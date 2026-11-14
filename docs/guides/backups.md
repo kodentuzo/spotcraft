@@ -21,10 +21,18 @@ failed or none has worked for 26 hours. On the app's page, **Back up now** makes
 
 1. **Enable R2** on the Cloudflare account (R2 in the Cloudflare dashboard). It asks for a
    payment method, even within the free tier, which includes 10 GB.
-2. **Make the bucket.** In `infra/cloudflare`, set `backup_bucket`, e.g.
-   `spotcraft-backups`, and run `tofu apply`. This module's token needs **Workers R2 Storage:
-   Edit** on the account. The `backup_settings` output gives `BACKUP_S3_ENDPOINT` and
-   `BACKUP_BUCKET`; add both as variables on the `production` environment.
+2. **Make the bucket.** In `infra/cloudflare`, set `backup_bucket`, e.g. `spotcraft-backups`.
+   To keep the backups in the EU, also set `backup_jurisdiction = "eu"`. Then run `tofu apply`.
+   This module's token needs **Workers R2 Storage: Edit** on the account. The `backup_settings`
+   output gives `BACKUP_S3_ENDPOINT` and `BACKUP_BUCKET`; add both as variables on the
+   `production` environment.
+
+   For a bucket you made by hand, import it first, with its jurisdiction at the end:
+
+   ```bash
+   tofu import 'cloudflare_r2_bucket.backups[0]' '<account id>/<bucket>/eu'
+   ```
+
 3. **Make the agent's key.** In **R2 → Manage API tokens → Create API token**:
    - **Object Read & Write**, for the backup bucket only;
    - no expiry, or a date you'll remember.

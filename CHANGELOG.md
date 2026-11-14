@@ -10,6 +10,12 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
 
 ## [Unreleased]
 
+### Added
+
+- **`backup_jurisdiction` in `infra/cloudflare`** keeps the backup bucket in the EU (`eu`) or
+  FedRAMP (`fedramp`) jurisdiction, and `backup_settings` gives that jurisdiction's endpoint. The
+  backups guide also shows how to import a bucket made by hand.
+
 ## [0.5.0] - 2026-11-14
 
 Releases without downtime, a deploy hook for an app's CI, nightly backups of every app to R2

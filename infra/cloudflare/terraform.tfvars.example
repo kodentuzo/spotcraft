@@ -13,3 +13,5 @@ dashboard_domain = "dash.example.com"
 # bot_fight_mode   = false
 # block_ai_bots    = false
 # route_dns        = false                # while moving an existing instance
+# backup_bucket       = "spotcraft-backups" # the agent's nightly backups
+# backup_jurisdiction = "eu"               # keep them in the EU
