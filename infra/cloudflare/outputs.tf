@@ -24,7 +24,8 @@ output "dashboard_settings" {
 output "backup_settings" {
   description = "Variables for the agent's nightly backups (ADR 0030); empty without backup_bucket."
   value = {
-    BACKUP_S3_ENDPOINT = var.backup_bucket != "" ? "https://${var.account_id}.r2.cloudflarestorage.com" : ""
+    # A bucket in a jurisdiction has its own S3 endpoint, e.g. <account>.eu.r2.cloudflarestorage.com.
+    BACKUP_S3_ENDPOINT = var.backup_bucket != "" ? "https://${var.account_id}${var.backup_jurisdiction == "default" ? "" : ".${var.backup_jurisdiction}"}.r2.cloudflarestorage.com" : ""
     BACKUP_BUCKET      = var.backup_bucket
   }
 }
