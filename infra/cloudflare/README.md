@@ -122,6 +122,7 @@ agent rewrites every app's Caddy site for the new mode when it starts.
 | `block_ai_bots`           | `false`                | "Block AI bots"                                        |
 | `route_dns`               | `true`                 | point the records at the tunnel                        |
 | `backup_bucket`           | `""`                   | R2 bucket for the agent's backups; empty: none         |
+| `backup_jurisdiction`     | `"default"`            | `eu` or `fedramp` keeps backups there; fixed once made |
 | `backup_retention_days`   | `30`                   | days R2 keeps a backup                                 |
 
 Limits of the free plan:

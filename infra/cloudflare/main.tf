@@ -185,15 +185,17 @@ resource "cloudflare_zero_trust_access_application" "deploy_hook" {
 resource "cloudflare_r2_bucket" "backups" {
   count = var.backup_bucket != "" ? 1 : 0
 
-  account_id = var.account_id
-  name       = var.backup_bucket
+  account_id   = var.account_id
+  name         = var.backup_bucket
+  jurisdiction = var.backup_jurisdiction
 }
 
 resource "cloudflare_r2_bucket_lifecycle" "backups" {
   count = var.backup_bucket != "" ? 1 : 0
 
-  account_id  = var.account_id
-  bucket_name = cloudflare_r2_bucket.backups[0].name
+  account_id   = var.account_id
+  bucket_name  = cloudflare_r2_bucket.backups[0].name
+  jurisdiction = var.backup_jurisdiction
   rules = [{
     id         = "expire-backups"
     enabled    = true
@@ -212,8 +214,9 @@ resource "cloudflare_r2_bucket_lifecycle" "backups" {
 resource "cloudflare_r2_bucket_lock" "backups" {
   count = var.backup_bucket != "" ? 1 : 0
 
-  account_id  = var.account_id
-  bucket_name = cloudflare_r2_bucket.backups[0].name
+  account_id   = var.account_id
+  bucket_name  = cloudflare_r2_bucket.backups[0].name
+  jurisdiction = var.backup_jurisdiction
   rules = [{
     id      = "keep-backups"
     enabled = true

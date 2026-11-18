@@ -85,6 +85,17 @@ variable "backup_bucket" {
   default     = ""
 }
 
+variable "backup_jurisdiction" {
+  description = "Where R2 keeps the backups: default, or eu or fedramp to keep them in that jurisdiction. Fixed once the bucket exists."
+  type        = string
+  default     = "default"
+
+  validation {
+    condition     = contains(["default", "eu", "fedramp"], var.backup_jurisdiction)
+    error_message = "backup_jurisdiction must be default, eu or fedramp."
+  }
+}
+
 variable "backup_retention_days" {
   description = "Days R2 keeps a backup before deleting it."
   type        = number
