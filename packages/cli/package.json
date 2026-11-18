@@ -1,6 +1,6 @@
 {
   "name": "spotcraft",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "The spotcraft command: run the Spotcraft server's database setup locally",
   "keywords": [
     "spotcraft",
