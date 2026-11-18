@@ -66,8 +66,14 @@ describe('pending', () => {
     )
   })
 
-  it('refuses a database newer than the app', () => {
-    assert.throws(() => pending(list(1), rows(1, 2)), /has app migration 2.*knows only 1/)
+  it('runs nothing on a database newer than the app (a rollback)', () => {
+    assert.deepEqual(pending(list(1), rows(1, 2)), [])
+    assert.deepEqual(pending(list(1, 2), rows(1, 2, 3)), [])
+    // An older app still notices a file renamed under it.
+    assert.throws(
+      () => pending(list(1, 2), [...rows(1), { version: 2, name: 'other' }, ...rows(3)]),
+      /Migration 2 was applied as other, but is now m2/,
+    )
   })
 })
 
@@ -146,6 +152,13 @@ INSERT INTO notes (body) VALUES ('first');`,
       ),
       ['1 notes', '2 tags'],
     )
+  })
+
+  it('lets an older app start on a database a newer one migrated (a rollback)', async () => {
+    const db = appDb()
+    await migrateApp(db, [NOTES, TAGS])
+    assert.deepEqual(await migrateApp(db, [NOTES]), { applied: [], adopted: [] })
+    assert.deepEqual(await query('SELECT body FROM notes'), [{ body: 'first' }])
   })
 
   it('rolls back every migration of the run when one fails', async () => {

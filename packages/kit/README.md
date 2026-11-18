@@ -174,9 +174,10 @@ await migrateApp(backend.db, migrations, { adoptDrizzle: true })
   names the migration.
 - Applied migrations are recorded in `public.app_migrations` (version, name, time).
 - It **stops** when a migration is missing below the newest applied one (one added out of
-  order), when an applied version now has another name (a file put in the middle), or when the
-  database has a version the app doesn't know (an older image against a newer database). New
+  order), or when an applied version now has another name (a file put in the middle). New
   migrations go at the end.
+- A database newer than the app (an older version after a rollback) needs nothing: the app
+  starts and uses the tables it knows, since migrations only add.
 - **`adoptDrizzle: true`** takes over from Drizzle's migrator, once. When `app_migrations` is
   empty and `drizzle.__drizzle_migrations` has N rows, the first N migrations count as applied,
   as long as each file's SHA-256 is the hash Drizzle stored. Drizzle's table is then left as it

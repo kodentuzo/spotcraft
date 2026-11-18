@@ -11,6 +11,14 @@ to run against an older schema.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Rolling back across a migration works.** `migrateApp` no longer stops when the database has
+  app migrations the app doesn't know, which an older version meets after a rollback. It runs
+  nothing, and the app starts on the newer tables, since migrations only add
+  ([ADR 0032](../../docs/decisions/0032-rollback-on-a-newer-database.md)). It still stops on a
+  migration added out of order or renamed.
+
 ## [0.4.0] - 2026-11-14
 
 The server glue every app wrote around the kit, now in it

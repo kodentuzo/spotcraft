@@ -71,8 +71,10 @@ export function migrationsFromFiles(files: readonly { name: string; sql: string 
  * The migrations a database still needs, given the ones it has. It stops with an error when:
  * - an applied version now has another name: a file was added or renamed in the middle;
  * - a migration numbered below the newest applied one is missing (added out of order, say on
- *   a branch that merged late), since running it after newer ones could do the wrong thing;
- * - the database has a version this list doesn't (an older image against a newer database).
+ *   a branch that merged late), since running it after newer ones could do the wrong thing.
+ *
+ * A database newer than the list (an older image after a newer one migrated it, as in a
+ * rollback) needs nothing: migrations only add, so the older app runs on the newer tables.
  */
 export function pending(
   all: readonly Migration[],
@@ -88,11 +90,6 @@ export function pending(
     }
   }
   const newest = Math.max(0, ...applied.map((row) => row.version))
-  if (newest > all.length) {
-    throw new Error(
-      `The database has app migration ${newest}, but this version of the app knows only ${all.length}`,
-    )
-  }
   const done = new Set(applied.map((row) => row.version))
   const skipped = all.filter((m) => m.version < newest && !done.has(m.version))
   if (skipped.length > 0) {
