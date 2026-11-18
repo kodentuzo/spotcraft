@@ -216,7 +216,7 @@ The tests need a throwaway Postgres and its superuser URL. They create their own
 and `app_kit_*` databases and remove them afterwards:
 
 ```bash
-docker run -d --name kit-test-pg -e POSTGRES_PASSWORD=testsuper -p 127.0.0.1:55432:5432 postgres:18.6-trixie
+docker run -d --name kit-test-pg -e POSTGRES_PASSWORD=testsuper -p 127.0.0.1:55432:5432 postgres:18.7-trixie
 KIT_TEST_POSTGRES_URL=postgres://postgres:testsuper@127.0.0.1:55432/postgres pnpm --filter @spotcraft/kit test
 ```
 

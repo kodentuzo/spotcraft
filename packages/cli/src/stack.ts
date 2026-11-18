@@ -11,7 +11,7 @@ export const PORT = 54340
 
 /** The server's Postgres image (infra/server/compose.yaml). */
 export const POSTGRES_IMAGE =
-  'postgres:18.6-trixie@sha256:e3d24f6906d0760bf4da0dae872415391ededefad23fd471c47dc53b0ddf3c42'
+  'postgres:18.7-trixie@sha256:2ea8630df176ad090ec92136dee850397c5af8781e4bcf2e4162593691c61bbc'
 
 /** The server's Postgres login rules (infra/server/pg_hba.conf). */
 export const PG_HBA = `# TYPE  DATABASE  USER      ADDRESS  METHOD
