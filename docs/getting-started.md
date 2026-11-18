@@ -10,7 +10,7 @@ DNS is set up for you.
 
 ## 1. Fork the repository
 
-Fork [vindotski/spotcraft](https://github.com/vindotski/spotcraft). Everything personal goes into
+Fork [kodentuzo/spotcraft](https://github.com/kodentuzo/spotcraft). Everything personal goes into
 your fork's settings, never into its files.
 
 ## 2. Create the server

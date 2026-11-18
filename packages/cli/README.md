@@ -2,7 +2,7 @@
 
 The `spotcraft` command. For now it has one job: `spotcraft dev` runs, on your machine, the same
 Postgres and app database setup an app gets on a Spotcraft server
-([ADR 0017](https://github.com/vindotski/spotcraft/blob/main/docs/decisions/0017-local-stack.md)). It needs Docker.
+([ADR 0017](https://github.com/kodentuzo/spotcraft/blob/main/docs/decisions/0017-local-stack.md)). It needs Docker.
 
 ```bash
 npm install --save-dev spotcraft   # same version as the Spotcraft you deploy to
@@ -19,7 +19,7 @@ npx spotcraft dev env --write      # add DATABASE_URL and AUTH_SECRET to .env (o
 | `dev reset [--yes]` | deletes this app's database and creates it empty again (asks first)                   |
 | `dev migrate`       | brings this app's database up to date after upgrading the CLI                         |
 
-How an app uses it with the kit: [Guest accounts with the backend kit](https://github.com/vindotski/spotcraft/blob/main/docs/guides/backend-kit.md).
+How an app uses it with the kit: [Guest accounts with the backend kit](https://github.com/kodentuzo/spotcraft/blob/main/docs/guides/backend-kit.md).
 
 The app name comes from `--name`, or from the `name` in `package.json` made into an app name
 (`@acme/Blog_API` → `blog-api`). Its database is `app_<name>`, with dashes as underscores.

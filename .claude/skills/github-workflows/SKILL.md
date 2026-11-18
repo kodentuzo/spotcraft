@@ -30,7 +30,7 @@ description: Spotcraft's conventions for GitHub Actions workflows and Dependabot
   `deploy.yml` does for the tag.
 - Node and pnpm come from the repo: `pnpm/action-setup` (version from `packageManager`) and
   `actions/setup-node` with `node-version-file: .nvmrc`.
-- Only the original repository publishes (`github.repository == 'vindotski/spotcraft'`), so
+- Only the original repository publishes (`github.repository == 'kodentuzo/spotcraft'`), so
   forks don't try.
 - Set `concurrency` for anything that deploys or publishes, with `cancel-in-progress: false`.
 - Comments at the top of a workflow say what it does and when it runs.

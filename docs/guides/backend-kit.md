@@ -178,7 +178,7 @@ export const init: ServerInit = async () => {
 
 Migrations only add: never drop or rename in a later one. For a few seconds during a release,
 the old and the new version run against the same database. Add new files only at the end; the
-runner stops on one put between applied ones. The [kit's README](https://github.com/vindotski/spotcraft/blob/main/packages/kit/README.md#the-apps-migrations)
+runner stops on one put between applied ones. The [kit's README](https://github.com/kodentuzo/spotcraft/blob/main/packages/kit/README.md#the-apps-migrations)
 has the details, and `adoptDrizzle` for a database Drizzle's own migrator managed.
 
 **A health route** for the image's `HEALTHCHECK`, so a deploy waits until the database answers:
