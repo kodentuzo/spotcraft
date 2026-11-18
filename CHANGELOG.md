@@ -10,6 +10,8 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-11-18
+
 ### Added
 
 - **`backup_jurisdiction` in `infra/cloudflare`** keeps the backup bucket in the EU (`eu`) or
@@ -335,7 +337,8 @@ handful of server-rendered apps from Docker Hub images behind HTTPS.
 - Servers: key-only SSH as a `deploy` user with modern algorithms only, root login refused,
   two firewalls, automatic security updates.
 
-[Unreleased]: https://github.com/vindotski/spotcraft/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/vindotski/spotcraft/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/vindotski/spotcraft/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/vindotski/spotcraft/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/vindotski/spotcraft/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/vindotski/spotcraft/compare/v0.3.0...v0.4.0
