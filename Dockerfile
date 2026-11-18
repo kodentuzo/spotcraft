@@ -8,7 +8,7 @@
 # Base images are pinned by digest; bump the version and digest together.
 
 # The Docker CLI and Compose plugin (static binaries) from the official image, for the agent.
-FROM docker:29.9.3-cli@sha256:2357639ad1ea7d0194134bf3292622fd4e562483966ed674e5d7c945b5f3b28d AS docker-cli
+FROM docker:29.10.0-cli@sha256:34507eb5069d8be82c95dd3b6987d4250fd5fee49b82e2509b7d7a7030740d6d AS docker-cli
 
 # The build output is plain JavaScript, so it is built once on the native platform.
 FROM --platform=$BUILDPLATFORM node:26.13.1-slim@sha256:e6bedef217677b276c591795e169840edd9096dbf13f29df8ef8d1856b8820bc AS build
