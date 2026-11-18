@@ -35,4 +35,4 @@ doesn't resolve, or a page contains a `<script>` (`scripts/check-links.ts`).
 the docs or the changelogs, and deploys it with GitHub Pages. In the repository's settings,
 Pages uses "GitHub Actions" as its source and `spotcraft.dev` as its custom domain, and the
 `github-pages` environment allows deploys from `main`. DNS: the apex has GitHub Pages' A and
-AAAA records and `www` is a CNAME to `vindotski.github.io`, all DNS-only in Cloudflare.
+AAAA records and `www` is a CNAME to `kodentuzo.github.io`, all DNS-only in Cloudflare.

@@ -12,11 +12,11 @@
   ],
   "homepage": "https://spotcraft.dev",
   "bugs": {
-    "url": "https://github.com/vindotski/spotcraft/issues"
+    "url": "https://github.com/kodentuzo/spotcraft/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/vindotski/spotcraft.git",
+    "url": "git+https://github.com/kodentuzo/spotcraft.git",
     "directory": "packages/kit"
   },
   "license": "Apache-2.0",

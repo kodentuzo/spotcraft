@@ -52,7 +52,7 @@ jobs:
       # job's read-only token, since the checkout keeps no git credentials. Forks don't
       # publish the kit, so only the original repository checks.
       - name: The kit in this release is published
-        if: startsWith(github.ref, 'refs/tags/v') && github.repository == 'vindotski/spotcraft'
+        if: startsWith(github.ref, 'refs/tags/v') && github.repository == 'kodentuzo/spotcraft'
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
@@ -180,7 +180,7 @@ jobs:
             org.opencontainers.image.title=spotcraft
             org.opencontainers.image.description=Spotcraft's agent and dashboard (one image, two containers)
             org.opencontainers.image.licenses=Apache-2.0
-            org.opencontainers.image.source=https://github.com/vindotski/spotcraft
+            org.opencontainers.image.source=https://github.com/kodentuzo/spotcraft
 
       - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
@@ -226,7 +226,7 @@ jobs:
     # node24: the CLI promises Node 24 (engines) and isn't published unless it works there.
     needs: [verify, images, node24]
     # Only the original repository publishes these names; forks of the template skip it.
-    if: startsWith(github.ref, 'refs/tags/v') && github.repository == 'vindotski/spotcraft'
+    if: startsWith(github.ref, 'refs/tags/v') && github.repository == 'kodentuzo/spotcraft'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     environment: npm
@@ -272,7 +272,7 @@ jobs:
     name: npm (@spotcraft/kit)
     # node24: the kit promises Node 24 (engines) and isn't published unless it works there.
     needs: [verify, node24]
-    if: startsWith(github.ref, 'refs/tags/kit-v') && github.repository == 'vindotski/spotcraft'
+    if: startsWith(github.ref, 'refs/tags/kit-v') && github.repository == 'kodentuzo/spotcraft'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     environment: npm

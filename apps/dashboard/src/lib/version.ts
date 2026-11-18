@@ -4,4 +4,4 @@ import { version } from '../../package.json'
 
 export const VERSION: string = version
 /** The release notes of the running version. */
-export const RELEASE_URL = `https://github.com/vindotski/spotcraft/releases/tag/v${version}`
+export const RELEASE_URL = `https://github.com/kodentuzo/spotcraft/releases/tag/v${version}`

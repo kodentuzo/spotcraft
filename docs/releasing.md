@@ -40,7 +40,7 @@ broken one (`npm deprecate spotcraft@0.2.0 "Use 0.2.1"`).
 
 ## One-time npm setup
 
-Only the original repository (`vindotski/spotcraft`) publishes to npm; CI skips the step
+Only the original repository (`kodentuzo/spotcraft`) publishes to npm; CI skips the step
 in forks.
 
 1. On npmjs.com, create the free organization `spotcraft` (it owns `@spotcraft/kit`).
@@ -51,7 +51,7 @@ in forks.
 3. On npmjs.com, link a **trusted publisher** in the settings of each package (`@spotcraft/kit`
    and `spotcraft`). The fields are case-sensitive:
    - provider: GitHub Actions;
-   - organization or user: `vindotski`, repository: `spotcraft`;
+   - organization or user: `kodentuzo`, repository: `spotcraft`;
    - workflow filename: `ci.yml`, environment: `npm`;
    - allow `npm publish` (newer links only allow `npm stage publish` unless ticked).
 4. Delete the `NPM_TOKEN` secret and revoke the token. From then on CI publishes through

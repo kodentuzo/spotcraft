@@ -8,7 +8,7 @@
   "homepage": "https://spotcraft.dev",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/vindotski/spotcraft.git"
+    "url": "git+https://github.com/kodentuzo/spotcraft.git"
   },
   "type": "module",
   "packageManager": "pnpm@12.4.1",
