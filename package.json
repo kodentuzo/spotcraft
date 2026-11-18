@@ -1,6 +1,6 @@
 {
   "name": "spotcraft",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "Self-hosted deployment for a handful of web apps on one server: Docker images behind HTTPS, monitored, managed from one dashboard.",
   "private": true,
   "license": "Apache-2.0",
@@ -8,7 +8,7 @@
   "homepage": "https://spotcraft.dev",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/vindotski/spotcraft.git"
+    "url": "git+https://github.com/kodentuzo/spotcraft.git"
   },
   "type": "module",
   "packageManager": "pnpm@12.4.1",
@@ -25,8 +25,8 @@
     "check:versions": "node scripts/check-versions.ts"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.6.7",
-    "@sveltejs/mcp": "^0.1.30",
+    "@biomejs/biome": "2.6.8",
+    "@sveltejs/mcp": "^0.1.31",
     "@types/node": "catalog:",
     "typescript": "catalog:"
   }

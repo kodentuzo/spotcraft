@@ -10,6 +10,19 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-11-18
+
+The repository moved to the kodentuzo organization, with updated server images.
+
+### Changed
+
+- **The repository moved to [kodentuzo/spotcraft](https://github.com/kodentuzo/spotcraft).** Old
+  links redirect. Forks can update their upstream remote:
+  `git remote set-url upstream https://github.com/kodentuzo/spotcraft.git`. The Docker image
+  is still `vindotski/spotcraft`.
+- **Server images:** Postgres 18.7 (also in the local stack and CI), Caddy 2.11.9 (new digest),
+  cloudflared 2026.11.1 and cAdvisor 0.61.0.
+
 ## [0.5.1] - 2026-11-18
 
 ### Added
@@ -337,11 +350,12 @@ handful of server-rendered apps from Docker Hub images behind HTTPS.
 - Servers: key-only SSH as a `deploy` user with modern algorithms only, root login refused,
   two firewalls, automatic security updates.
 
-[Unreleased]: https://github.com/vindotski/spotcraft/compare/v0.5.1...HEAD
-[0.5.1]: https://github.com/vindotski/spotcraft/compare/v0.5.0...v0.5.1
-[0.5.0]: https://github.com/vindotski/spotcraft/compare/v0.4.1...v0.5.0
-[0.4.1]: https://github.com/vindotski/spotcraft/compare/v0.4.0...v0.4.1
-[0.4.0]: https://github.com/vindotski/spotcraft/compare/v0.3.0...v0.4.0
-[0.3.0]: https://github.com/vindotski/spotcraft/compare/v0.2.0...v0.3.0
-[0.2.0]: https://github.com/vindotski/spotcraft/compare/v0.1.0...v0.2.0
-[0.1.0]: https://github.com/vindotski/spotcraft/releases/tag/v0.1.0
+[Unreleased]: https://github.com/kodentuzo/spotcraft/compare/v0.5.2...HEAD
+[0.5.2]: https://github.com/kodentuzo/spotcraft/compare/v0.5.1...v0.5.2
+[0.5.1]: https://github.com/kodentuzo/spotcraft/compare/v0.5.0...v0.5.1
+[0.5.0]: https://github.com/kodentuzo/spotcraft/compare/v0.4.1...v0.5.0
+[0.4.1]: https://github.com/kodentuzo/spotcraft/compare/v0.4.0...v0.4.1
+[0.4.0]: https://github.com/kodentuzo/spotcraft/compare/v0.3.0...v0.4.0
+[0.3.0]: https://github.com/kodentuzo/spotcraft/compare/v0.2.0...v0.3.0
+[0.2.0]: https://github.com/kodentuzo/spotcraft/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/kodentuzo/spotcraft/releases/tag/v0.1.0

@@ -1,10 +1,10 @@
 # @spotcraft/kit
 
 The backend kit for server-rendered apps hosted on Spotcraft
-([ADR 0016](https://github.com/vindotski/spotcraft/blob/main/docs/decisions/0016-backend-kit.md)). For now it gives an app **guest
+([ADR 0016](https://github.com/kodentuzo/spotcraft/blob/main/docs/decisions/0016-backend-kit.md)). For now it gives an app **guest
 accounts**: a visitor gets an account without signing up, and the app keeps their data under
 its id. It also holds the `auth` schema and the code that gives an app its own database
-([ADR 0015](https://github.com/vindotski/spotcraft/blob/main/docs/decisions/0015-shared-postgres.md)).
+([ADR 0015](https://github.com/kodentuzo/spotcraft/blob/main/docs/decisions/0015-shared-postgres.md)).
 In the workspace, Node runs the TypeScript source through the `spotcraft-source` export condition
 (`node --conditions=spotcraft-source`, `customConditions` in `tsconfig.json`). Anything that installs the
 kit into `node_modules`, like the agent's image, uses the build: `pnpm --filter @spotcraft/kit
@@ -24,7 +24,7 @@ on first use that the schema is at least `AUTH_SCHEMA_VERSION`. A kit release th
 in the changelog which Spotcraft version it needs; upgrade Spotcraft first, then the kit.
 
 The step-by-step guide for a SvelteKit app, locally and deployed, is
-[Guest accounts with the backend kit](https://github.com/vindotski/spotcraft/blob/main/docs/guides/backend-kit.md).
+[Guest accounts with the backend kit](https://github.com/kodentuzo/spotcraft/blob/main/docs/guides/backend-kit.md).
 
 ## Guests
 
@@ -138,12 +138,12 @@ app calls from its own files, because Nitro replaces `import.meta.dev` and
 - **`@spotcraft/kit/nuxt`**, for Nuxt 4 (Nitro 2, h3 1). It imports nothing from Nuxt.
   - `guestMiddleware(backend)` puts the guest on `event.context.guest`, creating one only on
     writes, sends the cookie, skips assets and answers the guest limit with 429.
-  - Guide: [Guest accounts in Nuxt](https://github.com/vindotski/spotcraft/blob/main/docs/guides/kit-nuxt.md).
+  - Guide: [Guest accounts in Nuxt](https://github.com/kodentuzo/spotcraft/blob/main/docs/guides/kit-nuxt.md).
 - **`@spotcraft/kit/tanstack-start`**, for TanStack Start on React. It imports
   `@tanstack/react-start/server`, an optional peer dependency.
   - `guestHelpers(backend)` gives `currentGuestId()` and `guestId()` for server code, which
     send the cookie and `Cache-Control: private, no-store`.
-  - Guide: [Guest accounts in TanStack Start](https://github.com/vindotski/spotcraft/blob/main/docs/guides/kit-tanstack-start.md).
+  - Guide: [Guest accounts in TanStack Start](https://github.com/kodentuzo/spotcraft/blob/main/docs/guides/kit-tanstack-start.md).
 - Both have `startup(nitroApp, backend, options)` for a Nitro plugin: `prepare`, then exit the
   process if it fails, so the deploy fails and the old version keeps serving. It closes the
   connections when the server stops.
@@ -216,7 +216,7 @@ The tests need a throwaway Postgres and its superuser URL. They create their own
 and `app_kit_*` databases and remove them afterwards:
 
 ```bash
-docker run -d --name kit-test-pg -e POSTGRES_PASSWORD=testsuper -p 127.0.0.1:55432:5432 postgres:18.6-trixie
+docker run -d --name kit-test-pg -e POSTGRES_PASSWORD=testsuper -p 127.0.0.1:55432:5432 postgres:18.7-trixie
 KIT_TEST_POSTGRES_URL=postgres://postgres:testsuper@127.0.0.1:55432/postgres pnpm --filter @spotcraft/kit test
 ```
 

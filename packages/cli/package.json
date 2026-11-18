@@ -1,6 +1,6 @@
 {
   "name": "spotcraft",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "The spotcraft command: run the Spotcraft server's database setup locally",
   "keywords": [
     "spotcraft",
@@ -10,11 +10,11 @@
   ],
   "homepage": "https://spotcraft.dev",
   "bugs": {
-    "url": "https://github.com/vindotski/spotcraft/issues"
+    "url": "https://github.com/kodentuzo/spotcraft/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/vindotski/spotcraft.git",
+    "url": "git+https://github.com/kodentuzo/spotcraft.git",
     "directory": "packages/cli"
   },
   "license": "Apache-2.0",
