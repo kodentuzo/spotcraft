@@ -15,8 +15,8 @@
     "@spotcraft/ui": "workspace:*",
     "@tailwindcss/vite": "catalog:",
     "@types/node": "catalog:",
-    "astro": "^7.4.11",
-    "marked": "^18.2.0",
+    "astro": "^7.4.12",
+    "marked": "^18.2.1",
     "tailwindcss": "catalog:",
     "typescript": "catalog:"
   }
