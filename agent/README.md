@@ -63,7 +63,9 @@ App names: lower-case letters, digits and dashes, 2–32 characters. The names o
 own services (`caddy`, `cloudflared`, `agent`, `dashboard`, `auth`, `umami`, `postgres`,
 `victoriametrics`, `vmagent`, `blackbox`, `node-exporter`, `cadvisor`), since an app's service joins the same
 network, plus `www` and `fallback`, are reserved, and so is every name starting with `app-`
-(Caddy reaches each app as `app-<name>`). A host can belong to one app only: a custom domain
+(Caddy reaches each app as `app-<name>`). So are the dashboard's own pages, since an app's
+pages are `/<name>/…` there: `new`, `apps`, `api`, `hooks`, `login`, `logout`, `usage`, `logs`,
+`server`, `domains`, `backups`, `users`, `settings`. A host can belong to one app only: a custom domain
 can't be another app's default host, and no app may use `DASHBOARD_DOMAIN` or a reserved host
 of the apps domain such as `fallback.<APPS_DOMAIN>` (409). The apex itself may be an app's.
 

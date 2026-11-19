@@ -17,6 +17,10 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
   a phone the sidebar is a drawer. Each section (Overview, Usage, Logs, Server, Domains,
   Backups, Users, Settings) shows every app, or the app picked in the switcher
   (`/usage/<app>`). An app's tabs are gone: old `?tab=` links redirect to their section.
+- **App names** (breaking, unlikely to matter): the dashboard's pages are now reserved names,
+  since an app's pages are `/<app>/…`: `new`, `apps`, `api`, `hooks`, `login`, `logout`,
+  `usage`, `logs`, `server`, `domains`, `backups`, `users`, `settings`. To upgrade, rename an
+  app with one of these names first (add it under the new name, then remove the old one).
 - **Dashboard home:** an overview (apps running, server memory and disk, backups when set up)
   above a list with a row per app: its icon (from its site) or initial, status, last deploy,
   24 hourly uptime bars, memory against its limit, and visitors (or requests without
