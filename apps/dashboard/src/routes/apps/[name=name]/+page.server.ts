@@ -1,9 +1,10 @@
-import { NAME } from '@spotcraft/agent/app-spec'
+import { NAME, TAG } from '@spotcraft/agent/app-spec'
 import { error, fail, redirect } from '@sveltejs/kit'
 import {
   appLogs,
   backupNow,
   createHookToken,
+  databaseLayout,
   deleteHookToken,
   deployApp,
   getApp,
@@ -12,6 +13,7 @@ import {
   getSettings,
   hookEnabled,
   listApps,
+  moveApp,
   removeApp,
 } from '#lib/server/agent.ts'
 import { instant, promql, range } from '#lib/server/metrics.ts'
@@ -23,20 +25,33 @@ export const load: PageServerLoad = async ({ params, url }) => {
   // The name goes into PromQL and agent URLs before the app is looked up: only valid names.
   if (!new RegExp(NAME).test(name)) error(404, 'No such app')
   // Everything starts at once; only the 404 waits for the app itself.
-  const [app, cpu, memory, response, up, uptimeDay, uptimeWeek, logs, hook, settings, backup] =
-    await Promise.all([
-      getApp(name),
-      range(promql.appCpu(name)),
-      range(promql.appMemory(name)),
-      range(promql.appResponse(name)),
-      instant(promql.appUp(name)),
-      instant(promql.appUptime(name, '24h')),
-      instant(promql.appUptime(name, '7d')),
-      appLogs(name, 200),
-      hookEnabled(name).catch(() => undefined),
-      getSettings().catch(() => undefined),
-      getBackup(name).catch(() => 'unavailable' as const),
-    ])
+  const [
+    app,
+    cpu,
+    memory,
+    response,
+    up,
+    uptimeDay,
+    uptimeWeek,
+    logs,
+    hook,
+    settings,
+    backup,
+    layout,
+  ] = await Promise.all([
+    getApp(name),
+    range(promql.appCpu(name)),
+    range(promql.appMemory(name)),
+    range(promql.appResponse(name)),
+    instant(promql.appUp(name)),
+    instant(promql.appUptime(name, '24h')),
+    instant(promql.appUptime(name, '7d')),
+    appLogs(name, 200),
+    hookEnabled(name).catch(() => undefined),
+    getSettings().catch(() => undefined),
+    getBackup(name).catch(() => 'unavailable' as const),
+    databaseLayout(name).catch(() => undefined),
+  ])
   if (!app) error(404, 'No such app')
   // The domain's status asks Cloudflare (several calls): streamed, so the page doesn't wait.
   const domain = app.domain ? getDomainStatus(name).catch(() => undefined) : undefined
@@ -49,6 +64,8 @@ export const load: PageServerLoad = async ({ params, url }) => {
     hook: { enabled: hook, url: `https://${url.host}/hooks/deploy/${name}` },
     // Backups (ADR 0030): null when the server has none set up.
     backup: settings?.backups ? { last: backup } : null,
+    // An app made before ADR 0034 still has its own database, until it moves.
+    ownDatabase: layout === 'database',
   }
 }
 
@@ -69,6 +86,20 @@ export const actions: Actions = {
     } catch (cause) {
       return fail(502, {
         backupError: cause instanceof Error ? cause.message : 'The backup failed',
+      })
+    }
+  },
+  // Into its schema and the user pool, with a version made for them (ADR 0035).
+  move: async ({ params, request }) => {
+    const tag = String((await request.formData()).get('tag') ?? '').trim()
+    if (!new RegExp(TAG).test(tag))
+      return fail(400, { moveError: 'Enter the tag of the new version', tag })
+    try {
+      return { moved: (await moveApp(params.name, tag)).moved }
+    } catch (cause) {
+      return fail(502, {
+        moveError: cause instanceof Error ? cause.message : 'The move failed',
+        tag,
       })
     }
   },

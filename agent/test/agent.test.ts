@@ -91,13 +91,15 @@ const GUEST_ID = '8a22a41f-636c-4249-99b7-95aafff1346e'
 /** A user an app's foreign key won't let go of. */
 const BLOCKED_ID = '5b0d4c2e-1f4a-4b8e-9c1d-2e3f4a5b6c7d'
 
-/** Records database calls; `failing` makes provision throw. */
+/** Records database calls; `failing` makes provision throw, `moving` a move. */
 function fakeDatabases() {
   const calls: string[][] = []
   let failing = false
+  let moveFails = false
+  const layouts = new Map<string, 'schema' | 'database' | 'none'>()
   const databases: Databases = {
-    async provision(name, password) {
-      calls.push(['provision', name, password])
+    async provision(name, password, options) {
+      calls.push(['provision', name, password, ...(options?.move ? ['move'] : [])])
       if (failing) throw new Error('connection refused')
       return {
         DATABASE_URL: `postgres://app_${name}:${password}@postgres:5432/apps`,
@@ -106,6 +108,18 @@ function fakeDatabases() {
     },
     async purge(name) {
       calls.push(['purge', name])
+    },
+    async layout(name) {
+      return layouts.get(name) ?? 'schema'
+    },
+    async move(name, { formerSecret }) {
+      calls.push(['move', name, formerSecret ?? ''])
+      if (moveFails) throw new Error('duplicate key')
+      layouts.set(name, 'schema')
+      return { users: 2, sessions: 3, tables: { progress: 5 } }
+    },
+    async dropSchema(name) {
+      calls.push(['dropSchema', name])
     },
     async listUsers({ limit, cursor }) {
       calls.push(['listUsers', String(limit), cursor ?? ''])
@@ -130,7 +144,13 @@ function fakeDatabases() {
       return id === GUEST_ID
     },
   }
-  return { databases, calls, fail: () => (failing = true) }
+  return {
+    databases,
+    calls,
+    fail: () => (failing = true),
+    ownDatabase: (name: string) => layouts.set(name, 'database'),
+    failMove: () => (moveFails = true),
+  }
 }
 
 const spec = {
@@ -872,6 +892,63 @@ describe('agent', () => {
       )
       assert.equal(environment.DATABASE_SCHEMA, 'app_tagtape')
       assert.equal(compose.services['tagtape-blue'].environment.TRUST_PROXY, '1')
+    })
+
+    it('moves an app from its own database into its schema, with a new version', async () => {
+      docker.image({ healthcheck: true })
+      const old = { ...dbSpec, env: { ...dbSpec.env, AUTH_SECRET: 'the-kit-secret' } }
+      assert.equal((await put(old)).statusCode, 200)
+      db.ownDatabase('tagtape')
+      const layout = await withDb.inject({ url: '/apps/tagtape/database', headers: auth })
+      assert.deepEqual(layout.json(), { layout: 'database' })
+
+      db.calls.length = 0
+      const res = await withDb.inject({
+        method: 'POST',
+        url: '/apps/tagtape/move',
+        headers: auth,
+        payload: { tag: '3.0.0' },
+      })
+      assert.equal(res.statusCode, 200, res.body)
+      assert.deepEqual(res.json().moved, { users: 2, sessions: 3, tables: { progress: 5 } })
+      assert.equal(res.json().status.tag, '3.0.0')
+      assert.deepEqual(
+        db.calls.map(([step, , , flag]) => [step, flag]),
+        [
+          ['provision', 'move'],
+          ['move', undefined],
+        ],
+      )
+      assert.equal(db.calls[1][2], 'the-kit-secret', 'the old AUTH_SECRET goes to the pool')
+      assert.ok(docker.running.has('spotcraft-app-tagtape/tagtape-green'), 'the new version runs')
+
+      const again = await withDb.inject({
+        method: 'POST',
+        url: '/apps/tagtape/move',
+        headers: auth,
+        payload: { tag: '3.0.0' },
+      })
+      assert.equal(again.statusCode, 409, 'already in its schema')
+    })
+
+    it('drops the schema and keeps the old version when the copy fails', async () => {
+      docker.image({ healthcheck: true })
+      assert.equal((await put(dbSpec)).statusCode, 200)
+      db.ownDatabase('tagtape')
+      db.failMove()
+      const res = await withDb.inject({
+        method: 'POST',
+        url: '/apps/tagtape/move',
+        headers: auth,
+        payload: { tag: '3.0.0' },
+      })
+      assert.equal(res.statusCode, 502)
+      assert.match(res.json().error, /Could not copy tagtape/)
+      assert.equal(db.calls.at(-1)?.[0], 'dropSchema')
+      assert.ok(docker.running.has('spotcraft-app-tagtape/tagtape-blue'), 'the old version runs')
+      assert.ok(!docker.running.has('spotcraft-app-tagtape/tagtape-green'))
+      const stored = await withDb.inject({ url: '/apps/tagtape', headers: auth })
+      assert.equal(stored.json().tag, dbSpec.tag)
     })
 
     it('keeps the password to itself and reuses it on the next deploy', async () => {

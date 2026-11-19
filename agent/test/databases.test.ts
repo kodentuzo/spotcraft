@@ -6,7 +6,7 @@ import type { Instance } from '@kodentuzo/spotcraft/provision'
 import { migrate } from '@spotcraft/kit/provision'
 import pg from 'pg'
 import { AgentError } from '../src/apps.ts'
-import { postgresDatabases } from '../src/databases.ts'
+import { fillOrder, postgresDatabases } from '../src/databases.ts'
 
 const SUPERUSER_URL = process.env.KIT_TEST_POSTGRES_URL
 if (!SUPERUSER_URL && process.env.CI) throw new Error('KIT_TEST_POSTGRES_URL is not set')
@@ -196,5 +196,138 @@ describe('postgres app databases', {
     assert.deepEqual(left.rows[0], { sessions: 0, notes: 0 })
     assert.equal((await databases.listUsers({ limit: 10 })).total, 2)
     await databases.purge('agent-test')
+  })
+  it("moves a kit app's guests, sessions and rows from its own database into its schema", async () => {
+    const su = SUPERUSER_URL as string
+    // The app before ADR 0034: its own database, the kit's `auth` in it, its tables in public.
+    await query(adminUrl(), `CREATE ROLE app_agent_test LOGIN PASSWORD '${PASSWORD}'`)
+    await query(adminUrl(), `GRANT app_agent_test TO ${ADMIN} WITH INHERIT FALSE, SET TRUE`)
+    await query(adminUrl(), 'CREATE DATABASE app_agent_test OWNER app_agent_test')
+    const own = urlFor('app_agent_test', PASSWORD, 'app_agent_test')
+    await migrate(own)
+    const guest = (
+      await query(
+        own,
+        `INSERT INTO auth.users (email, is_anonymous) VALUES ('temp@guest.example.test', true)
+         RETURNING id`,
+      )
+    ).rows[0].id
+    await query(
+      own,
+      `INSERT INTO auth.sessions (user_id, token, expires_at) VALUES
+         ('${guest}', 'live-token', now() + interval '1 day'),
+         ('${guest}', 'old-token', now() - interval '1 day');
+       CREATE TABLE levels (id text PRIMARY KEY, title text NOT NULL);
+       CREATE TABLE progress (
+         user_id uuid NOT NULL REFERENCES auth.users (id) ON DELETE CASCADE,
+         level_id text NOT NULL REFERENCES levels (id),
+         moves int NOT NULL,
+         dropped_later text);
+       CREATE TABLE counters (id serial PRIMARY KEY, n int NOT NULL);
+       CREATE TABLE journal (id int PRIMARY KEY);
+       INSERT INTO levels VALUES ('one', 'One'), ('two', 'Two');
+       INSERT INTO progress VALUES ('${guest}', 'two', 12, 'x');
+       INSERT INTO counters (n) VALUES (10), (20);
+       INSERT INTO journal VALUES (1), (2);`,
+    )
+
+    // The pool's `auth` in the instance database, as the auth service sets it up.
+    const env = await databases().provision('agent-test', PASSWORD, { move: true })
+    assert.equal(env.DATABASE_SCHEMA, 'app_agent_test')
+    const pool = new URL(su)
+    pool.pathname = `/${INSTANCE.database}`
+    await migrate(pool.toString())
+    await query(
+      pool.toString(),
+      `CREATE TABLE IF NOT EXISTS auth.former_secrets (
+         secret text PRIMARY KEY, app text NOT NULL, added_at timestamptz NOT NULL DEFAULT now());
+       GRANT USAGE ON SCHEMA auth TO ${INSTANCE.group}, ${ADMIN};
+       GRANT SELECT (id, is_anonymous, created_at, updated_at), REFERENCES (id) ON auth.users TO ${INSTANCE.group};
+       GRANT SELECT ON auth.users, auth.sessions TO ${ADMIN};
+       GRANT INSERT ON auth.users, auth.sessions, auth.former_secrets TO ${ADMIN};`,
+    )
+    // The new version's migrations: the same tables in its schema, less one column; it fills
+    // its journal itself.
+    await query(
+      env.DATABASE_URL,
+      `CREATE TABLE levels (id text PRIMARY KEY, title text NOT NULL);
+       CREATE TABLE progress (
+         user_id uuid NOT NULL REFERENCES auth.users (id) ON DELETE CASCADE,
+         level_id text NOT NULL REFERENCES levels (id),
+         moves int NOT NULL);
+       CREATE TABLE counters (id serial PRIMARY KEY, n int NOT NULL);
+       CREATE TABLE journal (id int PRIMARY KEY);
+       INSERT INTO journal VALUES (1);`,
+    )
+    assert.equal(
+      (await query(own, 'SELECT count(*)::int AS n FROM levels')).rows[0].n,
+      2,
+      'the old version still finds its tables while it moves',
+    )
+
+    const moved = await databases().move('agent-test', { formerSecret: 'the-kit-secret' })
+    assert.deepEqual(moved, {
+      users: 1,
+      sessions: 1,
+      tables: { counters: 2, levels: 2, progress: 1 },
+    })
+    const after = await query(
+      env.DATABASE_URL,
+      `SELECT (SELECT count(*) FROM journal)::int AS journal,
+              (SELECT moves FROM progress WHERE user_id = '${guest}') AS moves`,
+    )
+    assert.deepEqual(after.rows[0], { journal: 1, moves: 12 })
+    const next = await query(env.DATABASE_URL, 'INSERT INTO counters (n) VALUES (30) RETURNING id')
+    assert.equal(next.rows[0].id, 3, 'the serial continues after the moved rows')
+    const sessions = await query(pool.toString(), 'SELECT token FROM auth.sessions')
+    assert.deepEqual(
+      sessions.rows.map((row) => row.token),
+      ['live-token'],
+    )
+    const former = await query(pool.toString(), 'SELECT secret, app FROM auth.former_secrets')
+    assert.deepEqual(former.rows, [{ secret: 'the-kit-secret', app: 'agent-test' }])
+    assert.equal(await databases().layout('agent-test'), 'schema', 'the schema wins now')
+    assert.deepEqual(await databases().dumpTarget('agent-test'), {
+      database: INSTANCE.database,
+      schema: 'app_agent_test',
+    })
+
+    // Moving again copies nothing twice.
+    assert.deepEqual(await databases().move('agent-test', {}), {
+      users: 0,
+      sessions: 0,
+      tables: {},
+    })
+
+    await databases().dropSchema('agent-test')
+    assert.equal(await databases().layout('agent-test'), 'database', 'back where it was')
+    await query(pool.toString(), 'DELETE FROM auth.users; DELETE FROM auth.former_secrets')
+    await databases().purge('agent-test')
+  })
+
+  it('fills tables after those their foreign keys point at', () => {
+    assert.deepEqual(
+      fillOrder(
+        ['s.progress', 's.levels', 's.packs', 's.tree'],
+        [
+          ['s.progress', 's.levels'],
+          ['s.levels', 's.packs'],
+          ['s.tree', 's.tree'],
+          ['s.progress', 'auth.users'],
+        ],
+      ),
+      ['s.packs', 's.tree', 's.levels', 's.progress'],
+    )
+    assert.throws(
+      () =>
+        fillOrder(
+          ['s.a', 's.b'],
+          [
+            ['s.a', 's.b'],
+            ['s.b', 's.a'],
+          ],
+        ),
+      /round in a circle/,
+    )
   })
 })

@@ -242,6 +242,29 @@ export function buildApp({ token, apps, allowedIps = [], logger = false }: Build
     async (request) => apps.backup(request.params.name),
   )
 
+  // Where the app's tables are, and moving an app made before ADR 0034 into its schema.
+  app.get<{ Params: NameParams }>(
+    '/apps/:name/database',
+    { schema: { params: nameParamsSchema } },
+    async (request) => ({ layout: await apps.databaseLayout(request.params.name) }),
+  )
+
+  app.post<{ Params: NameParams; Body: { tag: string } }>(
+    '/apps/:name/move',
+    {
+      schema: {
+        params: nameParamsSchema,
+        body: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['tag'],
+          properties: { tag: { type: 'string', pattern: TAG } },
+        },
+      },
+    },
+    async (request) => apps.move(request.params.name, request.body.tag),
+  )
+
   // The app's deploy hook (ADR 0029). The dashboard manages its token: a new one is returned
   // once, and only its hash is kept.
   app.get<{ Params: NameParams }>(

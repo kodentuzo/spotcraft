@@ -60,15 +60,26 @@ One Postgres database per instance, `apps`, laid out like a Supabase project:
 - It can't create schemas or extensions. Ask for an extension to be added to the instance.
 - At most 20 connections, and statements stop after 30 seconds.
 
-With Drizzle:
+With Drizzle, put the app's tables in its schema by name, and keep the pool's `users` table in a
+file of its own that the config doesn't list, so drizzle-kit only references it:
 
 ```ts
-import { pgSchema, pgTable, text, uuid } from 'drizzle-orm/pg-core'
+// src/db/auth.ts: the pool's table, referenced, never migrated by the app.
+import { pgSchema, uuid } from 'drizzle-orm/pg-core'
 
-// The pool's table: referenced, never migrated by the app.
 export const users = pgSchema('auth').table('users', { id: uuid('id').primaryKey() })
+```
 
-export const workouts = pgTable('workouts', {
+```ts
+// src/db/schema.ts: the app's tables.
+import { pgSchema, text, uuid } from 'drizzle-orm/pg-core'
+import { users } from './auth.ts'
+
+// The app's schema, app_<slug>: the same name on the server and locally. Not exported, so
+// drizzle-kit doesn't try to create it.
+const app = pgSchema('app_lifts')
+
+export const workouts = app.table('workouts', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id')
     .notNull()
@@ -77,14 +88,17 @@ export const workouts = pgTable('workouts', {
 })
 ```
 
-In `drizzle.config.ts`, keep the migrator inside the app's schema and away from `auth`:
+A plain `pgTable` would work for queries, but drizzle-kit writes `"public"."<table>"` into the
+foreign keys between the app's own tables, and an app can't use `public`.
+
+In `drizzle.config.ts`, keep the migrator's own table in the app's schema too:
 
 ```ts
 export default defineConfig({
   dialect: 'postgresql',
   schema: './src/db/schema.ts',
-  schemaFilter: [process.env.DATABASE_SCHEMA ?? 'public'],
-  migrations: { schema: process.env.DATABASE_SCHEMA },
+  out: './drizzle',
+  migrations: { schema: 'app_lifts' },
   dbCredentials: { url: process.env.DATABASE_URL! },
 })
 ```

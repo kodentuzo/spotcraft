@@ -1,13 +1,58 @@
 import {
   appLayout,
   appRoleName,
+  dropSchema,
   INSTANCE,
   type Instance,
   provision,
   purge,
 } from '@kodentuzo/spotcraft/provision'
 import pg from 'pg'
-import { AgentError, type Databases, type PoolUser } from './apps.ts'
+import { AgentError, type Databases, type Moved, type PoolUser } from './apps.ts'
+
+const { escapeIdentifier: id } = pg
+
+/** The columns of the kit's `auth` tables that the pool's have too (ADRs 0016 and 0035). */
+const USER_COLUMNS = [
+  'id',
+  'name',
+  'email',
+  'email_verified',
+  'image',
+  'is_anonymous',
+  'created_at',
+  'updated_at',
+]
+const SESSION_COLUMNS = [
+  'id',
+  'user_id',
+  'token',
+  'expires_at',
+  'ip_address',
+  'user_agent',
+  'created_at',
+  'updated_at',
+]
+
+/**
+ * Tables in the order they can be filled: each after the tables its foreign keys point at.
+ * `edges` are [table, referenced table]; references outside `tables` don't count.
+ */
+export function fillOrder(tables: string[], edges: [string, string][]): string[] {
+  const order: string[] = []
+  const left = new Set(tables)
+  while (left.size) {
+    const ready = [...left].filter((table) =>
+      edges.every(([from, to]) => from !== table || to === table || !left.has(to)),
+    )
+    if (!ready.length) throw new Error(`Foreign keys go round in a circle: ${[...left].join(', ')}`)
+    for (const table of ready.sort()) {
+      order.push(table)
+      left.delete(table)
+    }
+  }
+  return order
+}
 
 /** Keyset cursor for user pages: the last row's creation time and id. */
 const encodeCursor = (createdAt: Date, id: string) =>
@@ -72,8 +117,8 @@ export function postgresDatabases(
   }
 
   return {
-    async provision(name, password) {
-      const { database } = await provision(adminUrl, { name, password, instance })
+    async provision(name, password, { move = false } = {}) {
+      const { database } = await provision(adminUrl, { name, password, instance, move })
       const role = appRoleName(name)
       const env: Record<string, string> = {
         DATABASE_URL: urlFor(database, { name: role, password }),
@@ -90,6 +135,127 @@ export function postgresDatabases(
     },
 
     purge: (name) => purge(adminUrl, name, instance),
+
+    layout: (name) => appLayout(adminUrl, name, instance),
+
+    dropSchema: (name) => dropSchema(adminUrl, name, instance),
+
+    async move(name, { formerSecret }) {
+      const role = appRoleName(name)
+      // The old database, read as the app (which owns everything in it).
+      const from = new pg.Client({ connectionString: urlFor(role) })
+      await from.connect()
+      try {
+        await from.query(`SET ROLE ${id(role)}`)
+        const read = async (sql: string) =>
+          (
+            await from.query<{ rows: unknown[] }>(
+              `SELECT coalesce(json_agg(t), '[]') AS rows FROM (${sql}) t`,
+            )
+          ).rows[0].rows
+        const hasAuth = (await from.query("SELECT to_regclass('auth.sessions') IS NOT NULL AS ok"))
+          .rows[0].ok
+        const users = hasAuth ? await read(`SELECT ${USER_COLUMNS.join(', ')} FROM auth.users`) : []
+        // Expired sessions would only be deleted again.
+        const sessions = hasAuth
+          ? await read(
+              `SELECT ${SESSION_COLUMNS.join(', ')} FROM auth.sessions WHERE expires_at > now()`,
+            )
+          : []
+        const tables = (
+          await from.query<{ name: string }>(
+            `SELECT relname AS name FROM pg_class
+             WHERE relnamespace = 'public'::regnamespace AND relkind IN ('r', 'p')`,
+          )
+        ).rows.map((row) => row.name)
+
+        return await inPool(async (to) => {
+          await to.query('BEGIN')
+          try {
+            const fill = async (table: string, columns: string[], rows: unknown[]) => {
+              if (!rows.length) return 0
+              const list = columns.map(id).join(', ')
+              const inserted = await to.query(
+                `INSERT INTO ${table} (${list}) OVERRIDING SYSTEM VALUE
+                 SELECT ${list} FROM json_populate_recordset(NULL::${table}, $1)
+                 ON CONFLICT DO NOTHING`,
+                [JSON.stringify(rows)],
+              )
+              return inserted.rowCount ?? 0
+            }
+            // The guests first, with the same ids and tokens, so their cookies stay valid.
+            const moved: Moved = {
+              users: await fill('auth.users', USER_COLUMNS, users),
+              sessions: await fill('auth.sessions', SESSION_COLUMNS, sessions),
+              tables: {},
+            }
+            if (formerSecret) {
+              await to.query(
+                'INSERT INTO auth.former_secrets (secret, app) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+                [formerSecret, name],
+              )
+            }
+            // Then the app's rows, as the app: into each table the new version made and left
+            // empty (a table it filled itself, like a migrations journal, is its own).
+            await to.query(`SET LOCAL ROLE ${id(role)}`)
+            const made = await to.query<{ name: string; columns: string[] }>(
+              `SELECT c.relname AS name,
+                      array_agg(a.attname::text ORDER BY a.attnum) FILTER (WHERE a.attgenerated = '') AS columns
+               FROM pg_class c JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped
+               WHERE c.relnamespace = $1::regnamespace AND c.relkind IN ('r', 'p') AND c.relname = ANY($2)
+               GROUP BY c.relname`,
+              [role, tables],
+            )
+            const edges = await to.query<{ from: string; to: string }>(
+              `SELECT conrelid::regclass::text AS from, confrelid::regclass::text AS to
+               FROM pg_constraint WHERE contype = 'f' AND connamespace = $1::regnamespace`,
+              [role],
+            )
+            const qualified = (table: string) => `${id(role)}.${id(table)}`
+            const columnsOf = new Map(made.rows.map((row) => [qualified(row.name), row]))
+            for (const table of fillOrder(
+              [...columnsOf.keys()],
+              edges.rows.map((edge) => [edge.from, edge.to]),
+            )) {
+              const target = columnsOf.get(table) as { name: string; columns: string[] }
+              const empty = await to.query(`SELECT NOT EXISTS (SELECT FROM ${table}) AS empty`)
+              if (!empty.rows[0].empty) continue
+              const source = await from.query<{ name: string }>(
+                `SELECT attname AS name FROM pg_attribute
+                 WHERE attrelid = $1::regclass AND attnum > 0 AND NOT attisdropped`,
+                [`public.${id(target.name)}`],
+              )
+              const shared = target.columns.filter((column) =>
+                source.rows.some((row) => row.name === column),
+              )
+              const rows = await read(
+                `SELECT ${shared.map(id).join(', ')} FROM public.${id(target.name)}`,
+              )
+              moved.tables[target.name] = await fill(table, shared, rows)
+              // Serial and identity columns continue after the rows that came along.
+              const serials = await to.query<{ column: string; seq: string }>(
+                `SELECT name AS column, pg_get_serial_sequence($1, name) AS seq
+                 FROM unnest($2::text[]) AS name WHERE pg_get_serial_sequence($1, name) IS NOT NULL`,
+                [table, shared],
+              )
+              for (const { column, seq } of serials.rows) {
+                await to.query(
+                  `SELECT setval($1, coalesce((SELECT max(${id(column)}) FROM ${table}), 0) + 1, false)`,
+                  [seq],
+                )
+              }
+            }
+            await to.query('COMMIT')
+            return moved
+          } catch (error) {
+            await to.query('ROLLBACK')
+            throw error
+          }
+        })
+      } finally {
+        await from.end()
+      }
+    },
 
     listUsers: ({ limit, cursor }) =>
       inPool(async (db) => {

@@ -1,6 +1,7 @@
 import pg from 'pg'
 import { deleteIdleGuests } from './cleanup.ts'
 import { loadConfig } from './config.ts'
+import { formerSecrets } from './former.ts'
 import { migrate } from './migrate.ts'
 import { createPool } from './pool.ts'
 import { createAuthServer } from './server.ts'
@@ -22,7 +23,7 @@ const ready = async () => {
   return true
 }
 
-const server = createAuthServer(createPool(config, db), config, ready)
+const server = createAuthServer(createPool(config, db), config, ready, formerSecrets(db))
 server.listen(config.port, config.host, () => log('info', 'listening', { port: config.port }))
 
 // Postgres may still be starting (both start in the same deploy), so migrating is retried for a

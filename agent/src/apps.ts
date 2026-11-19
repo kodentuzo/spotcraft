@@ -139,9 +139,24 @@ export interface Databases {
    * returns the env that tells the app where it is: DATABASE_URL, and DATABASE_SCHEMA for a
    * schema.
    */
-  provision(name: string, password: string): Promise<Record<string, string>>
+  provision(
+    name: string,
+    password: string,
+    options?: { move?: boolean },
+  ): Promise<Record<string, string>>
   /** Drops the app's schema or database, and its role, if they exist. */
   purge(name: string): Promise<void>
+  /** Where the app's tables are: its schema, its own database (before ADR 0034), or nowhere. */
+  layout(name: string): Promise<'schema' | 'database' | 'none'>
+  /**
+   * Copies an app from its own database into its schema, in one transaction: its kit guests
+   * and live sessions into the pool (same ids and tokens), `formerSecret` (its old
+   * AUTH_SECRET, which signed their cookies) for the pool to accept, and the rows of each
+   * table of `public` that the new version made in the schema and left empty.
+   */
+  move(name: string, options: { formerSecret?: string }): Promise<Moved>
+  /** Drops the app's schema only, after a move that failed. */
+  dropSchema(name: string): Promise<void>
   /** A page of the user pool's users (ADR 0035), newest first. */
   listUsers(page: { limit: number; cursor?: string }): Promise<UserPage>
   /**
@@ -149,6 +164,13 @@ export interface Databases {
    * False if not found.
    */
   deleteUser(id: string): Promise<boolean>
+}
+
+/** What a move copied: guests, sessions, and rows per table. */
+export interface Moved {
+  users: number
+  sessions: number
+  tables: Record<string, number>
 }
 
 /** A user of the pool, as the dashboard shows it. */
@@ -395,7 +417,13 @@ export class Apps {
    * With `takeOver: false`, this deploy replaces no foreign DNS records whatever the app's
    * setting, which stays as stored (a hook release, ADR 0029).
    */
-  async #deploy(spec: AppSpec, { takeOver = Boolean(spec.takeOver) } = {}): Promise<AppStatus> {
+  async #deploy(
+    spec: AppSpec,
+    {
+      takeOver = Boolean(spec.takeOver),
+      move,
+    }: { takeOver?: boolean; move?: () => Promise<void> } = {},
+  ): Promise<AppStatus> {
     const previousSpec = await this.#store.get(spec.name)
     const oldHosts = previousSpec ? customHosts(previousSpec) : []
     const newHosts = customHosts(spec)
@@ -419,7 +447,7 @@ export class Apps {
           ),
         )
       }
-      status = await this.#rollOut(spec)
+      status = await this.#rollOut(spec, move)
     } catch (error) {
       // Put DNS back exactly as it was (records a take-over replaced included), and the
       // previous protection (best effort).
@@ -585,11 +613,11 @@ export class Apps {
    * new slot is healthy, so an agent that stops mid-deploy restarts with the live slot's files
    * (`recover`).
    */
-  async #rollOut(requested: AppSpec): Promise<AppStatus> {
+  async #rollOut(requested: AppSpec, move?: () => Promise<void>): Promise<AppStatus> {
     // Every app has a schema on a server with Postgres, including one released by its hook
     // from a spec stored before ADR 0034.
     const spec = { ...requested, database: this.hasDatabases }
-    const env = await this.#platformEnv(spec)
+    const env = await this.#platformEnv(spec, { move: Boolean(move) })
     const previous = await this.#store.read(spec.name)
     const live = previous ? composeService(previous.compose) : undefined
     const slot = live === slotService(spec.name, 'blue') ? 'green' : 'blue'
@@ -625,6 +653,16 @@ export class Apps {
       if (migrated.code !== 0) {
         await this.#abandon(spec.name, service, previous)
         throw new AgentError(`The migrations of ${spec.name} failed`, 502, tail(migrated))
+      }
+    }
+    // A move fills the new schema now that it has its tables, while the old version still
+    // serves (what it writes from here on stays behind).
+    if (move) {
+      try {
+        await move()
+      } catch (error) {
+        await this.#abandon(spec.name, service, previous)
+        throw error
       }
     }
     // Only the new slot's service, and no --remove-orphans: the live slot's container isn't in
@@ -813,9 +851,9 @@ export class Apps {
    * release, secret and address; the user pool's (with an issuer and an address); its schema
    * (on a server with Postgres).
    */
-  async #platformEnv(spec: AppSpec): Promise<Record<string, string>> {
+  async #platformEnv(spec: AppSpec, { move = false } = {}): Promise<Record<string, string>> {
     // The schema first: if it can't be prepared, nothing about the app is written yet.
-    const database = this.#databases ? await this.#provision(spec.name) : {}
+    const database = this.#databases ? await this.#provision(spec.name, { move }) : {}
     const env: Record<string, string> = {
       PORT: String(spec.port),
       APP_NAME: spec.name,
@@ -911,7 +949,7 @@ export class Apps {
   }
 
   /** Prepares the app's database with its stored password (generated the first time). */
-  async #provision(name: string): Promise<Record<string, string>> {
+  async #provision(name: string, { move = false } = {}): Promise<Record<string, string>> {
     if (!this.#databases) {
       throw new AgentError('This server has no Postgres configured for app databases', 409)
     }
@@ -919,7 +957,7 @@ export class Apps {
     const password = secrets.databasePassword ?? randomBytes(24).toString('hex')
     let env: Record<string, string>
     try {
-      env = await this.#databases.provision(name, password)
+      env = await this.#databases.provision(name, password, { move })
     } catch (error) {
       throw new AgentError(`Could not prepare the database for ${name}`, 502, message(error))
     }
@@ -933,6 +971,59 @@ export class Apps {
       })
     }
     return env
+  }
+
+  /** Where the app's tables are; `none` on a server without Postgres. */
+  async databaseLayout(name: string): Promise<'schema' | 'database' | 'none'> {
+    if (!(await this.#store.get(name))) throw new AgentError('No such app', 404)
+    return this.#databases ? this.#databases.layout(name) : 'none'
+  }
+
+  /**
+   * Moves an app made before ADR 0034 from its own database into its schema, deploying `tag`,
+   * a version made for the schema and the pool (ADR 0035): a backup first (if backups are set
+   * up), then the deploy, which copies the guests, sessions and rows between the new version's
+   * migrations and its start. The old database stays, unused, until someone drops it. If any
+   * of it fails, the schema goes and the old version keeps running on its own database.
+   */
+  move(name: string, tag: string): Promise<{ status: AppStatus; moved: Moved }> {
+    return this.#exclusive(async () => {
+      const databases = this.#databases
+      if (!databases) throw new AgentError('This server has no Postgres, so nothing to move', 409)
+      const spec = await this.#store.get(name)
+      if (!spec) throw new AgentError('No such app', 404)
+      if ((await databases.layout(name)) !== 'database') {
+        throw new AgentError(`${name} has no database of its own to move`, 409)
+      }
+      if (this.#backups) {
+        const backup = await this.#backup(name)
+        if (!backup.ok) throw new AgentError(`Could not back ${name} up first`, 502, backup.error)
+      }
+      let moved: Moved | undefined
+      const formerSecret = spec.env.AUTH_SECRET || undefined
+      try {
+        const status = await this.#deploy(
+          { ...spec, tag },
+          {
+            takeOver: false,
+            move: async () => {
+              try {
+                moved = await databases.move(name, { formerSecret })
+              } catch (error) {
+                throw new AgentError(`Could not copy ${name} into its schema`, 502, message(error))
+              }
+            },
+          },
+        )
+        if (this.#releases.get(name)?.state !== 'deploying') this.#releases.delete(name)
+        return { status, moved: moved as Moved }
+      } catch (error) {
+        await databases.dropSchema(name).catch((dropError: unknown) => {
+          console.warn(`could not drop the schema of ${name}: ${message(dropError)}`)
+        })
+        throw error
+      }
+    })
   }
 
   /**

@@ -57,16 +57,10 @@ const currentUser = async (c: pg.Client) =>
 const exists = async (c: pg.Client, sql: string, value: string) =>
   Boolean((await c.query(sql, [value])).rowCount)
 
-/** Whether the app still has its own database, from before ADR 0034. */
-export function hasOwnDatabase(adminUrl: string, name: string): Promise<boolean> {
-  return asAdmin(adminUrl, undefined, (admin) =>
-    exists(admin, 'SELECT 1 FROM pg_database WHERE datname = $1', appRoleName(name)),
-  )
-}
-
 /**
  * Where the app's tables live: its schema in the instance database, its own database (from
- * before ADR 0034), or nowhere yet.
+ * before ADR 0034), or nowhere yet. The schema wins: an app that moved keeps its old database
+ * until someone drops it.
  */
 export function appLayout(
   adminUrl: string,
@@ -75,12 +69,19 @@ export function appLayout(
 ): Promise<'schema' | 'database' | 'none'> {
   const role = appRoleName(name)
   return asAdmin(adminUrl, undefined, async (admin) => {
-    if (await exists(admin, 'SELECT 1 FROM pg_database WHERE datname = $1', role)) return 'database'
-    if (!(await exists(admin, 'SELECT 1 FROM pg_database WHERE datname = $1', instance)))
-      return 'none'
-    return asAdmin(adminUrl, instance, async (db) =>
-      (await exists(db, 'SELECT 1 FROM pg_namespace WHERE nspname = $1', role)) ? 'schema' : 'none',
+    const hasInstance = await exists(
+      admin,
+      'SELECT 1 FROM pg_database WHERE datname = $1',
+      instance,
     )
+    const hasSchema =
+      hasInstance &&
+      (await asAdmin(adminUrl, instance, (db) =>
+        exists(db, 'SELECT 1 FROM pg_namespace WHERE nspname = $1', role),
+      ))
+    if (hasSchema) return 'schema'
+    if (await exists(admin, 'SELECT 1 FROM pg_database WHERE datname = $1', role)) return 'database'
+    return 'none'
   })
 }
 
@@ -106,6 +107,11 @@ export interface ProvisionOptions {
   /** The password of the app's role; set again on every run. */
   password: string
   instance?: Instance
+  /**
+   * Sets up the schema even though the app still has its own database (from before ADR 0034):
+   * the start of moving it there. Its own database stays as it was.
+   */
+  move?: boolean
 }
 
 /**
@@ -116,15 +122,15 @@ export interface ProvisionOptions {
  *
  * The role owns its schema and has it as its `search_path`. It may connect to the instance
  * database and nothing else: no schemas of its own, no other app's. An app that still has its
- * own database (from before ADR 0034) keeps it, and gets no schema until it moves.
+ * own database (from before ADR 0034) keeps it, and gets no schema until it moves (`move`).
  */
 export async function provision(
   adminUrl: string,
-  { name, password, instance: where = INSTANCE }: ProvisionOptions,
+  { name, password, instance: where = INSTANCE, move = false }: ProvisionOptions,
 ): Promise<{ database: string }> {
   const role = appRoleName(name)
   if (password.length < 16) throw new Error('The app password must have at least 16 characters')
-  const ownDatabase = await hasOwnDatabase(adminUrl, name)
+  const ownDatabase = !move && (await appLayout(adminUrl, name, where)) === 'database'
   const instance = where.database
   if (!ownDatabase) await ensureInstance(adminUrl, where)
 
@@ -154,7 +160,10 @@ export async function provision(
       await admin.query('RESET ROLE')
       return
     }
-    await admin.query(`ALTER ROLE ${id(role)} SET search_path = ${id(role)}`)
+    // Only in the instance database: an app that is moving still uses `public` in its own.
+    await admin.query(
+      `ALTER ROLE ${id(role)} IN DATABASE ${id(instance)} SET search_path = ${id(role)}`,
+    )
     await admin.query(`GRANT ${id(where.group)} TO ${id(role)}`)
     await admin.query(`GRANT CONNECT ON DATABASE ${id(instance)} TO ${id(role)}`)
   })
@@ -164,6 +173,23 @@ export async function provision(
     db.query(`CREATE SCHEMA IF NOT EXISTS ${id(role)} AUTHORIZATION ${id(role)}`),
   )
   return { database: instance }
+}
+
+/**
+ * Drops the app's schema and everything in it, and nothing else: a move that failed leaves the
+ * app in its own database, as before.
+ */
+export async function dropSchema(
+  adminUrl: string,
+  name: string,
+  { database: instance } = INSTANCE,
+) {
+  const role = appRoleName(name)
+  await asAdmin(adminUrl, instance, async (db) => {
+    await db.query(`SET ROLE ${id(role)}`)
+    await db.query(`DROP SCHEMA IF EXISTS ${id(role)} CASCADE`)
+    await db.query('RESET ROLE')
+  })
 }
 
 /**

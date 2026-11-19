@@ -1,6 +1,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import { toNodeHandler } from 'better-auth/node'
 import type { Config } from './config.ts'
+import { resign } from './former.ts'
 import { BASE_PATH, isLocalOrigin, type Pool, type Pools } from './pool.ts'
 
 /** Headers a bearer client needs to read from responses: the session token and the JWT. */
@@ -30,12 +31,14 @@ function cors(req: IncomingMessage, res: ServerResponse, config: Config): boolea
 
 /**
  * The pool's HTTP server: Better Auth under `/_spotcraft/auth`, and `/health`, which answers
- * 200 once `ready()` resolves true (migrated and connected).
+ * 200 once `ready()` resolves true (migrated and connected). A session cookie signed with one
+ * of `formerSecrets()` (an app that moved into the pool) is re-signed first (`former.ts`).
  */
 export function createAuthServer(
   pools: Pools,
   config: Config,
   ready: () => Promise<boolean>,
+  formerSecrets: () => Promise<string[]> = async () => [],
 ): Server {
   const handlers = new WeakMap<Pool, ReturnType<typeof toNodeHandler>>()
   return createServer(async (req, res) => {
@@ -52,6 +55,14 @@ export function createAuthServer(
         return
       }
       if (cors(req, res, config)) return
+      const resigned = req.headers.cookie?.includes('session_token')
+        ? resign(req.headers.cookie, config.secret, await formerSecrets())
+        : undefined
+      if (resigned) {
+        req.headers.cookie = resigned.cookie
+        // Better Auth replaces it when it sets cookies itself (a renewal, a sign-out).
+        res.setHeader('set-cookie', resigned.setCookie)
+      }
       let handle = handlers.get(pool)
       if (!handle) {
         handle = toNodeHandler(pool)
