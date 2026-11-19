@@ -44,6 +44,8 @@ jobs:
       # Optional, with the two BACKUP_* secrets: nightly backups (infra/cloudflare's backup_settings).
       BACKUP_S3_ENDPOINT: ${{ vars.BACKUP_S3_ENDPOINT }}
       BACKUP_BUCKET: ${{ vars.BACKUP_BUCKET }}
+      # Optional: origins (comma-separated) that may call the user pool from other sites (ADR 0035).
+      AUTH_TRUSTED_ORIGINS: ${{ vars.AUTH_TRUSTED_ORIGINS }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -111,6 +113,7 @@ jobs:
             printf 'export BACKUP_S3_ENDPOINT=%q BACKUP_BUCKET=%q\n' "$BACKUP_S3_ENDPOINT" "$BACKUP_BUCKET"
             printf 'export BACKUP_ACCESS_KEY_ID=%q BACKUP_SECRET_ACCESS_KEY=%q\n' \
               "$BACKUP_ACCESS_KEY_ID" "$BACKUP_SECRET_ACCESS_KEY"
+            printf 'export AUTH_TRUSTED_ORIGINS=%q\n' "$AUTH_TRUSTED_ORIGINS"
             cat infra/remote-deploy.sh
           } | ssh server bash -s
 

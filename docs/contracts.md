@@ -48,11 +48,11 @@ Locally, `spotcraft dev` writes the same names to `.env`.
 
 One Postgres database per instance, `apps`, laid out like a Supabase project:
 
-| Schema       | Owner          | The app may                                    |
-| ------------ | -------------- | ---------------------------------------------- |
-| `app_<slug>` | the app's role | do anything: it is the app's own               |
-| `auth`       | the user pool  | read `auth.users` and point foreign keys at it |
-| other apps'  | their roles    | nothing                                        |
+| Schema       | Owner          | The app may                                                                                             |
+| ------------ | -------------- | ------------------------------------------------------------------------------------------------------- |
+| `app_<slug>` | the app's role | do anything: it is the app's own                                                                        |
+| `auth`       | the user pool  | read `auth.users` (`id`, `is_anonymous`, `created_at`, `updated_at`) and point foreign keys at its `id` |
+| other apps'  | their roles    | nothing                                                                                                 |
 
 - The app's role has its schema as its `search_path`, so unqualified names (Drizzle's
   `pgTable`) land there.
@@ -129,7 +129,8 @@ Users come from the instance's pool. Today they are all guests.
   - `iss` equals `AUTH_ISSUER`;
   - not expired.
 - **Claims:** `sub` (the user id, a UUID, the same as `auth.users.id`), `is_anonymous`, `iss`,
-  `iat`, `exp`.
+  `iat`, `exp`. Tokens last 15 minutes. `GET <AUTH_URL>/token` returns one for the session or
+  bearer token it is sent.
 - **App data** points at the user with a foreign key, `on delete cascade` or `on delete set
   null`. Deleting a user deletes their rows in every app. A key that blocks the delete is a bug.
 

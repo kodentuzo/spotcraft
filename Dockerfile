@@ -1,6 +1,7 @@
-# Spotcraft: one image for the agent and the dashboard (ADR 0025). Compose runs it twice,
-# choosing the program with `working_dir` and `command`:
+# Spotcraft: one image for the agent, the user pool and the dashboard (ADR 0025). Compose runs
+# it three times, choosing the program with `working_dir` and `command`:
 #   agent      working_dir /app/agent      command ["src/index.ts"]
+#   auth       working_dir /app/auth       command ["src/index.ts"]
 #   dashboard  working_dir /app/dashboard  command ["build"]
 # Only the agent's container gets the Docker socket. Per-service settings (ports, proxy headers,
 # paths) are set in Compose, not here.
@@ -27,9 +28,11 @@ COPY . .
 # dashboard is bundled into build/ and needs no node_modules.
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
   pnpm install --frozen-lockfile --store-dir "$PNPM_STORE_DIR" \
-    --filter @spotcraft/agent... --filter @spotcraft/dashboard... --filter ./packages/cli \
+    --filter @spotcraft/agent... --filter @spotcraft/auth... --filter @spotcraft/dashboard... \
+    --filter ./packages/cli \
   && pnpm --filter ./packages/cli build \
   && pnpm --filter @spotcraft/agent deploy --prod --store-dir "$PNPM_STORE_DIR" /out/agent \
+  && pnpm --filter @spotcraft/auth deploy --prod --store-dir "$PNPM_STORE_DIR" /out/auth \
   && pnpm --filter @spotcraft/dashboard build \
   && mkdir -p /out/dashboard /probes \
   && cp -r apps/dashboard/package.json apps/dashboard/build /out/dashboard/

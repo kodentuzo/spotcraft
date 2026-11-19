@@ -75,6 +75,15 @@ can create databases and roles but is not a superuser. Apps share the `apps` dat
 its own schema owned by its own role ([ADR 0034](decisions/0034-app-contract.md)). An app's role
 may connect to `apps` only, and can't create schemas or extensions or use other apps' schemas.
 
+**The user pool** ([ADR 0035](decisions/0035-auth-pool.md)) runs as its own container on the
+`web` and `db` networks, never on `edge`. Its Postgres role owns only the `auth` schema of
+`apps`. Apps may read a user's id, guest flag and times, and point foreign keys at the id; they
+can't read emails, sessions or keys, or change anything in `auth`. Its secret signs sessions and
+encrypts the token-signing keys; the deploy generates it and keeps it in `.env`. Each app domain
+gets its own base URL, so a session cookie is first-party on that domain and the origin check
+accepts only that origin, plus the origins set in `AUTH_TRUSTED_ORIGINS` for bearer clients. New
+guests are limited per client address, which Caddy sets in a header of its own.
+
 **Spotcraft's own containers** run without capabilities (Caddy keeps `NET_BIND_SERVICE` for ports
 80 and 443), with `no-new-privileges`, read-only root filesystems where the software allows,
 limits and health checks. None runs privileged. The agent and the dashboard run from one

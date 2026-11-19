@@ -8,6 +8,7 @@ from one dashboard. One instance per owner, not SaaS. Design the smallest thing 
 | Path              | What                                                                                                      |
 | ----------------- | --------------------------------------------------------------------------------------------------------- |
 | `agent/`          | Fastify agent on the server: deploys apps (Compose + Caddy site blocks), Postgres per app, Cloudflare DNS |
+| `auth/`           | The instance's user pool: Better Auth over the `auth` schema of the shared `apps` database                |
 | `apps/dashboard/` | SvelteKit dashboard; no database, asks the agent                                                          |
 | `apps/site/`      | The website, spotcraft.dev (docs are this repo's Markdown)                                                |
 | `packages/ui/`    | Shared shadcn-svelte components and theme                                                                 |

@@ -6,7 +6,7 @@ implementation: planned
 date: 2026-11-19
 supersedes: [16, 18]
 superseded_by: []
-notes: "Wave 1: the main pool with guests, bearer tokens and JWKS in the auth schema of the instance database; the route through each app's domain; the Pool page; moving sokobanko's and vinskiano's guests, sessions and tables. Sign-in, sign-out and turning a guest into a user come later. To check while building: Better Auth with a base URL and trusted origins that change per request."
+notes: "Built: the auth service (Better Auth behind Node's HTTP server, not Fastify) with guests, bearer tokens and EdDSA JWTs in the auth schema of the apps database, the deploy's roles and schema, idle-guest cleanup and a nightly dump of auth. Found while building: Better Auth's dynamic base URL trusts every origin its host patterns match, so the service keeps one Better Auth per host, each with that host as its base URL; the guest limit is therefore per host. Apps may read only id, is_anonymous, created_at and updated_at of auth.users. Better Auth turns its origin check off under a test runner, so it is set on explicitly. To build: the Caddy route, the Pool page, and moving sokobanko's and vinskiano's guests (their cookies are signed with each app's own secret, which the pool doesn't have). Sign-in, sign-out and turning a guest into a user come later."
 ---
 
 # Each instance runs one user pool, starting with guests

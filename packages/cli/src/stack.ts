@@ -34,12 +34,36 @@ ALTER ROLE spotcraft_agent SET createrole_self_grant = 'set';
 -- Apps get CONNECT on their own database only; the built-in ones are the agent's.
 REVOKE CONNECT ON DATABASE postgres, template1 FROM PUBLIC;
 GRANT CONNECT ON DATABASE postgres TO spotcraft_agent;
+-- The database apps share (ADR 0034), owned by the agent, and the group every app role joins.
+-- The agent may grant the group to the app roles it makes, without inheriting its rights.
+SELECT NOT EXISTS (SELECT FROM pg_database WHERE datname = 'apps') AS missing \\gset
+\\if :missing
+  CREATE DATABASE apps OWNER spotcraft_agent;
+\\endif
+REVOKE ALL ON DATABASE apps FROM PUBLIC;
+SELECT NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'spotcraft_app') AS missing \\gset
+\\if :missing
+  CREATE ROLE spotcraft_app NOLOGIN;
+\\endif
+GRANT spotcraft_app TO spotcraft_agent WITH ADMIN OPTION, INHERIT FALSE;
+-- The user pool's role (ADR 0035): it owns the auth schema in apps, and nothing else.
+SELECT NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'spotcraft_auth') AS missing \\gset
+\\if :missing
+  CREATE ROLE spotcraft_auth LOGIN PASSWORD :'auth_pw';
+\\else
+  ALTER ROLE spotcraft_auth LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE PASSWORD :'auth_pw';
+\\endif
+GRANT CONNECT ON DATABASE apps TO spotcraft_auth;
+\\c apps
+REVOKE ALL ON SCHEMA public FROM PUBLIC;
+CREATE SCHEMA IF NOT EXISTS auth AUTHORIZATION spotcraft_auth;
 `
 
 // Fixed local passwords keep DATABASE_URL the same across runs (and in .env). Acceptable only
 // because the port is bound to 127.0.0.1 and the data is throwaway.
 const SUPERUSER_PASSWORD = 'spotcraft-dev-superuser'
 const ADMIN_PASSWORD = 'spotcraft-dev-admin-password'
+const AUTH_PASSWORD = 'spotcraft-dev-auth-password'
 export const appPassword = (name: string) => `local-${name}-password`
 
 export const adminUrl = () =>
@@ -146,9 +170,9 @@ export async function up(runner: Runner = run) {
       '-d',
       'postgres',
     ],
-    `\\set pw ${ADMIN_PASSWORD}\n${ADMIN_SQL}`,
+    `\\set pw ${ADMIN_PASSWORD}\n\\set auth_pw ${AUTH_PASSWORD}\n${ADMIN_SQL}`,
   )
-  if (role.code !== 0) fail("Could not set up the agent's role.", role)
+  if (role.code !== 0) fail("Could not set up the agent's and the user pool's roles.", role)
 }
 
 /** Stops Postgres; the data stays in its volume. */

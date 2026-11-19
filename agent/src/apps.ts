@@ -18,6 +18,9 @@ import type { Runner, RunResult } from './runner.ts'
 import type { AppFiles, Store } from './store.ts'
 import { composeService, renderCompose, renderSite } from './templates.ts'
 
+/** Where the user pool's backups go in the bucket, and its key in `backupAll`'s result. */
+export const POOL_BACKUP = '_auth'
+
 export type { BackupStatus }
 
 export class AgentError extends Error {
@@ -145,7 +148,9 @@ export class Apps {
   readonly settings: AgentSettings
   readonly #domains: Domains | undefined
   readonly #access: AccessApps | undefined
-  readonly #backups: { target: BackupTarget; dump: Dump; now: () => Date } | undefined
+  readonly #backups:
+    | { target: BackupTarget; dump: Dump; dumpPool?: () => Promise<Buffer>; now: () => Date }
+    | undefined
   /** Apps with a backup on request waiting or running. */
   readonly #backingUp = new Set<string>()
   #queue: Promise<unknown> = Promise.resolve()
@@ -171,8 +176,16 @@ export class Apps {
      * protected apps are put behind Cloudflare Access (ADR 0021).
      */
     cloudflare?: { domains: Domains; access?: AccessApps },
-    /** With it, apps are backed up to a bucket (ADR 0030): `backupAll`, nightly. */
-    backups?: { target: BackupTarget; dump: Dump; now?: () => Date },
+    /**
+     * With it, apps are backed up to a bucket (ADR 0030): `backupAll`, nightly. `dumpPool`
+     * dumps the user pool's `auth` schema (ADR 0035), backed up after the apps.
+     */
+    backups?: {
+      target: BackupTarget
+      dump: Dump
+      dumpPool?: () => Promise<Buffer>
+      now?: () => Date
+    },
   ) {
     this.#store = store
     this.#run = run
@@ -769,7 +782,8 @@ export class Apps {
 
   /**
    * Backs up every app, one at a time, each in its own turn in the queue so deploys can go
-   * between them. A failed app doesn't stop the others; its status says why.
+   * between them, then the user pool (under `POOL_BACKUP`). A failure doesn't stop the others;
+   * its status says why.
    */
   async backupAll(): Promise<Record<string, BackupStatus>> {
     const result: Record<string, BackupStatus> = {}
@@ -780,7 +794,29 @@ export class Apps {
       )
       if (status) result[spec.name] = status
     }
+    const dumpPool = this.#backups.dumpPool
+    if (dumpPool) result[POOL_BACKUP] = await this.#exclusive(() => this.#backupPool(dumpPool))
     return result
+  }
+
+  /**
+   * The user pool's `auth` schema, as `_auth/<time>/auth.dump` (app names can't start with
+   * `_`). Its secret is in the server's .env, which Hetzner's backups hold.
+   */
+  async #backupPool(dump: () => Promise<Buffer>): Promise<BackupStatus> {
+    const backups = this.#backups
+    if (!backups) throw new AgentError('Backups are not set up on this server', 409)
+    const key = `${POOL_BACKUP}/${backupStamp(backups.now())}/`
+    try {
+      const data = await dump()
+      await backups.target.put(`${key}auth.dump`, data)
+      const at = backups.now().toISOString()
+      return { at, ok: true, key, bytes: data.length, lastOkAt: at }
+    } catch (error) {
+      const status = { at: backups.now().toISOString(), ok: false, error: message(error) }
+      console.warn(`backup of the user pool failed: ${status.error}`)
+      return status
+    }
   }
 
   /**

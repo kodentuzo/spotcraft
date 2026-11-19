@@ -76,6 +76,7 @@ changes are listed in the [changelog](CHANGELOG.md).
 | Path                     | What                                               |
 | ------------------------ | -------------------------------------------------- |
 | `agent`                  | the agent (Fastify): deploys the apps              |
+| `auth`                   | the user pool (Better Auth): guests for every app  |
 | `apps/dashboard`         | the dashboard (SvelteKit)                          |
 | `apps/site`              | the website (Astro, on GitHub Pages)               |
 | `packages/cli`           | `spotcraft dev`, and app schema provisioning       |
