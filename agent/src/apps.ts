@@ -243,6 +243,8 @@ export interface VisitSummary {
   browsers: Breakdown
   /** Custom events the app sends (`umami.track`). */
   events: Breakdown
+  /** Views and visitors per UTC day (`YYYY-MM-DD`), oldest first; empty when Umami can't say. */
+  perDay: { day: string; views: number; visitors: number }[]
 }
 
 export type Breakdown = { name: string; count: number }[]

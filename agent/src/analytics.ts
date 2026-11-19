@@ -79,18 +79,47 @@ export class Umami implements Analytics {
           Array.isArray(rows) ? rows.map(({ x, y }) => ({ name: x ?? '(unknown)', count: y })) : [],
         () => [],
       )
-    const [stats, pages, systems, hostnames, referrers, countries, devices, browsers, events] =
-      await Promise.all([
-        get<Stats & { comparison?: Partial<Stats> }>(`/stats?${range}`),
-        get<Metric>(`/metrics?${range}&type=path&limit=10`),
-        get<Metric>(`/metrics?${range}&type=os&limit=10`),
-        breakdown('hostname'),
-        breakdown('referrer'),
-        breakdown('country'),
-        breakdown('device'),
-        breakdown('browser'),
-        breakdown('event'),
-      ])
+    type Series = { x: string; y: number }[]
+    const perDay = get<{ pageviews?: Series; sessions?: Series }>(
+      `/pageviews?${range}&unit=day&timezone=UTC`,
+    ).then(
+      ({ pageviews, sessions }) => {
+        const byDay = new Map<string, { day: string; views: number; visitors: number }>()
+        const at = (x: string) => {
+          const day = String(x).slice(0, 10)
+          const entry = byDay.get(day) ?? { day, views: 0, visitors: 0 }
+          byDay.set(day, entry)
+          return entry
+        }
+        for (const { x, y } of Array.isArray(pageviews) ? pageviews : []) at(x).views += y
+        for (const { x, y } of Array.isArray(sessions) ? sessions : []) at(x).visitors += y
+        return [...byDay.values()].sort((a, b) => a.day.localeCompare(b.day))
+      },
+      () => [],
+    )
+    const [
+      stats,
+      pages,
+      systems,
+      hostnames,
+      referrers,
+      countries,
+      devices,
+      browsers,
+      events,
+      daily,
+    ] = await Promise.all([
+      get<Stats & { comparison?: Partial<Stats> }>(`/stats?${range}`),
+      get<Metric>(`/metrics?${range}&type=path&limit=10`),
+      get<Metric>(`/metrics?${range}&type=os&limit=10`),
+      breakdown('hostname'),
+      breakdown('referrer'),
+      breakdown('country'),
+      breakdown('device'),
+      breakdown('browser'),
+      breakdown('event'),
+      perDay,
+    ])
     return {
       days,
       views: stats.pageviews ?? 0,
@@ -108,6 +137,7 @@ export class Umami implements Analytics {
       devices,
       browsers,
       events,
+      perDay: daily,
     }
   }
 

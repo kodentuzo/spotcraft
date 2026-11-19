@@ -36,7 +36,16 @@ function fakeUmami(initialPassword = 'umami') {
       websites.set(id, body)
       return json(200, { id })
     }
-    const numbers = /^\/api\/websites\/[^/]+\/(stats|metrics)$/.exec(url.pathname)?.[1]
+    const numbers = /^\/api\/websites\/[^/]+\/(stats|metrics|pageviews)$/.exec(url.pathname)?.[1]
+    if (numbers === 'pageviews') {
+      return json(200, {
+        pageviews: [
+          { x: '2026-11-18 00:00:00', y: 4 },
+          { x: '2026-11-19 00:00:00', y: 6 },
+        ],
+        sessions: [{ x: '2026-11-19 00:00:00', y: 2 }],
+      })
+    }
     if (numbers === 'stats') return json(200, { pageviews: 12, visitors: 5, visits: 7 })
     if (numbers === 'metrics') {
       const type = url.searchParams.get('type')
@@ -120,5 +129,9 @@ describe("the agent's Umami client", () => {
     ])
     assert.deepEqual(summary.referrers, [{ name: 'x', count: 2 }])
     assert.deepEqual(summary.events, [])
+    assert.deepEqual(summary.perDay, [
+      { day: '2026-11-18', views: 4, visitors: 0 },
+      { day: '2026-11-19', views: 6, visitors: 2 },
+    ])
   })
 })

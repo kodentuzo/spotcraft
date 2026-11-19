@@ -1383,6 +1383,7 @@ describe('analytics (ADR 0038)', () => {
             devices: [],
             browsers: [],
             events: [],
+            perDay: [],
           }
         },
       },

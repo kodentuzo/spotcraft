@@ -207,7 +207,8 @@ site then counts nothing, and after a start the agent keeps trying in the backgr
 
 - `visits`, from Umami: views, visitors and visits over the last `days`, the same before, and
   and the top ten pages, hosts, referrers, countries (ISO codes), devices, browsers, operating
-  systems and custom events. A breakdown Umami refuses stays empty, and the rest still show;
+  systems and custom events, and views and visitors per UTC day. A breakdown Umami refuses
+  stays empty, and the rest still show;
 - `accounts`, from the pool's sessions on the app's hosts: accounts active in the last day,
   7 days and 30 days, new accounts per day (their first session on these hosts), and active
   accounts per `Spotcraft-Client` value.
