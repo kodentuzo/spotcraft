@@ -10,6 +10,27 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
 
 ## [Unreleased]
 
+### Changed
+
+- **Dashboard home:** an overview (apps running, server memory and disk, backups when set up)
+  above a list with a row per app: its icon (from its site) or initial, status, last deploy,
+  24 hourly uptime bars, memory against its limit, and visitors (or requests without
+  analytics). A failed backup, deploy or custom domain shows only when there is one. Apps
+  that need a look come first.
+- **App page:** a header with the app's icon, status and address (Redeploy, Edit, Visit),
+  and tabs: Overview (failures first, then the deployment, its health and its usage totals), Usage, Settings
+  (with Remove at the bottom) and Logs. Tabs are links (`?tab=`), so they work without
+  JavaScript and can be shared.
+- **Usage panels:** an app's Usage tab opens with a chart of the last 7 days, with tabs for
+  visitors, page views, new accounts and requests and each one's change from the week
+  before. Then it breaks its visits down by page and host, referrer,
+  country, device and browser, operating system, custom event (`umami.track`) and app
+  version. The agent asks Umami for each; one Umami can't give stays empty.
+- **Agent:** records each app's last deploy (time, tag, and the error if it failed) in
+  `deploy.json`, and returns it as `lastDeploy` with the app
+  ([ADR 0039](docs/decisions/0039-app-status-at-a-glance.md)). Apps show it after their next
+  deploy.
+
 ## [0.7.0] - 2026-11-19
 
 Every app counts its usage, with no change to the app

@@ -19,9 +19,10 @@ import {
 } from '#lib/server/agent.ts'
 import { instant, promql, range } from '#lib/server/metrics.ts'
 import { writeProbes } from '#lib/server/probes.ts'
+import { specOf } from '#lib/spec.ts'
 import type { Actions, PageServerLoad } from './$types'
 
-export const load: PageServerLoad = async ({ params, url }) => {
+export const load: PageServerLoad = async ({ params, url, untrack }) => {
   const { name } = params
   // The name goes into PromQL and agent URLs before the app is looked up: only valid names.
   if (!new RegExp(NAME).test(name)) error(404, 'No such app')
@@ -34,6 +35,7 @@ export const load: PageServerLoad = async ({ params, url }) => {
     up,
     uptimeDay,
     uptimeWeek,
+    uptimeHourly,
     logs,
     hook,
     settings,
@@ -47,6 +49,7 @@ export const load: PageServerLoad = async ({ params, url }) => {
     instant(promql.appUp(name)),
     instant(promql.appUptime(name, '24h')),
     instant(promql.appUptime(name, '7d')),
+    range(promql.appUptimeHourly(name), 24 * 60, 3600),
     appLogs(name, 200),
     hookEnabled(name).catch(() => undefined),
     getSettings().catch(() => undefined),
@@ -67,20 +70,27 @@ export const load: PageServerLoad = async ({ params, url }) => {
     when(() => instant(promql.appErrorsDay(hosts)), null),
     when(() => instant(promql.appLatencyP95(hosts)), null),
     when(() => range(promql.appRequestsPerHour(hosts), 24 * 60, 3600), []),
-  ]).then(([counted, requests, errors, p95, perHour]) => ({
+    when(() => instant(promql.appRequestsWeek(hosts)), null),
+    when(() => instant(promql.appRequestsWeek(hosts, true)), null),
+    // Seven points a day apart, each the day before it, the last ending now.
+    when(() => range(promql.appRequestsPerDay(hosts), 6 * 24 * 60, 86400), []),
+  ]).then(([counted, requests, errors, p95, perHour, week, previousWeek, perDay]) => ({
     ...counted,
-    requests: { day: requests, errors, p95, perHour },
+    requests: { day: requests, errors, p95, perHour, week, previousWeek, perDay },
   }))
   return {
     app,
-    metrics: { cpu, memory, response, up, uptimeDay, uptimeWeek },
+    metrics: { cpu, memory, response, up, uptimeDay, uptimeWeek, uptimeHourly },
     logs,
     domain,
     usage,
     // Always https: behind the tunnel the dashboard itself sees plain HTTP.
-    hook: { enabled: hook, url: `https://${url.host}/hooks/deploy/${name}` },
+    // Untracked: switching tabs (`?tab=`) changes the URL but needs no new data.
+    hook: { enabled: hook, url: `https://${untrack(() => url.host)}/hooks/deploy/${name}` },
     // Backups (ADR 0030): null when the server has none set up.
     backup: settings?.backups ? { last: backup } : null,
+    // When the page was made, so server and browser draw the same hours.
+    now: Date.now(),
     // An app made before ADR 0034 still has its own database, until it moves.
     ownDatabase: layout === 'database',
   }
@@ -91,8 +101,7 @@ export const actions: Actions = {
   redeploy: async ({ params }) => {
     const app = await getApp(params.name)
     if (!app) error(404, 'No such app')
-    const { name, state, health, status, hostnames, ...input } = app
-    const result = await deployApp(name, input)
+    const result = await deployApp(app.name, specOf(app))
     if (!result.ok) return fail(502, { deployError: result.error, output: result.output })
     return { redeployed: true }
   },

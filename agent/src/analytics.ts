@@ -14,7 +14,8 @@ export interface Analytics {
   /** Deletes the website and its numbers; one that is already gone is fine. */
   deleteWebsite(id: string): Promise<void>
   /** What the website counted over the last `days` days, and the days before. */
-  summary(id: string, days: number): Promise<VisitSummary>
+  /** With `brief`, only the totals: one call to Umami instead of one per breakdown. */
+  summary(id: string, days: number, brief?: boolean): Promise<VisitSummary>
 }
 
 /** Umami's account on a fresh install. Nothing exposes it: Caddy routes only the tracker. */
@@ -59,7 +60,7 @@ export class Umami implements Analytics {
     return id
   }
 
-  async summary(id: string, days: number): Promise<VisitSummary> {
+  async summary(id: string, days: number, brief = false): Promise<VisitSummary> {
     const endAt = Date.now()
     const startAt = endAt - days * 24 * 60 * 60 * 1000
     const range = `startAt=${startAt}&endAt=${endAt}`
@@ -71,10 +72,56 @@ export class Umami implements Analytics {
     }
     type Stats = { pageviews: number; visitors: number; visits: number }
     type Metric = { x: string | null; y: number }[]
-    const [stats, pages, systems] = await Promise.all([
+    const metric = (type: string): Promise<Metric> =>
+      brief ? Promise.resolve([]) : get<Metric>(`/metrics?${range}&type=${type}&limit=10`)
+    // A breakdown Umami can't give leaves its list empty; the totals still show.
+    const breakdown = (type: string) =>
+      metric(type).then(
+        (rows) =>
+          Array.isArray(rows) ? rows.map(({ x, y }) => ({ name: x ?? '(unknown)', count: y })) : [],
+        () => [],
+      )
+    type Series = { x: string; y: number }[]
+    type Daily = { pageviews?: Series; sessions?: Series }
+    const perDay = (
+      brief ? Promise.resolve<Daily>({}) : get<Daily>(`/pageviews?${range}&unit=day&timezone=UTC`)
+    ).then(
+      ({ pageviews, sessions }) => {
+        const byDay = new Map<string, { day: string; views: number; visitors: number }>()
+        const at = (x: string) => {
+          const day = String(x).slice(0, 10)
+          const entry = byDay.get(day) ?? { day, views: 0, visitors: 0 }
+          byDay.set(day, entry)
+          return entry
+        }
+        for (const { x, y } of Array.isArray(pageviews) ? pageviews : []) at(x).views += y
+        for (const { x, y } of Array.isArray(sessions) ? sessions : []) at(x).visitors += y
+        return [...byDay.values()].sort((a, b) => a.day.localeCompare(b.day))
+      },
+      () => [],
+    )
+    const [
+      stats,
+      pages,
+      systems,
+      hostnames,
+      referrers,
+      countries,
+      devices,
+      browsers,
+      events,
+      daily,
+    ] = await Promise.all([
       get<Stats & { comparison?: Partial<Stats> }>(`/stats?${range}`),
-      get<Metric>(`/metrics?${range}&type=path&limit=5`),
-      get<Metric>(`/metrics?${range}&type=os&limit=5`),
+      metric('path'),
+      metric('os'),
+      breakdown('hostname'),
+      breakdown('referrer'),
+      breakdown('country'),
+      breakdown('device'),
+      breakdown('browser'),
+      breakdown('event'),
+      perDay,
     ])
     return {
       days,
@@ -87,6 +134,13 @@ export class Umami implements Analytics {
       },
       pages: pages.map(({ x, y }) => ({ path: x ?? '(unknown)', views: y })),
       systems: systems.map(({ x, y }) => ({ name: x ?? '(unknown)', visitors: y })),
+      hostnames,
+      referrers,
+      countries,
+      devices,
+      browsers,
+      events,
+      perDay: daily,
     }
   }
 

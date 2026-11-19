@@ -843,6 +843,26 @@ describe('agent', () => {
     assert.equal(stored.tag, '2.0.0')
   })
 
+  it('records the last deploy, and the last one that worked when one fails', async () => {
+    await app.inject({ method: 'PUT', url: '/apps/tagtape', headers: auth, payload: spec })
+    const first = (await app.inject({ url: '/apps/tagtape', headers: auth })).json()
+    assert.equal(first.lastDeploy.ok, true)
+    assert.equal(first.lastDeploy.tag, '2.0.0')
+    docker.failWhen((args) => args.includes('pull'))
+    await app.inject({
+      method: 'PUT',
+      url: '/apps/tagtape',
+      headers: auth,
+      payload: { ...spec, tag: '9.9.9' },
+    })
+    const [listed] = (await app.inject({ url: '/apps', headers: auth })).json().apps
+    assert.equal(listed.lastDeploy.ok, false)
+    assert.equal(listed.lastDeploy.tag, '9.9.9')
+    assert.ok(listed.lastDeploy.error)
+    assert.equal(listed.lastDeploy.lastOkTag, '2.0.0')
+    assert.equal(listed.lastDeploy.lastOkAt, first.lastDeploy.at)
+  })
+
   it('lists, shows logs for and removes apps', async () => {
     await app.inject({ method: 'PUT', url: '/apps/tagtape', headers: auth, payload: spec })
     await app.inject({
@@ -1357,6 +1377,13 @@ describe('analytics (ADR 0038)', () => {
             previous: { views: 10, visitors: 4 },
             pages: [{ path: '/', views: 9 }],
             systems: [{ name: 'iOS', visitors: 3 }],
+            hostnames: [],
+            referrers: [],
+            countries: [],
+            devices: [],
+            browsers: [],
+            events: [],
+            perDay: [],
           }
         },
       },

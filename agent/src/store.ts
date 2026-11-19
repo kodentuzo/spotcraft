@@ -1,6 +1,7 @@
 import { access, chmod, mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { AppSpec } from './app-spec.ts'
+import type { DeployStatus } from './apps.ts'
 import type { BackupStatus } from './backups.ts'
 
 /** Everything the server knows about one app; the files are the only record. */
@@ -231,6 +232,26 @@ export class Store {
   /** Written next to it, then renamed: a reader never sees half a file. */
   async writeBackupStatus(name: string, status: BackupStatus) {
     const path = this.#backupStatusPath(name)
+    await writeFile(`${path}.next`, `${JSON.stringify(status, null, 2)}\n`)
+    await rename(`${path}.next`, path)
+  }
+
+  #deployStatusPath(name: string) {
+    return join(this.appDir(name), 'deploy.json')
+  }
+
+  /** The app's last deploy; undefined if none was recorded, or its file can't be read. */
+  async readDeployStatus(name: string): Promise<DeployStatus | undefined> {
+    try {
+      return JSON.parse(await readFile(this.#deployStatusPath(name), 'utf8')) as DeployStatus
+    } catch {
+      return undefined
+    }
+  }
+
+  /** Written next to it, then renamed, like the backup status. */
+  async writeDeployStatus(name: string, status: DeployStatus) {
+    const path = this.#deployStatusPath(name)
     await writeFile(`${path}.next`, `${JSON.stringify(status, null, 2)}\n`)
     await rename(`${path}.next`, path)
   }

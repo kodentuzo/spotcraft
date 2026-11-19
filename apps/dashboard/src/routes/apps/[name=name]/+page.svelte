@@ -1,77 +1,55 @@
 <script lang="ts">
   import { Alert, AlertDescription, AlertTitle } from '@spotcraft/ui/components/alert'
-  import * as AlertDialog from '@spotcraft/ui/components/alert-dialog'
-  import { Button, buttonVariants } from '@spotcraft/ui/components/button'
-  import { Input } from '@spotcraft/ui/components/input'
-  import { Label } from '@spotcraft/ui/components/label'
-  import { backupHealth } from '#lib/backup.ts'
-  import Sparkline from '#lib/components/Sparkline.svelte'
-  import Stat from '#lib/components/Stat.svelte'
+  import { Button } from '@spotcraft/ui/components/button'
+  import AppTile from '#lib/components/AppTile.svelte'
   import StatusBadge from '#lib/components/StatusBadge.svelte'
-  import { ago, bytes, count, dateTime, milliseconds, percent, uptime } from '#lib/format.ts'
   import { enhance } from '$app/forms'
+  import { page } from '$app/state'
   import type { PageProps } from './$types'
+  import Overview from './Overview.svelte'
+  import Settings from './Settings.svelte'
+  import Usage from './Usage.svelte'
 
   let { data, form }: PageProps = $props()
 
   const app = $derived(data.app)
-  const m = $derived(data.metrics)
-  const last = (series: Array<[number, number]>) => (series.length ? series[series.length - 1][1] : null)
+  const host = $derived(app.domain ?? app.hostnames[0])
   let redeploying = $state(false)
 
-  const stateLabel = { active: 'Active', pending: 'Pending', missing: 'Missing', unknown: 'Not checked' }
-  const modeLabel = { zone: 'DNS by Spotcraft', saas: 'Cloudflare custom hostname', manual: 'DNS set by hand' }
-  let purge = $state(false)
-  let backingUp = $state(false)
-  let moving = $state(false)
-
-  // A GitHub Actions step for the app's workflow, after its image is pushed (ADR 0029).
-  const hookStep = $derived(`- name: Deploy to Spotcraft
-  timeout-minutes: 20
-  env:
-    URL: ${data.hook.url}
-    TOKEN: \${{ secrets.SPOTCRAFT_DEPLOY_TOKEN }}
-    # A pull may take 5 minutes and the health check 2, after other apps' deploys.
-    WAIT_MINUTES: 15
-  run: |
-    TAG="sha-\${GITHUB_SHA::7}"
-    auth="Authorization: Bearer $TOKEN"
-    curl -fsS --retry 5 --retry-all-errors -X POST "$URL" -H "$auth" \\
-      -H 'content-type: application/json' -d "{\\"tag\\":\\"$TAG\\"}"
-    deadline=$((SECONDS + WAIT_MINUTES * 60))
-    while [ "$SECONDS" -lt "$deadline" ]; do
-      sleep 5
-      # A failed poll (Spotcraft restarting, a network blip) is tried again.
-      result=$(curl -fsS "$URL" -H "$auth") || continue
-      case $(echo "$result" | jq -r '.state + " " + .tag') in
-        "live $TAG") exit 0 ;;
-        live*) echo "Another tag is live: $result"; exit 1 ;;
-        failed*) echo "$result"; exit 1 ;;
-      esac
-    done
-    echo "Not live after $WAIT_MINUTES minutes"; exit 1`)
+  const tabs = [
+    { id: 'overview', label: 'Overview' },
+    { id: 'usage', label: 'Usage' },
+    { id: 'settings', label: 'Settings' },
+    { id: 'logs', label: 'Logs' },
+  ] as const
+  type Tab = (typeof tabs)[number]['id']
+  // A form's result belongs to the Settings tab, even when the browser posted without the tab.
+  const tab = $derived.by((): Tab => {
+    const asked = page.url.searchParams.get('tab')
+    if (tabs.some((t) => t.id === asked)) return asked as Tab
+    if (form && !('deployError' in form) && !('redeployed' in form)) return 'settings'
+    return 'overview'
+  })
 </script>
 
 <svelte:head><title>{app.name} · Spotcraft</title></svelte:head>
 
-<a href="/" class="text-sm text-muted-foreground hover:text-foreground">← Apps</a>
+<a href="/" class="text-footnote text-muted-foreground hover:text-foreground">← Apps</a>
 
-<div class="mt-2 mb-6 flex flex-wrap items-start justify-between gap-4">
-  <div>
-    <div class="flex items-center gap-3">
-      <h1 class="font-heading text-2xl font-bold">{app.name}</h1>
-      <StatusBadge state={app.state} health={app.health} />
+<header class="mt-3 mb-6 flex flex-wrap items-center justify-between gap-4">
+  <div class="flex min-w-0 items-center gap-4">
+    <AppTile name={app.name} {host} size="lg" />
+    <div class="min-w-0">
+      <div class="flex flex-wrap items-center gap-3">
+        <h1 class="font-heading text-title-1 font-bold">{app.name}</h1>
+        <StatusBadge state={app.state} health={app.health} />
+      </div>
+      {#if host}
+        <a href="https://{host}" class="block truncate text-footnote text-muted-foreground hover:text-foreground hover:underline" target="_blank" rel="noopener noreferrer">{host}</a>
+      {/if}
     </div>
-    <p class="mt-1 text-sm text-muted-foreground">
-      {#each app.hostnames as host (host)}
-        <a href="https://{host}" class="hover:underline" target="_blank" rel="noopener noreferrer">{host}</a><span aria-hidden="true" class="px-1">·</span>
-      {/each}
-      <span class="font-mono">{app.image}:{app.tag}</span>
-      {#if app.status}· {app.status}{/if}
-    </p>
   </div>
   <div class="flex gap-2">
-    <Button href="/apps/{app.name}/edit" variant="outline">Edit</Button>
     <form
       method="POST"
       action="?/redeploy"
@@ -85,39 +63,10 @@
     >
       <Button type="submit" variant="outline" disabled={redeploying}>{redeploying ? 'Redeploying…' : 'Redeploy'}</Button>
     </form>
-    <AlertDialog.Root>
-      <AlertDialog.Trigger class={buttonVariants({ variant: 'destructive' })}>Remove</AlertDialog.Trigger>
-      <AlertDialog.Content>
-        <AlertDialog.Header>
-          <AlertDialog.Title>Remove {app.name}?</AlertDialog.Title>
-          <AlertDialog.Description>
-            Stops the container and removes its settings and its site. {app.hostnames.join(' and ')} stop answering. The image stays on Docker Hub, so you can add it again.
-            {#if app.database}
-              Its database is kept, so adding the app again brings its data back, unless you delete it below.
-            {/if}
-          </AlertDialog.Description>
-        </AlertDialog.Header>
-        <form id="remove-app" method="POST" action="?/remove">
-          {#if app.database}
-            <label class="flex items-start gap-3 text-sm">
-              <input type="checkbox" name="purge" bind:checked={purge} class="mt-1 size-4 accent-destructive" />
-              <span>
-                Also delete its database
-                <span class="block text-xs text-muted-foreground">Every row in app_{app.name.replaceAll('-', '_')} is lost. This cannot be undone.</span>
-              </span>
-            </label>
-          {/if}
-        </form>
-        <AlertDialog.Footer>
-          <AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
-          <Button type="submit" form="remove-app" variant="destructive">
-            {purge ? `Remove ${app.name} and its data` : `Remove ${app.name}`}
-          </Button>
-        </AlertDialog.Footer>
-      </AlertDialog.Content>
-    </AlertDialog.Root>
+    <Button href="/apps/{app.name}/edit" variant="outline">Edit</Button>
+    {#if host}<Button href="https://{host}" target="_blank" rel="noopener noreferrer">Visit</Button>{/if}
   </div>
-</div>
+</header>
 
 {#if form && 'deployError' in form}
   <Alert variant="destructive" class="mb-6">
@@ -131,267 +80,27 @@
   <Alert class="mb-6"><AlertTitle>Redeployed</AlertTitle></Alert>
 {/if}
 
-<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-  <Stat label="Reachable now" value={m.up === null ? '—' : m.up === 1 ? 'Yes' : 'No'} detail={app.protected ? "Every address, probed over the internet, up to the Access sign-in" : "Every address, checked over HTTPS through the internet"} />
-  <Stat label="Uptime" value={uptime(m.uptimeDay)} detail="Last 24 hours · 7 days: {uptime(m.uptimeWeek)}" />
-  <Stat label="CPU" value={percent(last(m.cpu) === null ? null : (last(m.cpu) ?? 0) * 100, 1)} detail="of one core · limit {app.cpus}">
-    <Sparkline series={m.cpu.map(([t, v]) => [t, v * 100] as [number, number])} format={(v) => percent(v, 1)} label="CPU, last hour" />
-  </Stat>
-  <Stat label="Memory" value={bytes(last(m.memory))} detail="limit {app.memory}">
-    <Sparkline series={m.memory} format={bytes} label="Memory, last hour" />
-  </Stat>
-</div>
+<nav aria-label="App sections" class="mb-6 flex overflow-x-auto border-b">
+  {#each tabs as t (t.id)}
+    <a
+      href={t.id === 'overview' ? `/apps/${app.name}` : `?tab=${t.id}`}
+      data-sveltekit-noscroll
+      aria-current={tab === t.id ? 'page' : undefined}
+      class="-mb-px flex min-h-11 items-center border-b-2 px-4 text-footnote whitespace-nowrap {tab === t.id ? 'border-foreground font-medium' : 'border-transparent text-muted-foreground hover:text-foreground'}"
+    >{t.label}</a>
+  {/each}
+</nav>
 
-<div class="mt-4 grid gap-4 sm:grid-cols-2">
-  <Stat label="Response time" value={milliseconds(last(m.response))} detail="Full HTTPS request, over the internet">
-    <Sparkline series={m.response} format={milliseconds} label="Response time, last hour" />
-  </Stat>
-  <div class="space-y-2 border p-4 text-sm">
-    <p class="text-muted-foreground">Settings</p>
-    <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1">
-      <dt class="text-muted-foreground">Port</dt><dd class="tabular-nums">{app.port}</dd>
-      <dt class="text-muted-foreground">Filesystem</dt><dd>{app.readOnly ? 'Read-only' : 'Writable'}</dd>
-      <dt class="text-muted-foreground">Database</dt>
-      <dd>
-        {#if app.database}Postgres <span class="font-mono">app_{app.name.replaceAll('-', '_')}</span>{:else}None{/if}
-      </dd>
-      <dt class="text-muted-foreground">Sign-in</dt><dd>{app.protected ? 'Cloudflare Access' : 'Public'}</dd>
-      <dt class="text-muted-foreground">Analytics</dt><dd>{app.analytics === false ? 'Off' : 'On'}</dd>
-      <dt class="text-muted-foreground">Environment</dt><dd>{Object.keys(app.env).length === 1 ? '1 variable' : `${Object.keys(app.env).length} variables`}</dd>
-    </dl>
-  </div>
-</div>
-
-<section class="mt-8">
-  <h2 class="mb-2 font-heading text-lg font-semibold">Usage</h2>
-  {#await data.usage}
-    <p class="text-sm text-muted-foreground">Counting…</p>
-  {:then usage}
-    {@const visits = usage.visits}
-    {@const accounts = usage.accounts}
-    {@const requests = usage.requests}
-    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-      <Stat
-        label="Visitors"
-        value={count(visits?.visitors)}
-        detail={visits ? `Last ${visits.days} days · ${count(visits.previous.visitors)} the ${visits.days} before` : app.analytics === false ? 'Analytics is off for this app' : 'Not counted yet'}
-      />
-      <Stat
-        label="Page views"
-        value={count(visits?.views)}
-        detail={visits ? `${count(visits.visits)} visits · ${count(visits.previous.views)} views the ${visits.days} days before` : 'Pages and app screens'}
-      />
-      <Stat
-        label="Active accounts"
-        value={count(accounts?.active.week)}
-        detail={accounts ? `Last 7 days · ${count(accounts.active.day)} today · ${count(accounts.active.month)} in 30 days` : 'Accounts in the user pool that use this app'}
-      >
-        {#if accounts && accounts.newPerDay.length > 1}
-          <Sparkline
-            series={accounts.newPerDay.map(({ day, count: n }) => [Date.parse(day) / 1000, n] as [number, number])}
-            format={(v) => `${count(v)} new`}
-            label="New accounts per day, last 30 days"
-          />
-        {/if}
-      </Stat>
-      <Stat
-        label="Requests"
-        value={count(requests.day)}
-        detail={requests.day === null ? 'Last 24 hours' : `Last 24 hours · ${percent(requests.day > 0 ? ((requests.errors ?? 0) / requests.day) * 100 : 0, 1)} errors · p95 ${milliseconds(requests.p95)}`}
-      >
-        <Sparkline series={requests.perHour} format={(v) => `${count(v)} an hour`} label="Requests per hour, last 24 hours" />
-      </Stat>
-    </div>
-    {#if visits?.pages.length || visits?.systems.length || accounts?.clients.length}
-      <div class="mt-4 grid gap-4 text-sm sm:grid-cols-3">
-        {#each [
-          { title: 'Top pages', rows: visits?.pages.map((p) => [p.path, p.views] as const) ?? [] },
-          { title: 'Systems', rows: visits?.systems.map((s) => [s.name, s.visitors] as const) ?? [] },
-          { title: 'App versions', rows: accounts?.clients.map((c) => [c.client, c.active] as const) ?? [] },
-        ] as list (list.title)}
-          <div class="space-y-2 border p-4">
-            <p class="text-muted-foreground">{list.title}</p>
-            {#if list.rows.length}
-              <dl class="grid grid-cols-[1fr_auto] gap-x-4 gap-y-1">
-                {#each list.rows as [what, n] (what)}
-                  <dt class="truncate font-mono text-xs" title={what}>{what}</dt>
-                  <dd class="tabular-nums">{count(n)}</dd>
-                {/each}
-              </dl>
-            {:else}
-              <p class="text-xs text-muted-foreground">None yet</p>
-            {/if}
-          </div>
-        {/each}
-      </div>
-    {/if}
-    <p class="mt-2 text-xs text-muted-foreground">
-      Counted without cookies or anything that identifies a visitor
-      (<a class="underline" href="https://{app.hostnames[0]}/_spotcraft/privacy">what is counted</a>). Visitors from apps are approximate.
-    </p>
-  {/await}
-</section>
-
-{#if data.ownDatabase || (form && 'moved' in form)}
-  <section class="mt-8">
-    <h2 class="mb-2 font-heading text-lg font-semibold">Own database</h2>
-    <div class="space-y-3 border p-4 text-sm">
-      {#if form && 'moved' in form && form.moved}
-        {@const tables = Object.entries(form.moved.tables)}
-        <p>
-          Moved: {form.moved.users} guests and {form.moved.sessions} sessions into the user pool{#if tables.length}, and {tables.map(([table, rows]) => `${rows} rows of ${table}`).join(', ')}{/if}.
-          The old database stays, unused: drop it once you're sure.
-        </p>
-      {:else}
-        <p class="text-muted-foreground">
-          This app was made before apps shared the instance database, and keeps its guests itself. Moving it deploys a new version made for its schema and the user pool, then copies its guests, their sessions and its rows over. Guests keep their cookies. A backup comes first; if anything fails, the current version keeps running as it is.
-        </p>
-        {#if form && 'moveError' in form}<p class="text-destructive">{form.moveError}</p>{/if}
-        <form
-          method="POST"
-          action="?/move"
-          class="flex flex-wrap items-end gap-2"
-          use:enhance={() => {
-            moving = true
-            return async ({ update }) => {
-              await update({ reset: false })
-              moving = false
-            }
-          }}
-        >
-          <div class="grid gap-1">
-            <Label for="move-tag">New version's tag</Label>
-            <Input id="move-tag" name="tag" required class="w-56 font-mono" placeholder={app.tag} value={form && 'tag' in form ? form.tag : ''} />
-          </div>
-          <Button type="submit" variant="outline" disabled={moving}>{moving ? 'Moving…' : 'Move'}</Button>
-        </form>
-      {/if}
-    </div>
+{#if tab === 'overview'}
+  <Overview {data} />
+{:else if tab === 'usage'}
+  <Usage {data} />
+{:else if tab === 'settings'}
+  <Settings {data} {form} />
+{:else}
+  <section>
+    <h2 class="sr-only">Logs</h2>
+    <p class="mb-2 text-caption-1 text-muted-foreground">Last 200 lines, newest at the bottom. Reload the page for newer lines.</p>
+    <pre class="max-h-[40rem] overflow-auto border bg-muted p-4 text-xs leading-relaxed whitespace-pre-wrap">{data.logs || 'No logs yet.'}</pre>
   </section>
 {/if}
-
-{#if data.backup}
-  {@const known = form && 'backedUp' in form ? form.backedUp : data.backup.last}
-  {@const last = known === 'unavailable' ? null : known}
-  {@const health = backupHealth(last)}
-  <section class="mt-8">
-    <h2 class="mb-2 font-heading text-lg font-semibold">Backups</h2>
-    <div class="space-y-3 border p-4 text-sm">
-      <p class="text-muted-foreground">
-        Every night at 03:00 UTC: {app.database ? 'a dump of its database and ' : ''}its settings, kept as long as the bucket keeps them (30 days by default).
-      </p>
-      {#if known === 'unavailable'}
-        <p class="text-destructive">The agent couldn't say how the last backup went. Check its log.</p>
-      {:else if health === 'none'}
-        <p>No backup yet.</p>
-      {:else if last}
-        <p class={health === 'ok' ? '' : 'text-destructive'}>
-          {#if last.ok}
-            Last backup {ago(last.at)} ({dateTime(last.at)}){#if app.database}, database {bytes(last.bytes ?? 0)}{/if}.
-            {#if health === 'overdue'}That is more than a day ago: check the agent's log.{/if}
-          {:else}
-            The last backup failed {ago(last.at)}: {last.error}.
-            {#if last.lastOkAt}The last one that worked was {ago(last.lastOkAt)}.{:else}None has worked yet.{/if}
-          {/if}
-        </p>
-      {/if}
-      {#if form && 'backupError' in form}<p class="text-destructive">{form.backupError}</p>{/if}
-      <form
-        method="POST"
-        action="?/backup"
-        use:enhance={() => {
-          backingUp = true
-          return async ({ update }) => {
-            await update()
-            backingUp = false
-          }
-        }}
-      >
-        <Button type="submit" variant="outline" disabled={backingUp}>{backingUp ? 'Backing up…' : 'Back up now'}</Button>
-      </form>
-    </div>
-  </section>
-{/if}
-
-{#if data.hook.enabled !== undefined}
-  {@const token = form && 'hookToken' in form ? form.hookToken : undefined}
-  {@const enabled = token ? true : form && 'hookDeleted' in form ? false : data.hook.enabled}
-  <section class="mt-8">
-    <h2 class="mb-2 font-heading text-lg font-semibold">Deploy hook</h2>
-    <div class="space-y-3 border p-4 text-sm">
-      <p class="text-muted-foreground">
-        Lets the app's CI deploy a new image tag, with no sign-in. Only the tag changes: the image, environment and limits stay as set here.
-        {enabled ? 'On.' : 'Off.'}
-      </p>
-      {#if token}
-        <Alert>
-          <AlertTitle>Your new token, shown only once</AlertTitle>
-          <AlertDescription>
-            <p>Save it as the secret <span class="font-mono">SPOTCRAFT_DEPLOY_TOKEN</span> in the app's repository. Any older token no longer works.</p>
-            <pre class="mt-2 overflow-x-auto border bg-muted p-2 font-mono text-xs select-all">{token}</pre>
-          </AlertDescription>
-        </Alert>
-      {/if}
-      <div class="flex flex-wrap gap-2">
-        <form method="POST" action="?/createHook" use:enhance>
-          <Button type="submit" variant="outline">{enabled ? 'New token' : 'Turn on'}</Button>
-        </form>
-        {#if enabled}
-          <form method="POST" action="?/deleteHook" use:enhance>
-            <Button type="submit" variant="outline">Turn off</Button>
-          </form>
-        {/if}
-      </div>
-      {#if enabled}
-        <p class="text-muted-foreground">A step for the app's GitHub Actions workflow, after it pushes the image. It deploys the commit's <span class="font-mono">sha-…</span> tag and waits until it is live:</p>
-        <pre class="overflow-x-auto border bg-muted p-3 text-xs leading-relaxed">{hookStep}</pre>
-      {/if}
-    </div>
-  </section>
-{/if}
-
-{#await data.domain then domain}
-{#if domain && domain.hosts.length > 0}
-  <section class="mt-8">
-    <h2 class="mb-2 font-heading text-lg font-semibold">Domain</h2>
-    <ul class="space-y-3">
-      {#each domain.hosts as host (host.host)}
-        <li class="border p-4 text-sm">
-          <div class="flex flex-wrap items-center justify-between gap-2">
-            <span class="font-mono">{host.host}</span>
-            <span class={['text-xs', host.state === 'active' ? 'text-muted-foreground' : 'text-destructive']}>
-              {stateLabel[host.state]} · {modeLabel[host.mode]}
-            </span>
-          </div>
-          {#if host.detail}<p class="mt-1 text-xs text-muted-foreground">{host.detail}</p>{/if}
-          {#if host.state !== 'active' && host.records.length > 0}
-            <p class="mt-3 text-xs text-muted-foreground">Add these records where the domain's DNS is hosted:</p>
-            <div class="mt-1 overflow-x-auto">
-              <table class="w-full text-left font-mono text-xs">
-                <tbody>
-                  {#each host.records as record (record.type + record.name)}
-                    <tr>
-                      <td class="py-1 pr-4">{record.type}</td>
-                      <td class="py-1 pr-4 break-all">{record.name}</td>
-                      <td class="py-1 break-all">{record.value}</td>
-                    </tr>
-                  {/each}
-                </tbody>
-              </table>
-            </div>
-            {#if host.mode === 'saas' && host.host.split('.').length === 2}
-              <p class="mt-2 text-xs text-muted-foreground">A root domain needs CNAME flattening (or an ALIAS record) at its DNS provider.</p>
-            {/if}
-          {/if}
-        </li>
-      {/each}
-    </ul>
-  </section>
-{/if}
-{/await}
-
-<section class="mt-8">
-  <h2 class="mb-2 font-heading text-lg font-semibold">Logs</h2>
-  <p class="mb-2 text-xs text-muted-foreground">Last 200 lines, newest at the bottom. Reload the page for newer lines.</p>
-  <pre class="max-h-[32rem] overflow-auto border bg-muted p-4 text-xs leading-relaxed whitespace-pre-wrap">{data.logs || 'No logs yet.'}</pre>
-</section>
