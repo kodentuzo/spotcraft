@@ -1,9 +1,6 @@
 <script lang="ts">
   import { capitalized, countryName, flag } from '#lib/breakdown.ts'
   import Breakdown from '#lib/components/Breakdown.svelte'
-  import Sparkline from '#lib/components/Sparkline.svelte'
-  import Stat from '#lib/components/Stat.svelte'
-  import { count, milliseconds, percent } from '#lib/format.ts'
   import type { PageData } from './$types'
 
   let { data }: { data: PageData } = $props()
@@ -34,45 +31,12 @@
 <section>
   <h2 class="sr-only">Usage</h2>
   {#await data.usage}
-    <p class="text-sm text-muted-foreground">Counting…</p>
+    <p class="text-footnote text-muted-foreground">Counting…</p>
   {:then usage}
     {@const visits = usage.visits}
     {@const accounts = usage.accounts}
-    {@const requests = usage.requests}
-    <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-      <Stat
-        label="Visitors"
-        value={count(visits?.visitors)}
-        detail={visits ? `Last ${visits.days} days · ${count(visits.previous.visitors)} the ${visits.days} before` : app.analytics === false ? 'Analytics is off for this app' : 'Not counted yet'}
-      />
-      <Stat
-        label="Page views"
-        value={count(visits?.views)}
-        detail={visits ? `${count(visits.visits)} visits · ${count(visits.previous.views)} views the ${visits.days} days before` : 'Pages and app screens'}
-      />
-      <Stat
-        label="Active accounts"
-        value={count(accounts?.active.week)}
-        detail={accounts ? `Last 7 days · ${count(accounts.active.day)} today · ${count(accounts.active.month)} in 30 days` : 'Accounts in the user pool that use this app'}
-      >
-        {#if accounts && accounts.newPerDay.length > 1}
-          <Sparkline
-            series={accounts.newPerDay.map(({ day, count: n }) => [Date.parse(day) / 1000, n] as [number, number])}
-            format={(v) => `${count(v)} new`}
-            label="New accounts per day, last 30 days"
-          />
-        {/if}
-      </Stat>
-      <Stat
-        label="Requests"
-        value={count(requests.day)}
-        detail={requests.day === null ? 'Last 24 hours' : `Last 24 hours · ${percent(requests.day > 0 ? ((requests.errors ?? 0) / requests.day) * 100 : 0, 1)} errors · p95 ${milliseconds(requests.p95)}`}
-      >
-        <Sparkline series={requests.perHour} format={(v) => `${count(v)} an hour`} label="Requests per hour, last 24 hours" />
-      </Stat>
-    </div>
     {@const people = visits?.visitors ?? 0}
-    <div class="mt-3 grid gap-3 md:grid-cols-2">
+    <div class="grid gap-3 md:grid-cols-2">
       <Breakdown
         label="Pages"
         tabs={[

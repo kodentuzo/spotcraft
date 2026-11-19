@@ -18,7 +18,7 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
   analytics). A failed backup, deploy or custom domain shows only when there is one. Apps
   that need a look come first.
 - **App page:** a header with the app's icon, status and address (Redeploy, Edit, Visit),
-  and tabs: Overview (failures first, then the deployment and its health), Usage, Settings
+  and tabs: Overview (failures first, then the deployment, its health and its usage totals), Usage, Settings
   (with Remove at the bottom) and Logs. Tabs are links (`?tab=`), so they work without
   JavaScript and can be shared.
 - **Usage panels:** an app's Usage tab breaks its visits down by page and host, referrer,
