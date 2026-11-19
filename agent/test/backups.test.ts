@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, it } from 'node:test'
 import { buildApp } from '../src/app.ts'
-import { Apps } from '../src/apps.ts'
+import { Apps, POOL_BACKUP } from '../src/apps.ts'
 import { type BackupTarget, backupStamp, untilNext } from '../src/backups.ts'
 import type { Runner } from '../src/runner.ts'
 import { amzDate, S3, signV4 } from '../src/s3.ts'
@@ -198,6 +198,22 @@ describe('backups', () => {
     assert.match(results.sokobanko?.error ?? '', /403/)
     assert.equal(results.sokobanko?.lastOkAt, '2026-11-14T03:00:00.000Z')
     clock = new Date('2026-11-14T03:00:00Z')
+  })
+
+  it("backs up the user pool's schema after the apps, when it can be dumped", async () => {
+    const pooled = new Apps(new Store(dir), docker, 'caddy', undefined, undefined, undefined, {
+      target: bucket.target,
+      dump: async (name) => Buffer.from(`dump of ${name}`),
+      dumpPool: async () => Buffer.from('dump of auth'),
+      now: () => clock,
+    })
+    const results = await pooled.backupAll()
+    assert.deepEqual(Object.keys(results).sort(), [POOL_BACKUP, 'site', 'sokobanko'])
+    assert.equal(bucket.objects.get('_auth/20261114T030000Z/auth.dump')?.toString(), 'dump of auth')
+    bucket.fail()
+    const failed = await pooled.backupAll()
+    assert.equal(failed[POOL_BACKUP]?.ok, false)
+    assert.match(failed[POOL_BACKUP]?.error ?? '', /403/)
   })
 
   it('carries on past a status file cut short, and writes it whole', async () => {

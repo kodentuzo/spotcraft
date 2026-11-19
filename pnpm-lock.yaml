@@ -294,6 +294,31 @@ importers:
         specifier: 'catalog:'
         version: 6.0.3
 
+  auth:
+    dependencies:
+      better-auth:
+        specifier: ^1.7.25
+        version: 1.7.25(@sveltejs/kit@3.3.0(@sveltejs/vite-plugin-svelte@7.3.1(svelte@5.57.3)(vite@8.3.8(@types/node@26.6.6)(jiti@2.7.0)))(svelte@5.57.3)(typescript@6.0.3)(vite@8.3.8(@types/node@26.6.6)(jiti@2.7.0)))(@tanstack/react-start@1.169.5(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(rolldown@1.2.19)(supports-color@7.2.0)(vite@8.3.8(@types/node@26.6.6)(jiti@2.7.0)))(drizzle-orm@0.45.4(@types/pg@8.23.1)(kysely@0.29.8)(pg@8.23.1))(pg@8.23.1)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(svelte@5.57.3)
+      drizzle-orm:
+        specifier: ^0.45.4
+        version: 0.45.4(@types/pg@8.23.1)(kysely@0.29.8)(pg@8.23.1)
+      pg:
+        specifier: ^8.23.1
+        version: 8.23.1
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 26.6.6
+      '@types/pg':
+        specifier: ^8.23.1
+        version: 8.23.1
+      jose:
+        specifier: ^6.2.17
+        version: 6.2.17
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+
   packages/cli:
     dependencies:
       pg:

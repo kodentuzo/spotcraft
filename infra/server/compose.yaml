@@ -3,9 +3,9 @@
 # Only Caddy is published; everything else is reachable on Docker networks only.
 # Third-party images are pinned by digest; bump the version and digest together.
 #
-# Networks: hosted apps share `edge` with Caddy and Postgres, and nothing else. The dashboard
-# and the monitoring are on `web` (with Caddy); only the dashboard and the agent are on
-# `control`; only the agent and Postgres are on `db`.
+# Networks: hosted apps share `edge` with Caddy and Postgres, and nothing else. The dashboard,
+# the user pool and the monitoring are on `web` (with Caddy); only the dashboard and the agent
+# are on `control`; only the agent, the user pool and Postgres are on `db`.
 #
 # The project keeps the name it had on the two-server setup, so the existing volumes
 # (certificates, Postgres data) and container names carry over unchanged.
@@ -150,6 +150,42 @@ services:
       timeout: 3s
       retries: 3
       start_period: 5s
+
+  # The instance's user pool (ADR 0035), from the same image: Better Auth over the `auth` schema
+  # of the apps database. Caddy routes /_spotcraft/auth on app domains to it. Its role, schema
+  # and secret are set up by the deploy script.
+  auth:
+    <<: *hardened
+    image: ${SPOTCRAFT_IMAGE:-vindotski/spotcraft}:${SPOTCRAFT_TAG:-latest}
+    working_dir: /app/auth
+    command: ["src/index.ts"]
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,noexec,nosuid,nodev
+    mem_limit: 192m
+    environment:
+      PORT: 3000
+      AUTH_DATABASE_URL: postgres://spotcraft_auth:${POSTGRES_AUTH_PASSWORD:?set POSTGRES_AUTH_PASSWORD in .env}@postgres:5432/apps
+      # Signs sessions and encrypts the signing keys; changing it signs every guest out.
+      AUTH_SECRET: ${AUTH_SECRET:?set AUTH_SECRET in .env}
+      # Every token's `iss`: names this instance's pool; it is not an address.
+      AUTH_ISSUER: https://${DASHBOARD_DOMAIN}/pools/main
+      # Optional: origins (comma-separated) of clients on other sites, with bearer tokens.
+      AUTH_TRUSTED_ORIGINS: ${AUTH_TRUSTED_ORIGINS:-}
+    # `web`: Caddy in front. `db`: Postgres. Never on `edge`, which hosted apps share.
+    networks: [web, db]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "/nodejs/bin/node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 20s
 
   # One Postgres for every hosted app that asks for a database (ADR 0015): each app gets its
   # own role and database, created by the agent as `spotcraft_agent` (set up by the deploy

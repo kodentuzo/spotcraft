@@ -18,6 +18,8 @@
 #   CLOUDFLARE_TUNNEL_TOKEN   the server's tunnel token; required with EDGE=cloudflare
 #   BACKUP_S3_ENDPOINT, BACKUP_BUCKET, BACKUP_ACCESS_KEY_ID, BACKUP_SECRET_ACCESS_KEY
 #                             optional, all four or none; nightly backups (ADR 0030)
+#   AUTH_TRUSTED_ORIGINS      optional; origins (comma-separated) that may call the user pool
+#                             from other sites (ADR 0035)
 set -euo pipefail
 cd /opt/spotcraft
 
@@ -86,6 +88,7 @@ if { [ -n "$CF_ACCESS_TEAM_DOMAIN" ] && [ -z "$CF_ACCESS_AUD" ]; } ||
   exit 1
 fi
 optional BACKUP_S3_ENDPOINT BACKUP_BUCKET BACKUP_ACCESS_KEY_ID BACKUP_SECRET_ACCESS_KEY
+optional AUTH_TRUSTED_ORIGINS
 backup_set=0
 for name in BACKUP_S3_ENDPOINT BACKUP_BUCKET BACKUP_ACCESS_KEY_ID BACKUP_SECRET_ACCESS_KEY; do
   [ -n "${!name}" ] && backup_set=$((backup_set + 1))
@@ -98,10 +101,17 @@ DOCKER_GID="$(getent group docker | cut -d: -f3)"
 # Postgres needs a superuser password once, when its data directory is created; nobody uses
 # it afterwards (the superuser only works over the container's local socket). It is generated
 # here on the first deploy and kept in .env, never stored in GitHub.
-POSTGRES_SUPERUSER_PASSWORD="$(sed -n 's/^POSTGRES_SUPERUSER_PASSWORD=//p' .env 2>/dev/null || true)"
-if [ -z "$POSTGRES_SUPERUSER_PASSWORD" ]; then
-  POSTGRES_SUPERUSER_PASSWORD="$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')"
-fi
+# The user pool's database password and secret (ADR 0035) are made the same way: nobody types
+# them, and changing AUTH_SECRET would sign every guest out.
+kept_or_new() {
+  local value
+  value="$(sed -n "s/^$1=//p" .env 2>/dev/null || true)"
+  [ -n "$value" ] || value="$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+  printf -v "$1" '%s' "$value"
+}
+kept_or_new POSTGRES_SUPERUSER_PASSWORD
+kept_or_new POSTGRES_AUTH_PASSWORD
+kept_or_new AUTH_SECRET
 cat > .env.new <<ENV
 DASHBOARD_DOMAIN=$DASHBOARD_DOMAIN
 SPOTCRAFT_TAG=$SPOTCRAFT_TAG
@@ -112,6 +122,9 @@ SESSION_SECRET=$SESSION_SECRET
 DOCKER_GID=$DOCKER_GID
 POSTGRES_AGENT_PASSWORD=$POSTGRES_AGENT_PASSWORD
 POSTGRES_SUPERUSER_PASSWORD=$POSTGRES_SUPERUSER_PASSWORD
+POSTGRES_AUTH_PASSWORD=$POSTGRES_AUTH_PASSWORD
+AUTH_SECRET=$AUTH_SECRET
+AUTH_TRUSTED_ORIGINS=$AUTH_TRUSTED_ORIGINS
 APPS_DOMAIN=$APPS_DOMAIN
 EDGE=$EDGE
 CLOUDFLARE_API_TOKEN=$CLOUDFLARE_API_TOKEN
@@ -180,14 +193,16 @@ docker compose pull --quiet
 if [ "$EDGE" = direct ]; then
   docker compose --profile cloudflare rm --stop --force cloudflared
 fi
-docker compose up -d --wait --wait-timeout 180 --remove-orphans
+# Postgres first: the roles below must exist before the agent and the user pool start.
+docker compose up -d --wait --wait-timeout 180 postgres
 
-# The agent's Postgres role: created on the first deploy, its password kept in step with the
-# secret on every deploy. It may create databases and roles, but is not a superuser. Running
-# this again changes nothing. The password travels on psql's stdin (as a psql variable), never
-# on a command line.
+# Postgres roles: created on the first deploy, their passwords kept in step on every deploy.
+# The agent's may create databases and roles, but is not a superuser; the user pool's owns the
+# auth schema of the apps database. Running this again changes nothing. The passwords travel
+# on psql's stdin (as psql variables), never on a command line.
 {
   printf '\\set pw %s\n' "$POSTGRES_AGENT_PASSWORD"
+  printf '\\set auth_pw %s\n' "$POSTGRES_AUTH_PASSWORD"
   cat <<'SQL'
 SELECT NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'spotcraft_agent') AS missing \gset
 \if :missing
@@ -201,8 +216,33 @@ ALTER ROLE spotcraft_agent SET createrole_self_grant = 'set';
 -- Apps get CONNECT on their own database only; the built-in ones are the agent's.
 REVOKE CONNECT ON DATABASE postgres, template1 FROM PUBLIC;
 GRANT CONNECT ON DATABASE postgres TO spotcraft_agent;
+-- The database apps share (ADR 0034), owned by the agent, and the group every app role joins.
+-- The agent may grant the group to the app roles it makes, without inheriting its rights.
+SELECT NOT EXISTS (SELECT FROM pg_database WHERE datname = 'apps') AS missing \gset
+\if :missing
+  CREATE DATABASE apps OWNER spotcraft_agent;
+\endif
+REVOKE ALL ON DATABASE apps FROM PUBLIC;
+SELECT NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'spotcraft_app') AS missing \gset
+\if :missing
+  CREATE ROLE spotcraft_app NOLOGIN;
+\endif
+GRANT spotcraft_app TO spotcraft_agent WITH ADMIN OPTION, INHERIT FALSE;
+-- The user pool's role (ADR 0035): it owns the auth schema in apps, and nothing else.
+SELECT NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'spotcraft_auth') AS missing \gset
+\if :missing
+  CREATE ROLE spotcraft_auth LOGIN PASSWORD :'auth_pw';
+\else
+  ALTER ROLE spotcraft_auth LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE PASSWORD :'auth_pw';
+\endif
+GRANT CONNECT ON DATABASE apps TO spotcraft_auth;
+\c apps
+REVOKE ALL ON SCHEMA public FROM PUBLIC;
+CREATE SCHEMA IF NOT EXISTS auth AUTHORIZATION spotcraft_auth;
 SQL
 } | docker compose exec -T postgres psql -q -v ON_ERROR_STOP=1 -U postgres -d postgres
+
+docker compose up -d --wait --wait-timeout 180 --remove-orphans
 
 if [ "$migrate" = true ]; then
   for app in apps/*/compose.yaml; do

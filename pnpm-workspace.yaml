@@ -2,6 +2,7 @@ packages:
   - apps/*
   - packages/*
   - agent
+  - auth
 
 # Supply chain, written out explicitly so a change of pnpm defaults can't
 # quietly weaken them: releases install only once they're a day old,

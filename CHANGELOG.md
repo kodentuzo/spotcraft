@@ -12,6 +12,19 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
 
 ### Added
 
+- **The user pool** (`auth`, [ADR 0035](docs/decisions/0035-auth-pool.md)): a new service from
+  the Spotcraft image, Better Auth over the `auth` schema of the shared `apps` database. For now
+  it makes guests, with a first-party cookie on whichever app domain asked, a bearer token for
+  clients elsewhere, and 15-minute EdDSA JWTs that apps check against its JWKS. Apps may read
+  and reference `auth.users`. Guests unused for 180 days are deleted, and the nightly backup
+  dumps `auth` to `_auth/` in the bucket. Nothing routes to it yet; Caddy's route on app
+  domains comes next.
+
+  **Upgrading:** nothing to set. The deploy now starts Postgres first and creates the `apps`
+  database, the `spotcraft_app` group and the pool's role and schema, and generates
+  `POSTGRES_AUTH_PASSWORD` and `AUTH_SECRET` into `.env`. Optional: the GitHub variable
+  `AUTH_TRUSTED_ORIGINS` for bearer clients on other sites. The server needs about 192 MB more.
+
 - **The planned app contract** ([docs/contracts.md](docs/contracts.md)): what every app gets and
   what it must do. Decided in four records, none built yet:
   - every app gets the same env vars and its own schema in one instance database, like a
