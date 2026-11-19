@@ -42,7 +42,8 @@ Spotcraft sets these for every container app. The app's own env can't override t
 | `SMTP_URL`        | Coming with instance SMTP: `smtp://user:pass@host:587`.                    |
 | `MAIL_FROM`       | Coming with instance SMTP: the sender address.                             |
 
-Locally, `spotcraft dev` writes the same names to `.env`.
+Locally, `spotcraft dev` writes the same names to `.env`, pointing at the repository's own stack
+([the CLI](../packages/cli/README.md)).
 
 ## Database
 

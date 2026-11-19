@@ -6,7 +6,7 @@ implementation: planned
 date: 2026-11-19
 supersedes: [27, 31]
 superseded_by: []
-notes: "Built: provisioning in the CLI package (spotcraft/provision), a schema per app in the apps database, legacy per-app databases kept; the agent no longer ships the kit, and a release no longer checks that the kit is published. To build in wave 1: the CLI published as @kodentuzo/spotcraft; spotkit 0.1 in kodentuzo/spotkit; @spotcraft/kit and the spotcraft npm package deprecated."
+notes: "Built: provisioning in the CLI package (spotcraft/provision), a schema per app in the apps database, legacy per-app databases kept; the agent no longer ships the kit, and a release no longer checks that the kit is published. The CLI is renamed @kodentuzo/spotcraft (export @kodentuzo/spotcraft/provision); its first publish and deprecating the old spotcraft package on npm are left to the release. To build in wave 1: spotkit 0.1 in kodentuzo/spotkit; @spotcraft/kit and the spotcraft npm package deprecated."
 ---
 
 # The kit becomes spotkit, outside this repository

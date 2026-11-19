@@ -13,7 +13,7 @@ from one dashboard. One instance per owner, not SaaS. Design the smallest thing 
 | `apps/site/`      | The website, spotcraft.dev (docs are this repo's Markdown)                                                |
 | `packages/ui/`    | Shared shadcn-svelte components and theme                                                                 |
 | `packages/kit/`   | `@spotcraft/kit` on npm: guest accounts and app databases for SSR apps                                    |
-| `packages/cli/`   | `spotcraft` CLI on npm: local stack (`spotcraft dev`)                                                     |
+| `packages/cli/`   | `@kodentuzo/spotcraft` CLI on npm: a local stack per repo (`spotcraft dev`)                               |
 | `infra/`          | Compose, Caddy, cloud-init, deploy script, OpenTofu (`hetzner`, `cloudflare`)                             |
 | `docs/`           | Guides and ADRs (`docs/decisions/`), published on the website                                             |
 

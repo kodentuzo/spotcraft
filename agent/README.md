@@ -256,7 +256,7 @@ All four `BACKUP_*` or none; the agent refuses to start with some.
 Apps share one database on the apps server's Postgres, `apps`, like a Supabase project
 ([ADR 0034](../docs/decisions/0034-app-contract.md)). On a server with Postgres every app has one (`database` in a `PUT` is ignored); a deploy first
 prepares the app's role and schema there, both `app_<name>` (dashes as underscores), using
-`spotcraft/provision` from [the CLI package](../packages/cli/README.md), so a laptop gets the
+`@kodentuzo/spotcraft/provision` from [the CLI package](../packages/cli/README.md), so a laptop gets the
 same setup. The agent creates `apps` and the `spotcraft_app` group role the first time.
 
 - The role owns its schema and has it as its `search_path`. It may connect to `apps` and

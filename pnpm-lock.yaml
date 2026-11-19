@@ -202,15 +202,15 @@ importers:
 
   agent:
     dependencies:
+      '@kodentuzo/spotcraft':
+        specifier: workspace:*
+        version: link:../packages/cli
       fastify:
         specifier: ^5.12.8
         version: 5.12.8
       pg:
         specifier: ^8.23.1
         version: 8.23.1
-      spotcraft:
-        specifier: workspace:*
-        version: link:../packages/cli
     devDependencies:
       '@spotcraft/kit':
         specifier: workspace:*

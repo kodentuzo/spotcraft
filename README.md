@@ -79,7 +79,7 @@ changes are listed in the [changelog](CHANGELOG.md).
 | `auth`                   | the user pool (Better Auth): guests for every app  |
 | `apps/dashboard`         | the dashboard (SvelteKit)                          |
 | `apps/site`              | the website (Astro, on GitHub Pages)               |
-| `packages/cli`           | `spotcraft dev`, and app schema provisioning       |
+| `packages/cli`           | `spotcraft dev` per repo, app schema provisioning  |
 | `packages/kit`           | guest accounts for apps (moving to spotkit)        |
 | `packages/ui`            | shared components and theme (shadcn-svelte)        |
 | `infra/cloud-init.yaml`  | first-boot setup for the server                    |

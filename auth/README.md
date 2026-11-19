@@ -69,6 +69,7 @@ blocks is skipped and logged.
 | `AUTH_ISSUER`          | every token's `iss`, e.g. `https://dash.example.com/pools/main`    |
 | `AUTH_TRUSTED_ORIGINS` | optional, comma-separated origins of bearer clients on other sites |
 | `AUTH_PROTOCOL`        | `https` (default), or `http` for a local stack                     |
+| `AUTH_LOCAL_ORIGINS`   | `1` only in a local stack: trust any `http://localhost:<port>`     |
 | `AUTH_APP_GROUP`       | the app group, default `spotcraft_app`                             |
 | `AUTH_ADMIN_ROLE`      | the agent's role, default `spotcraft_agent`                        |
 | `AUTH_GUEST_DAYS`      | idle guests are deleted after this many days, default 180          |

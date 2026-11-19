@@ -19,7 +19,7 @@ build` writes JavaScript, type declarations and the migrations to `dist/`.
 
 ```bash
 npm install @spotcraft/kit                  # see "Versions" below
-npm install --save-dev spotcraft            # the local stack: npx spotcraft dev start
+npm install --save-dev spotcraft@0.5        # the kit's local stack: npx spotcraft dev start
 ```
 
 ## Versions

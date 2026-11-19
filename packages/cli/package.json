@@ -1,7 +1,7 @@
 {
-  "name": "spotcraft",
+  "name": "@kodentuzo/spotcraft",
   "version": "0.5.2",
-  "description": "The spotcraft command: run the Spotcraft server's database setup locally",
+  "description": "The spotcraft command: a local stack that matches a Spotcraft server, per repository",
   "keywords": [
     "spotcraft",
     "cli",

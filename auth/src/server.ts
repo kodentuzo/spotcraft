@@ -1,7 +1,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import { toNodeHandler } from 'better-auth/node'
 import type { Config } from './config.ts'
-import { BASE_PATH, type Pool, type Pools } from './pool.ts'
+import { BASE_PATH, isLocalOrigin, type Pool, type Pools } from './pool.ts'
 
 /** Headers a bearer client needs to read from responses: the session token and the JWT. */
 const EXPOSED = 'set-auth-token, set-auth-jwt'
@@ -13,7 +13,9 @@ const EXPOSED = 'set-auth-token, set-auth-jwt'
  */
 function cors(req: IncomingMessage, res: ServerResponse, config: Config): boolean {
   const origin = req.headers.origin
-  if (!origin || !config.trustedOrigins.includes(origin)) return false
+  const trusted =
+    config.trustedOrigins.includes(origin ?? '') || (config.localOrigins && isLocalOrigin(origin))
+  if (!origin || !trusted) return false
   res.setHeader('Access-Control-Allow-Origin', origin)
   res.setHeader('Access-Control-Allow-Credentials', 'true')
   res.setHeader('Access-Control-Expose-Headers', EXPOSED)

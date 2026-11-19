@@ -12,6 +12,12 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
 
 ### Added
 
+- **`spotcraft dev` runs a stack per repository** ([ADR 0037](docs/decisions/0037-local-stack-per-repo.md)):
+  Postgres set up as on the server, the user pool, and Mailpit, on free ports kept in
+  `.spotcraft/dev.json`. One command starts it, sets up the app's schema, adds the server's
+  setting names to `.env` and runs `migrate` from the new `spotcraft.json`. Also `dev env`,
+  `dev db reset`, `dev migrate`, `dev status`, `dev stop` and `dev ls`.
+
 - **The dashboard's Users page** (`/users`) lists the user pool's users, shared by every app,
   with how many are guests, and deletes one with what every app kept for them
   ([ADR 0035](docs/decisions/0035-auth-pool.md)). If an app's foreign key keeps a user's rows,
@@ -54,6 +60,12 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
   - each repository gets its own local stack ([ADR 0037](docs/decisions/0037-local-stack-per-repo.md)).
 
 ### Changed
+
+- **The CLI is now `@kodentuzo/spotcraft`** on npm (the command is still `spotcraft`), with a
+  new local stack (breaking). **Migrating:** `npm install --save-dev @kodentuzo/spotcraft` and
+  run `npx spotcraft dev`. Apps on `@spotcraft/kit` keep `spotcraft@0.5`. The old shared stack
+  (`spotcraft-dev`) is left as it is; remove it with
+  `docker compose -p spotcraft-dev down -v` when nothing needs it.
 
 - **The per-app Users page and the agent's `/apps/:name/users` routes are gone** (breaking for
   API callers). Guests of apps made before ADR 0034 stay in their own database until those apps

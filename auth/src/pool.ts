@@ -14,6 +14,13 @@ export const CLIENT_IP_HEADER = 'x-spotcraft-client-ip'
 
 const DAY = 24 * 60 * 60
 
+/** An app's dev server on this machine, which a local stack trusts (`localOrigins`). */
+const LOCAL_ORIGIN = /^http:\/\/(localhost|127\.0\.0\.1):\d{1,5}$/
+
+/** Whether a local stack trusts this origin. */
+export const isLocalOrigin = (origin: string | null | undefined) =>
+  Boolean(origin && LOCAL_ORIGIN.test(origin))
+
 /** A host name as Caddy passes it on, with an optional port. */
 const HOST = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*(:\d{1,5})?$/
 
@@ -49,7 +56,12 @@ export function createPool(config: Config, client: pg.Pool) {
           jwks,
         },
       }),
-      trustedOrigins: config.trustedOrigins,
+      trustedOrigins: config.localOrigins
+        ? (request) => {
+            const origin = request?.headers.get('origin')
+            return [...config.trustedOrigins, ...(isLocalOrigin(origin) ? [origin] : [])]
+          }
+        : config.trustedOrigins,
       advanced: {
         // On explicitly: Better Auth turns both off when it detects a test runner, so tests would
         // pass without them.

@@ -1,4 +1,3 @@
-import pg from 'pg'
 import {
   appLayout,
   appRoleName,
@@ -6,7 +5,8 @@ import {
   type Instance,
   provision,
   purge,
-} from 'spotcraft/provision'
+} from '@kodentuzo/spotcraft/provision'
+import pg from 'pg'
 import { AgentError, type Databases, type PoolUser } from './apps.ts'
 
 /** Keyset cursor for user pages: the last row's creation time and id. */
