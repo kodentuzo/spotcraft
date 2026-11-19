@@ -41,7 +41,10 @@ const problems: string[] = []
 const expected = [
   '/',
   '/docs',
+  '/docs/run',
+  '/docs/build',
   '/docs/getting-started',
+  '/docs/dashboard',
   '/docs/security',
   '/docs/guides/backend-kit',
   '/docs/decisions',

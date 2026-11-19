@@ -10,6 +10,11 @@ JavaScript, published on GitHub Pages
 - **Pages** (`src/pages/`): `/` (home), `/docs`, every docs page at `/docs/<slug>`, and
   `404.html` for GitHub Pages. Built as `x.html` files (`build.format: 'file'`), which Pages
   serves at `/x`.
+- **Docs** come in two parts, one per reader, each with a landing page and a sidebar group:
+  **Run Spotcraft** (`docs/run.md`: setting up the server and using the dashboard) and **Build
+  apps** (`docs/build.md`: the app contract, the local stack, the kit, deploying from CI), then
+  a shared **Reference** group (security, decisions, changelogs). `NAV` in `src/lib/docs.ts`
+  holds the groups; pages keep their URLs whichever group they are in.
 - **Docs** are the repository's own Markdown, read at build time (`src/lib/docs.ts`):
   `docs/getting-started.md`, `docs/security.md`, `docs/guides/backend-kit.md`, the decision
   records and `CHANGELOG.md`. Links between those files become site links; any other repository

@@ -19,7 +19,11 @@ const sources = new Map(
 
 /** Site page slug → repository file. */
 const pageFiles = new Map<string, string>([
+  ['run', 'docs/run.md'],
+  ['build', 'docs/build.md'],
   ['getting-started', 'docs/getting-started.md'],
+  ['dashboard', 'docs/dashboard.md'],
+  ['guides/local-stack', 'docs/guides/local-stack.md'],
   ['security', 'docs/security.md'],
   ['contracts', 'docs/contracts.md'],
   ['guides/backend-kit', 'docs/guides/backend-kit.md'],
@@ -48,19 +52,43 @@ export interface DocPage {
   source: string
 }
 
-/** Pages in the sidebar, in reading order. */
+/**
+ * The sidebar: one group per reader, each with its landing page, then what both share. Pages
+ * keep their URLs whichever group they are in.
+ */
 export const NAV = [
-  { slug: 'getting-started', label: 'Getting started' },
-  { slug: 'guides/backend-kit', label: 'Guest accounts (kit)' },
-  { slug: 'guides/kit-nuxt', label: 'Kit in Nuxt' },
-  { slug: 'guides/kit-tanstack-start', label: 'Kit in TanStack Start' },
-  { slug: 'guides/deploy-from-ci', label: 'Deploy from CI' },
-  { slug: 'guides/backups', label: 'Backups and restoring' },
-  { slug: 'contracts', label: 'App contract (planned)' },
-  { slug: 'security', label: 'Security model' },
-  { slug: 'decisions', label: 'Decisions' },
-  { slug: 'changelog', label: 'Changelog' },
-  { slug: 'kit-changelog', label: 'Kit changelog' },
+  {
+    title: 'Run Spotcraft',
+    landing: 'run',
+    pages: [
+      { slug: 'getting-started', label: 'Getting started' },
+      { slug: 'dashboard', label: 'Using the dashboard' },
+      { slug: 'guides/backups', label: 'Backups and restoring' },
+      { slug: 'guides/move-into-the-pool', label: 'Moving an app into the pool' },
+    ],
+  },
+  {
+    title: 'Build apps',
+    landing: 'build',
+    pages: [
+      { slug: 'contracts', label: 'The app contract' },
+      { slug: 'guides/local-stack', label: 'Develop locally' },
+      { slug: 'guides/backend-kit', label: 'Guest accounts (kit)' },
+      { slug: 'guides/kit-nuxt', label: 'Kit in Nuxt' },
+      { slug: 'guides/kit-tanstack-start', label: 'Kit in TanStack Start' },
+      { slug: 'guides/deploy-from-ci', label: 'Deploy from CI' },
+    ],
+  },
+  {
+    title: 'Reference',
+    landing: null,
+    pages: [
+      { slug: 'security', label: 'Security model' },
+      { slug: 'decisions', label: 'Decisions' },
+      { slug: 'changelog', label: 'Changelog' },
+      { slug: 'kit-changelog', label: 'Kit changelog' },
+    ],
+  },
 ]
 
 export const allSlugs = () => [...pageFiles.keys()]

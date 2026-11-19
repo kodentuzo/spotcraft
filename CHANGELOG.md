@@ -12,6 +12,11 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
 
 ### Changed
 
+- **Docs:** in two parts, as hosting platforms split theirs. [Run Spotcraft](docs/run.md) is
+  for whoever owns the server, with a new page on [using the dashboard](docs/dashboard.md);
+  [Build apps](docs/build.md) is for the developers of the apps, with a new guide to
+  [developing locally](docs/guides/local-stack.md). Security, decisions and the changelogs are
+  shared. Every page keeps its address.
 - **Users pages:** the pool's Users page and an app's are now the same page: users and guests,
   accounts active today, in 7 and 30 days, new accounts per day and app versions, then the
   users with Delete. An app's lists the users with a session on it, last seen there
