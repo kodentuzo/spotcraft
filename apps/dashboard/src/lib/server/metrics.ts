@@ -110,6 +110,11 @@ export const promql = {
   memoryByProject: `sum by (container_label_com_docker_compose_project) (container_memory_working_set_bytes{container_label_com_docker_compose_project=~"${projectName('')}.+"})`,
   /** Each app's uptime per hour (its probes averaged), for a strip of bars. */
   uptimeHourlyByApp: 'avg by (app) (avg_over_time(probe_success{job="probes"}[1h]))',
+  /** Requests in the 7 days before now (or the 7 before those), keyed by host. */
+  requestsWeekByHost: (offset = false) =>
+    `sum by (host) (increase(caddy_http_request_duration_seconds_count[7d]${offset ? ' offset 7d' : ''}))`,
+  /** Requests in each day before a point, keyed by host. */
+  requestsPerDayByHost: 'sum by (host) (increase(caddy_http_request_duration_seconds_count[1d]))',
   /** Requests in the last 24 hours, keyed by Caddy's host label. */
   requestsDayByHost: 'sum by (host) (increase(caddy_http_request_duration_seconds_count[24h]))',
   /** The app's uptime per hour, for a strip of bars. */

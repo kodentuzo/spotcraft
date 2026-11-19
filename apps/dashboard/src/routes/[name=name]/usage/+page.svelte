@@ -1,12 +1,13 @@
 <script lang="ts">
   import { capitalized, countryName, flag } from '#lib/breakdown.ts'
+  import AppHeading from '#lib/components/AppHeading.svelte'
   import Breakdown from '#lib/components/Breakdown.svelte'
   import UsageChart from '#lib/components/UsageChart.svelte'
   import { count } from '#lib/format.ts'
   import { change, fillDays, lastDays, seriesDays } from '#lib/usage.ts'
-  import type { PageData } from './$types'
+  import type { PageProps } from './$types'
 
-  let { data }: { data: PageData } = $props()
+  let { data }: PageProps = $props()
 
   const app = $derived(data.app)
 </script>
@@ -31,8 +32,11 @@
   </p>
 {/snippet}
 
+<svelte:head><title>Usage · {app.name} · Spotcraft</title></svelte:head>
+
+<AppHeading title="Usage" {app} />
+
 <section>
-  <h2 class="sr-only">Usage</h2>
   {#await data.usage}
     <p class="text-footnote text-muted-foreground">Counting…</p>
   {:then usage}

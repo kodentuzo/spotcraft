@@ -45,3 +45,13 @@ export const dayLabel = (day: string) =>
     day: 'numeric',
     timeZone: 'UTC',
   })
+
+/** Several apps' day points added up per day of `days`. */
+export function sumDays(days: string[], lists: DayPoint[][]): DayPoint[] {
+  const total = new Map(days.map((day) => [day, 0]))
+  for (const list of lists) {
+    for (const { day, value } of list)
+      if (total.has(day)) total.set(day, (total.get(day) ?? 0) + value)
+  }
+  return days.map((day) => ({ day, value: total.get(day) ?? 0 }))
+}

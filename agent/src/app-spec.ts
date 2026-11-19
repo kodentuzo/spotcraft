@@ -73,6 +73,20 @@ export const RESERVED_NAMES = new Set([
   'auth',
   // Analytics' container (ADR 0038).
   'umami',
+  // The dashboard's own pages, which share the top of its URLs with apps (`/<app>/usage`).
+  'new',
+  'apps',
+  'api',
+  'hooks',
+  'login',
+  'logout',
+  'usage',
+  'logs',
+  'server',
+  'domains',
+  'backups',
+  'users',
+  'settings',
 ])
 
 /**

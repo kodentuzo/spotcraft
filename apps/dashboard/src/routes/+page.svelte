@@ -20,10 +20,7 @@
 
 <svelte:head><title>Apps · Spotcraft</title></svelte:head>
 
-<div class="mb-6 flex items-center justify-between gap-4">
-  <h1 class="font-heading text-title-1 font-bold">Apps</h1>
-  <Button href="/apps/new">Add app</Button>
-</div>
+<h1 class="mb-6 font-heading text-title-1 font-bold">Apps</h1>
 
 <section aria-label="Overview" class="mb-8 grid grid-cols-2 gap-3 {backups ? 'md:grid-cols-4' : 'md:grid-cols-3'}">
   {#if !data.agentError}
@@ -55,7 +52,7 @@
   <div class="border p-10 text-center">
     <p class="text-headline">No apps yet</p>
     <p class="mt-1 text-footnote text-muted-foreground">Add a Docker image and Spotcraft runs it behind HTTPS, on its own subdomain or your domain.</p>
-    <Button href="/apps/new" class="mt-4">Add your first app</Button>
+    <Button href="/new" class="mt-4">Add your first app</Button>
   </div>
 {:else}
   {#if data.backups === 'unavailable'}

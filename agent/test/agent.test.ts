@@ -768,6 +768,10 @@ describe('agent', () => {
     for (const reserved of ['dashboard', 'victoriametrics', 'cloudflared', 'blackbox', 'umami']) {
       assert.equal((await put(reserved, spec)).statusCode, 400, reserved)
     }
+    // The dashboard's pages: `/usage` is every app's usage, so no app may be called `usage`.
+    for (const page of ['usage', 'new', 'settings', 'login']) {
+      assert.equal((await put(page, spec)).statusCode, 400, page)
+    }
     // `app-<name>` is the alias Caddy reaches each app by: `app-blog` would answer for `blog`.
     assert.equal((await put('app-blog', spec)).statusCode, 400)
     // `<name>-blue` and `<name>-green` are the slots' services (ADR 0028).

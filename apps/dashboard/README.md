@@ -6,17 +6,36 @@ VictoriaMetrics. It has no database: the agent's files are the app list.
 
 ## Screens
 
-| Path                  | What                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/login`              | password login (5 failures per client in 15 minutes lock it out; IPv6 counts per /64)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `/`                   | overview (apps running, server memory and disk, backups), then a row per app: icon, status, last deploy, 24 hourly uptime bars, memory against its limit, visitors (or requests); a failed backup, deploy or domain only when there is one; trouble first                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `/apps/:name/icon`    | the app's icon for its tile, fetched from its site ([ADR 0039](../../docs/decisions/0039-app-status-at-a-glance.md)): touch icon, then favicon; raster only, no redirects, 256 KB; kept an hour (a miss five minutes) per app and `?host=`; 404 without one                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `/apps/new`           | add an app: name, image, tag (Docker Hub suggestions), custom domain, port, limits, env, sign-in                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| `/apps/:name`         | header (icon, status, address; Redeploy, Edit, Visit) and tabs (`?tab=`): **Overview** (failures first, the deployment: status, version, when deployed, addresses, limits; uptime bars, response time, CPU, memory against its limit; usage totals: visitors, page views, active accounts, requests), **Usage** (a chart of the last 7 days with tabs for visitors, page views, new accounts and requests, each with its change from the week before; then Pages/Hostnames, Referrers, Countries, Devices/Browsers, Operating systems, Events and App versions panels), **Settings** (settings, domain, deploy hook, backups, own database, Remove), **Logs** |
-| `/users`              | the user pool's users (guests and registered), shared by every app, newest first; delete one with a confirmation                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| `/apps/:name/edit`    | change settings and deploy                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `/server`             | the server's CPU, memory, disk, load, uptime                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `/hooks/deploy/:name` | the deploy hook for the app's CI, no sign-in: POST a tag, GET how it went ([guide](../../docs/guides/deploy-from-ci.md))                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+Signed-in pages share a sidebar (the instance's domain and version, the sections below, who is
+signed in, and Log out) and a header bar (a switcher for the app the page is about, the section's title, Add app).
+On a phone the sidebar opens as a drawer from the header's menu button.
+
+Every section has two scopes, chosen in the switcher: every app (`/usage`) or one, the app
+first (`/<app>/usage`). Sidebar links keep the app picked; the switcher keeps the section. An
+app can't take a page's name: the agent reserves them.
+
+| Section  | Every app                                                                                                  | One app                                                                                                                                                |
+| -------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Overview | `/`: apps running, server memory and disk, backups; a row per app with status, last deploy, uptime, memory | `/<app>`: header (Redeploy, Edit, Visit), failures first, the deployment (status, version, when deployed, addresses, limits), health and usage totals  |
+| Usage    | `/usage`: all apps' visitors, page views and requests over 7 days, then a row per app                      | `/<app>/usage`: a 7-day chart (visitors, page views, new accounts, requests), then pages, referrers, countries, devices, systems, events, app versions |
+| Logs     | `/logs`: every app's latest lines merged by time                                                           | `/<app>/logs`: the last 200 lines                                                                                                                      |
+| Server   | `/server`: the server's CPU, memory, disk, load, uptime                                                    | `/<app>/server`: the container's CPU and memory against its limits, response time and uptime over 24 hours                                             |
+| Domains  | `/domains`: every address of every app, with DNS status and records                                        | `/<app>/domains`: the app's addresses                                                                                                                  |
+| Backups  | `/backups`: every app's last backup, with Back up now (with backups)                                       | `/<app>/backups`: the last backup in detail, Back up now                                                                                               |
+| Users    | `/users`: the pool's users, newest first; delete one with a confirmation                                   | `/<app>/users`: the app's accounts (active today, 7 and 30 days; new per day; app versions), counts only                                               |
+| Settings | `/settings`: how the instance is set up (domains, edge, DNS, Access, backups, user pool, version)          | `/<app>/settings`: its settings, deploy hook, own database, Remove                                                                                     |
+
+Old links redirect: `/apps/<app>` to `/<app>` (and `?tab=usage` to `/<app>/usage`),
+`/apps/<app>/edit` to `/<app>/edit`, `/apps/new` to `/new`, `/logs?app=<app>` to
+`/<app>/logs`.
+
+| Path                  | What                                                                                                                                                                                                                                                        |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/login`              | password login (5 failures per client in 15 minutes lock it out; IPv6 counts per /64)                                                                                                                                                                       |
+| `/new`                | add an app: name, image, tag (Docker Hub suggestions), custom domain, port, limits, env, sign-in                                                                                                                                                            |
+| `/<app>/edit`         | change settings and deploy                                                                                                                                                                                                                                  |
+| `/<app>/icon`         | the app's icon for its tile, fetched from its site ([ADR 0039](../../docs/decisions/0039-app-status-at-a-glance.md)): touch icon, then favicon; raster only, no redirects, 256 KB; kept an hour (a miss five minutes) per app and `?host=`; 404 without one |
+| `/hooks/deploy/<app>` | the deploy hook for the app's CI, no sign-in: POST a tag, GET how it went ([guide](../../docs/guides/deploy-from-ci.md))                                                                                                                                    |
 
 **Database** gives the app its own Postgres database on the server, as `DATABASE_URL`
 ([ADR 0015](../../docs/decisions/0015-shared-postgres.md)). The form refuses an own
@@ -24,8 +43,8 @@ VictoriaMetrics. It has no database: the agent's files are the app list.
 its database" is ticked in the Remove dialog. If that delete fails after the app is gone, the
 error page says so.
 
-Signed-in pages end with the running Spotcraft version (from the dashboard's `package.json`,
-which carries the project's version), linked to its release notes. It isn't shown before login.
+The sidebar shows the running Spotcraft version (from the dashboard's `package.json`, which
+carries the project's version), linked to its release notes. It isn't shown before login.
 
 A failed deploy shows the agent's error and command output; the previous version keeps
 running. Metrics are optional: without VictoriaMetrics the pages show "No data yet".
@@ -64,8 +83,8 @@ docker build .                                     # the spotcraft image, from t
 
 ## Security
 
-- App routes are `/apps/[name=name]`: the name must match the agent's rule (`src/params.ts`),
-  and agent calls encode it.
+- App routes are `/[name=name]/…`: the name must match the agent's rule and not be one of its
+  reserved names (`src/params.ts`), and agent calls encode it.
 - Every route but `/login` and `/hooks/deploy/<name>` needs a session or a Cloudflare Access sign-in;
   `/api/*` answers 401 instead of redirecting.
 - **The deploy hook** (`/hooks/deploy/<name>`, [ADR 0029](../../docs/decisions/0029-deploy-hook.md))
@@ -83,4 +102,7 @@ docker build .                                     # the spotcraft image, from t
 - Session cookie: `httpOnly`, `SameSite=Strict`, HMAC-signed with an expiry (7 days).
 - Form posts get SvelteKit's origin check; pages send a nonce-based CSP, `X-Frame-Options: DENY`
   and `Cache-Control: no-store`, except app icons (`private, max-age=3600`).
+- The sidebar shows who is signed in: the Access email and its Gravatar, or "Admin" for the
+  password. The CSP allows images from `https://gravatar.com` for that alone; the picture is
+  asked for by the SHA-256 of the email, never the email, with no referrer.
 - App settings are validated with the agent's own rules (`@spotcraft/agent/app-spec`).

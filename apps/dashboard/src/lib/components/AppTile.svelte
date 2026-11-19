@@ -25,7 +25,7 @@
   <span class="font-heading font-bold uppercase {letter[size]}">{name.charAt(0)}</span>
   {#if !iconFailed}
     <img
-      src="/apps/{name}/icon?host={encodeURIComponent(host ?? '')}"
+      src="/{name}/icon?host={encodeURIComponent(host ?? '')}"
       alt=""
       width={icon[size]}
       height={icon[size]}

@@ -12,16 +12,26 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
 
 ### Changed
 
+- **Dashboard sidebar:** every signed-in page gets a sidebar (instance domain and version, the
+  sections, Log out) and a header bar with an app switcher, the section's title and Add app; on
+  a phone the sidebar is a drawer. Each section (Overview, Usage, Logs, Server, Domains,
+  Backups, Users, Settings) shows every app, or the app picked in the switcher, app first:
+  `/<app>` and `/<app>/usage`. Adding an app is `/new`. Old `/apps/<app>` links redirect.
+  Above Log out, who is signed in: the Access email with its Gravatar, or "Admin" for the
+  password.
+- **App names** (breaking, unlikely to matter): the dashboard's pages are now reserved names,
+  since an app's pages are `/<app>/…`: `new`, `apps`, `api`, `hooks`, `login`, `logout`,
+  `usage`, `logs`, `server`, `domains`, `backups`, `users`, `settings`. To upgrade, rename an
+  app with one of these names first (add it under the new name, then remove the old one).
 - **Dashboard home:** an overview (apps running, server memory and disk, backups when set up)
   above a list with a row per app: its icon (from its site) or initial, status, last deploy,
   24 hourly uptime bars, memory against its limit, and visitors (or requests without
   analytics). A failed backup, deploy or custom domain shows only when there is one. Apps
   that need a look come first.
-- **App page:** a header with the app's icon, status and address (Redeploy, Edit, Visit),
-  and tabs: Overview (failures first, then the deployment, its health and its usage totals), Usage, Settings
-  (with Remove at the bottom) and Logs. Tabs are links (`?tab=`), so they work without
-  JavaScript and can be shared.
-- **Usage panels:** an app's Usage tab opens with a chart of the last 7 days, with tabs for
+- **App page:** a header with the app's icon, status and address (Redeploy, Edit, Visit);
+  failures first, then the deployment, its health and its usage totals. Its other pages are
+  the sidebar's sections for that app (Settings ends with Remove).
+- **Usage panels:** an app's Usage page opens with a chart of the last 7 days, with tabs for
   visitors, page views, new accounts and requests and each one's change from the week
   before. Then it breaks its visits down by page and host, referrer,
   country, device and browser, operating system, custom event (`umami.track`) and app

@@ -4,11 +4,8 @@
   import AppTile from '#lib/components/AppTile.svelte'
   import StatusBadge from '#lib/components/StatusBadge.svelte'
   import { enhance } from '$app/forms'
-  import { page } from '$app/state'
   import type { PageProps } from './$types'
   import Overview from './Overview.svelte'
-  import Settings from './Settings.svelte'
-  import Usage from './Usage.svelte'
 
   let { data, form }: PageProps = $props()
 
@@ -16,20 +13,6 @@
   const host = $derived(app.domain ?? app.hostnames[0])
   let redeploying = $state(false)
 
-  const tabs = [
-    { id: 'overview', label: 'Overview' },
-    { id: 'usage', label: 'Usage' },
-    { id: 'settings', label: 'Settings' },
-    { id: 'logs', label: 'Logs' },
-  ] as const
-  type Tab = (typeof tabs)[number]['id']
-  // A form's result belongs to the Settings tab, even when the browser posted without the tab.
-  const tab = $derived.by((): Tab => {
-    const asked = page.url.searchParams.get('tab')
-    if (tabs.some((t) => t.id === asked)) return asked as Tab
-    if (form && !('deployError' in form) && !('redeployed' in form)) return 'settings'
-    return 'overview'
-  })
 </script>
 
 <svelte:head><title>{app.name} · Spotcraft</title></svelte:head>
@@ -63,7 +46,7 @@
     >
       <Button type="submit" variant="outline" disabled={redeploying}>{redeploying ? 'Redeploying…' : 'Redeploy'}</Button>
     </form>
-    <Button href="/apps/{app.name}/edit" variant="outline">Edit</Button>
+    <Button href="/{app.name}/edit" variant="outline">Edit</Button>
     {#if host}<Button href="https://{host}" target="_blank" rel="noopener noreferrer">Visit</Button>{/if}
   </div>
 </header>
@@ -80,27 +63,4 @@
   <Alert class="mb-6"><AlertTitle>Redeployed</AlertTitle></Alert>
 {/if}
 
-<nav aria-label="App sections" class="mb-6 flex overflow-x-auto border-b">
-  {#each tabs as t (t.id)}
-    <a
-      href={t.id === 'overview' ? `/apps/${app.name}` : `?tab=${t.id}`}
-      data-sveltekit-noscroll
-      aria-current={tab === t.id ? 'page' : undefined}
-      class="-mb-px flex min-h-11 items-center border-b-2 px-4 text-footnote whitespace-nowrap {tab === t.id ? 'border-foreground font-medium' : 'border-transparent text-muted-foreground hover:text-foreground'}"
-    >{t.label}</a>
-  {/each}
-</nav>
-
-{#if tab === 'overview'}
-  <Overview {data} />
-{:else if tab === 'usage'}
-  <Usage {data} />
-{:else if tab === 'settings'}
-  <Settings {data} {form} />
-{:else}
-  <section>
-    <h2 class="sr-only">Logs</h2>
-    <p class="mb-2 text-caption-1 text-muted-foreground">Last 200 lines, newest at the bottom. Reload the page for newer lines.</p>
-    <pre class="max-h-[40rem] overflow-auto border bg-muted p-4 text-xs leading-relaxed whitespace-pre-wrap">{data.logs || 'No logs yet.'}</pre>
-  </section>
-{/if}
+<Overview {data} />

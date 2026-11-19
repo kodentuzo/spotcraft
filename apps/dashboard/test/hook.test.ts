@@ -11,6 +11,8 @@ describe('deploy hook', () => {
     for (const path of [
       '/',
       '/apps/blog',
+      '/blog',
+      '/blog/settings',
       '/api/tags',
       '/hooks/',
       '/hooks/other',
