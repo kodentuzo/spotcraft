@@ -19,9 +19,24 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
   `_umami/<time>/umami.dump`. `spotcraft dev` runs it too, and prints its address (sign in as
   `admin` / `umami`); a stack made before keeps its ports and gets one more. `umami` is now a
   reserved app name, like the server's other services.
+- **Every app counts its visits** ([ADR 0038](docs/decisions/0038-analytics.md)). On deploy, the
+  agent gives the app a website in Umami, and Caddy adds Umami's script to the app's HTML pages
+  (no cookies, nothing that identifies a visitor). Apps already running get theirs when the new
+  agent starts. Every app domain now serves `/_spotcraft/s.js`, `/_spotcraft/e`,
+  `/_spotcraft/config.json` and `/_spotcraft/privacy`. The app form has an **Analytics** switch,
+  on by default: turn it off for an app whose CSP allows only scripts with a nonce.
 - **The app contract's analytics** ([docs/contracts.md](docs/contracts.md#analytics)): the paths
   `/_spotcraft/s.js`, `/_spotcraft/e`, `/_spotcraft/config.json` and `/_spotcraft/privacy`, and the
   `Spotcraft-Client` header.
+
+### Changed
+
+- **Caddy runs from Spotcraft's own image**, built with the `replace-response` module, instead of
+  the official `caddy` image. Same version (2.11.9), same volumes, so certificates carry over.
+  The agent's health probe for images without a `HEALTHCHECK` now runs with Node in Caddy's
+  container.
+- The deploy generates `UMAMI_ADMIN_PASSWORD` and keeps it in `.env`; the agent gives it to
+  Umami's `admin` account in place of the default.
 
 ### Fixed
 

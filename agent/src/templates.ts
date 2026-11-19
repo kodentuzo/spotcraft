@@ -90,7 +90,13 @@ export const wantsWwwRedirect = (domain: string) => domain.split('.').length ===
  * Behind Cloudflare (`edge: cloudflare`) the sites are plain HTTP: Cloudflare terminates TLS
  * and the tunnel brings requests to Caddy on port 80.
  */
-export function renderSite(app: AppSpec, settings: AgentSettings, service: string): string {
+export function renderSite(
+  app: AppSpec,
+  settings: AgentSettings,
+  service: string,
+  /** The app's Umami website (ADR 0038); without one, nothing is counted. */
+  websiteId?: string,
+): string {
   const scheme = settings.edge === 'cloudflare' ? 'http://' : ''
   const hosts = hostnames(app, settings.appsDomain)
   // E.g. APPS_DOMAIN was cleared and the app has no domain of its own: no site, rather than a
@@ -123,14 +129,106 @@ ${hosts.map((host) => scheme + host).join(', ')} {
 \thandle ${POOL_PATH}/* {
 ${poolProxy('\t\t')}
 \t}
+${analyticsRoutes(app, websiteId)}
 \thandle {
 \t\treverse_proxy ${upstreamAlias(service)}:${app.port} {
 \t\t\t# The visitor's address (Cloudflare's CF-Connecting-IP when behind the tunnel), not a hop's.
-\t\t\theader_up X-Forwarded-For {client_ip}
-\t\t}
+\t\t\theader_up X-Forwarded-For {client_ip}${injection(app, websiteId)}
 \t}
 }
 ${www}`
+}
+
+/** Analytics' container on the `web` network, where Caddy reaches it (ADR 0038). */
+export const ANALYTICS_UPSTREAM = 'umami:3000'
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+
+/** Whether the app's pages get the tracker: it has a website and its switch isn't off. */
+export const isAnalyticsOn = (app: AppSpec, websiteId: string | undefined): websiteId is string =>
+  app.analytics !== false && websiteId !== undefined && UUID.test(websiteId)
+
+/**
+ * What every app's site serves for analytics (ADR 0038): Umami's tracker and collect endpoint,
+ * the app's settings for clients that send their own events, and the privacy page.
+ */
+function analyticsRoutes(app: AppSpec, websiteId: string | undefined): string {
+  const on = isAnalyticsOn(app, websiteId)
+  const config = JSON.stringify({
+    analytics: on ? { websiteId, enabled: true } : { enabled: false },
+  })
+  const page = privacyPage(app.name, on)
+    .split('\n')
+    .map((line) => `\t\t${line}`)
+    .join('\n')
+  return `\t# Analytics (ADR 0038): Umami's tracker and collect endpoint, the app's settings, and
+\t# what is counted.
+\thandle /_spotcraft/s.js {
+\t\treverse_proxy ${ANALYTICS_UPSTREAM}
+\t}
+\thandle /_spotcraft/e {
+\t\treverse_proxy ${ANALYTICS_UPSTREAM} {
+\t\t\theader_up X-Spotcraft-Client-IP {client_ip}
+\t\t}
+\t}
+\thandle /_spotcraft/config.json {
+\t\theader Content-Type "application/json"
+\t\theader Cache-Control "public, max-age=300"
+\t\trespond \`${config}\` 200
+\t}
+\thandle /_spotcraft/privacy {
+\t\theader Content-Type "text/html; charset=utf-8"
+\t\theader Content-Security-Policy "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'"
+\t\trespond <<HTML
+${page}
+\t\tHTML 200
+\t}`
+}
+
+/**
+ * With analytics on, the app is asked for uncompressed responses (Caddy's `encode` compresses
+ * them for the visitor), and its HTML gets the tracker before `</head>`, streamed so pages
+ * rendered on the server still stream. Returns the end of the `reverse_proxy` block.
+ */
+function injection(app: AppSpec, websiteId: string | undefined): string {
+  if (!isAnalyticsOn(app, websiteId)) return '\n\t\t}'
+  const tag = `<script defer src="/_spotcraft/s.js" data-website-id="${websiteId}"></script>`
+  return `
+\t\t\t# Plain HTML, so the tracker can be added below.
+\t\t\theader_up Accept-Encoding identity
+\t\t}
+\t\treplace stream {
+\t\t\tmatch {
+\t\t\t\theader Content-Type text/html*
+\t\t\t}
+\t\t\t</head> \`${tag}</head>\`
+\t\t}`
+}
+
+/**
+ * The privacy page every app domain serves at /_spotcraft/privacy: what Spotcraft counts, and a
+ * switch that turns counting off in this browser (Umami's own `umami.disabled` flag).
+ */
+function privacyPage(name: string, on: boolean): string {
+  const counted = on
+    ? `<p>This site counts its visits with <a href="https://umami.is">Umami</a>, on its own server. It sets no cookies and stores no IP address or anything else that identifies you: only the page, where the visit came from, the country, and the browser, system and screen size. Apps that use this site count the screens they show, with their version and platform, the same way.</p>
+<p><label><input type="checkbox" id="off"> Don't count my visits in this browser</label></p>
+<script>
+const off = document.getElementById('off')
+off.checked = localStorage.getItem('umami.disabled') === '1'
+off.onchange = () => off.checked ? localStorage.setItem('umami.disabled', '1') : localStorage.removeItem('umami.disabled')
+</script>`
+    : '<p>This site counts nothing about its visits.</p>'
+  return `<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy: ${name}</title>
+<style>body { font: 17px/1.5 system-ui, sans-serif; max-width: 36rem; margin: 3rem auto; padding: 0 1rem }</style>
+<h1>What ${name} counts</h1>
+${counted}
+<p><a href="/">Back to the site</a></p>
+</html>`
 }
 
 /**

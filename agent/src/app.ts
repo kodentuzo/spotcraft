@@ -152,7 +152,16 @@ export function buildApp({ token, apps, allowedIps = [], logger = false }: Build
       }
       // Left out, `takeOver` keeps its current value too (ADR 0022).
       const takeOver = request.body.takeOver ?? current?.takeOver ?? false
-      return apps.deploy({ name, ...request.body, database, protected: protect, takeOver })
+      // And `analytics` (ADR 0038): on unless the app turned it off.
+      const analytics = request.body.analytics ?? current?.analytics ?? true
+      return apps.deploy({
+        name,
+        ...request.body,
+        database,
+        protected: protect,
+        takeOver,
+        analytics,
+      })
     },
   )
 

@@ -1,5 +1,6 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import type { AccessApps } from './access.ts'
+import type { Analytics } from './analytics.ts'
 import {
   type AgentSettings,
   type AppSpec,
@@ -73,6 +74,15 @@ export function readImageConfig(inspected: string): { migrate?: string[]; health
 
 /** Where the user pool's backups go in the bucket, and its key in `backupAll`'s result. */
 export const POOL_BACKUP = '_auth'
+
+/**
+ * The health probe, run with Node in Caddy's container: exits 0 on a 2xx, or a 404 (the app
+ * answers on its port, without that route); 1 otherwise, saying what it got.
+ */
+export const PROBE_SCRIPT = `fetch(process.argv[1], { signal: AbortSignal.timeout(3000) }).then(
+  (r) => { if (r.ok || r.status === 404) process.exit(0); console.error('HTTP ' + r.status); process.exit(1) },
+  (e) => { console.error(String(e.cause ?? e)); process.exit(1) },
+)`
 /** Analytics' database in the bucket (ADR 0038), beside the apps and the pool. */
 export const ANALYTICS_BACKUP = '_umami'
 
@@ -243,6 +253,11 @@ export class Apps {
 
   /** How an image without a HEALTHCHECK is waited for; tests shorten it. */
   probe = { intervalMs: 2000, seconds: PROBE_SECONDS }
+  /**
+   * The instance's analytics (ADR 0038). With it, every app gets an Umami website, whose id its
+   * site carries; without it, sites count nothing. Never a reason for a deploy to fail.
+   */
+  analytics: Analytics | undefined
   readonly #databases: Databases | undefined
   readonly settings: AgentSettings
   readonly #domains: Domains | undefined
@@ -712,7 +727,8 @@ export class Apps {
     }
     // The new slot is healthy: point the site at it, then commit. A restart before the commit
     // finds the old compose file, rewrites the site back and drops the new slot.
-    await this.#store.writeSite(spec.name, renderSite(spec, this.settings, service))
+    const websiteId = await this.#ensureWebsite(spec)
+    await this.#store.writeSite(spec.name, renderSite(spec, this.settings, service, websiteId))
     await this.#store.commit(spec.name)
     const reload = await this.#reloadCaddy()
     if (reload.code !== 0) {
@@ -816,6 +832,52 @@ export class Apps {
     })
   }
 
+  /**
+   * The id of the app's Umami website, made the first time and kept in `secrets.json`. If Umami
+   * can't be reached, the id kept so far (or none): the deploy goes on, and the site counts
+   * again once a later deploy or `backfillAnalytics` reaches Umami.
+   */
+  async #ensureWebsite(spec: AppSpec): Promise<string | undefined> {
+    const { analyticsId } = await this.#store.readSecrets(spec.name)
+    if (!this.analytics) return analyticsId
+    const [host] = hostnames(spec, this.settings.appsDomain)
+    try {
+      const id = await this.analytics.ensureWebsite(spec.name, host ?? spec.name, analyticsId)
+      if (id !== analyticsId) {
+        await this.#withSecrets(async () => {
+          const secrets = await this.#store.readSecrets(spec.name)
+          await this.#store.writeSecrets(spec.name, { ...secrets, analyticsId: id })
+        })
+      }
+      return id
+    } catch (error) {
+      console.warn(`analytics for ${spec.name}: ${message(error)}`)
+      return analyticsId
+    }
+  }
+
+  /**
+   * Gives every app without one an Umami website, then refreshes the sites, so apps made before
+   * analytics (or while Umami was down) start counting. Run after `recover`; Umami may still be
+   * starting, so it tries again every `retryMs` for up to `attempts` times. Returns the apps
+   * that got a website.
+   */
+  async backfillAnalytics({ attempts = 20, retryMs = 15_000 } = {}): Promise<string[]> {
+    const analytics = this.analytics
+    if (!analytics) return []
+    for (let attempt = 1; ; attempt++) {
+      const missing: AppSpec[] = []
+      for (const spec of await this.#store.list()) {
+        if (!(await this.#store.readSecrets(spec.name)).analyticsId) missing.push(spec)
+      }
+      const done: string[] = []
+      for (const spec of missing) if (await this.#ensureWebsite(spec)) done.push(spec.name)
+      if (done.length > 0) await this.refreshSites()
+      if (done.length === missing.length || attempt >= attempts) return done
+      await new Promise((resolve) => setTimeout(resolve, retryMs))
+    }
+  }
+
   async #refreshSites(): Promise<string[]> {
     const pending: { spec: AppSpec; files: AppFiles; site: string }[] = []
     for (const spec of await this.#store.list()) {
@@ -825,7 +887,8 @@ export class Apps {
       const files = await this.#store.read(spec.name)
       const service = files && composeService(files.compose)
       if (!files || !service) continue
-      const site = renderSite(spec, this.settings, service)
+      const { analyticsId } = await this.#store.readSecrets(spec.name)
+      const site = renderSite(spec, this.settings, service, analyticsId)
       if (files.site !== site) pending.push({ spec, files, site })
     }
     // The user pool's own host follows the apps domain and the edge, like the apps' sites.
@@ -951,18 +1014,16 @@ export class Apps {
     const deadline = Date.now() + this.probe.seconds * 1000
     let last: RunResult = { code: 1, stdout: '', stderr: 'not tried' }
     while (Date.now() < deadline) {
+      // Caddy runs from Spotcraft's image, which has Node and no wget (ADR 0038).
       last = await this.#run('docker', [
         'exec',
         this.#caddyContainer,
-        'wget',
-        '-q',
-        '-O',
-        '/dev/null',
-        '-T',
-        '3',
+        '/nodejs/bin/node',
+        '-e',
+        PROBE_SCRIPT,
         url,
       ])
-      if (last.code === 0 || /\b404\b/.test(last.stderr)) return { ...last, code: 0 }
+      if (last.code === 0) return last
       await new Promise((resolve) => setTimeout(resolve, this.probe.intervalMs))
     }
     return {
@@ -1212,7 +1273,14 @@ export class Apps {
       if (!spec) return false
       const down = await this.#compose(name, ['down', '--remove-orphans'])
       if (down.code !== 0) throw new AgentError(`Could not stop ${name}`, 500, tail(down))
+      const { analyticsId } = await this.#store.readSecrets(name)
       await this.#store.remove(name)
+      // Its numbers go with it. Umami being down mustn't keep an app from being removed.
+      if (analyticsId && this.analytics) {
+        await this.analytics
+          .deleteWebsite(analyticsId)
+          .catch((error) => console.warn(`could not delete ${name}'s analytics: ${message(error)}`))
+      }
       this.#forgetReleases(name)
       await this.#reloadCaddy()
       try {

@@ -18,6 +18,8 @@ export interface AppSecrets {
   appSecret?: string
   /** SHA-256 (hex) of the app's deploy hook token; the token itself is never stored (ADR 0029). */
   hookTokenHash?: string
+  /** The id of the app's Umami website (ADR 0038). Not secret, but the agent's to keep. */
+  analyticsId?: string
 }
 
 export class Store {

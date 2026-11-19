@@ -3,20 +3,20 @@
 Everything Spotcraft runs, on one server ([ADR 0026](../../docs/decisions/0026-one-server.md)),
 from `/opt/spotcraft` with Docker Compose.
 
-| Service           | Reachable from           | Purpose                                         |
-| ----------------- | ------------------------ | ----------------------------------------------- |
-| `caddy`           | public 80/443            | HTTPS, the dashboard and every app's site block |
-| `cloudflared`     | outbound only            | with `EDGE=cloudflare`: the tunnel to Caddy     |
-| `agent`           | `control` network :4000  | deploys apps; answers only the dashboard        |
-| `auth`            | `web` and `db` networks  | the user pool (guests), for every app           |
-| `umami`           | `web` and `db` networks  | analytics (Umami), for every app                |
-| `dashboard`       | via Caddy                | SvelteKit app; no database, asks the agent      |
-| `postgres`        | `edge` and `db` networks | databases for hosted apps                       |
-| `victoriametrics` | `web` network            | metrics storage (90 days)                       |
-| `vmagent`         | `web` network            | scrapes the exporters, runs the probes          |
-| `blackbox`        | `web` network            | HTTP uptime probes of each app's public URLs    |
-| `node-exporter`   | `web` network :9100      | host metrics                                    |
-| `cadvisor`        | `web` network :8080      | per-container metrics                           |
+| Service           | Reachable from           | Purpose                                                                 |
+| ----------------- | ------------------------ | ----------------------------------------------------------------------- |
+| `caddy`           | public 80/443            | HTTPS, the dashboard and every app's site block, from Spotcraft's image |
+| `cloudflared`     | outbound only            | with `EDGE=cloudflare`: the tunnel to Caddy                             |
+| `agent`           | `control` network :4000  | deploys apps; answers only the dashboard                                |
+| `auth`            | `web` and `db` networks  | the user pool (guests), for every app                                   |
+| `umami`           | `web` and `db` networks  | analytics (Umami), for every app                                        |
+| `dashboard`       | via Caddy                | SvelteKit app; no database, asks the agent                              |
+| `postgres`        | `edge` and `db` networks | databases for hosted apps                                               |
+| `victoriametrics` | `web` network            | metrics storage (90 days)                                               |
+| `vmagent`         | `web` network            | scrapes the exporters, runs the probes                                  |
+| `blackbox`        | `web` network            | HTTP uptime probes of each app's public URLs                            |
+| `node-exporter`   | `web` network :9100      | host metrics                                                            |
+| `cadvisor`        | `web` network :8080      | per-container metrics                                                   |
 
 Only Caddy is published on host ports. Files: `compose.yaml`, `Caddyfile`, `pg_hba.conf`,
 `scrape.yaml` (vmagent targets), `blackbox.yml` (probe modules) and `.env.example` (the deploy

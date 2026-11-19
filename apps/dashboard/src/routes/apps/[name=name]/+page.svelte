@@ -156,6 +156,7 @@
         {#if app.database}Postgres <span class="font-mono">app_{app.name.replaceAll('-', '_')}</span>{:else}None{/if}
       </dd>
       <dt class="text-muted-foreground">Sign-in</dt><dd>{app.protected ? 'Cloudflare Access' : 'Public'}</dd>
+      <dt class="text-muted-foreground">Analytics</dt><dd>{app.analytics === false ? 'Off' : 'On'}</dd>
       <dt class="text-muted-foreground">Environment</dt><dd>{Object.keys(app.env).length === 1 ? '1 variable' : `${Object.keys(app.env).length} variables`}</dd>
     </dl>
   </div>

@@ -25,6 +25,8 @@ export interface AppFormValues {
   env: string
   /** Deploys may replace the custom domain's existing DNS records (ADR 0022). */
   takeOver: boolean
+  /** Count visits and events with the instance's Umami (ADR 0038). */
+  analytics: boolean
 }
 
 export type AppFormErrors = Partial<Record<keyof AppFormValues, string>>
@@ -59,6 +61,7 @@ export function parseAppForm(
     protected: data.get('protected') === 'on',
     env: String(data.get('env') ?? ''),
     takeOver: data.get('takeOver') === 'on',
+    analytics: data.get('analytics') === 'on',
   }
   const errors: AppFormErrors = {}
 
@@ -117,6 +120,7 @@ export function parseAppForm(
       readOnly: values.readOnly,
       protected: values.protected,
       takeOver: values.takeOver,
+      analytics: values.analytics,
       env,
     },
   }

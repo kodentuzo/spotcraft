@@ -24,6 +24,7 @@ export const load: PageServerLoad = async ({ params }) => {
       protected: app.protected ?? false,
       env: envToText(app.env),
       takeOver: app.takeOver ?? false,
+      analytics: app.analytics ?? true,
     },
     // Docker Hub can take seconds: streamed, so the form shows at once.
     tags: dockerHubTags(app.image),
