@@ -503,13 +503,21 @@ describe('agent', () => {
       })
       await until(() => pulls().length >= 2)
       await release(token, '2.1.0')
+      // The edit must be in the queue before B: wait until the route has handed it to `deploy`
+      // (which queues it at once), not for a fixed time a slow runner may not keep.
+      let editQueued = false
+      const deploy = apps.deploy.bind(apps)
+      apps.deploy = (edited) => {
+        editQueued ||= edited.env.EDITED === '1'
+        return deploy(edited)
+      }
       const edit = app.inject({
         method: 'PUT',
         url: '/apps/tagtape',
         headers: auth,
         payload: { ...spec, tag: '2.0.2', env: { ...spec.env, EDITED: '1' } },
       })
-      await new Promise((r) => setTimeout(r, 5))
+      await until(() => editQueued)
       await release(token, '2.2.0')
       letGo()
       await busy
