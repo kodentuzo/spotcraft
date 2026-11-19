@@ -20,7 +20,7 @@ incoming `Request` and lets you add headers to the response.
 
 ```bash
 npm install @spotcraft/kit drizzle-orm
-npm install --save-dev spotcraft
+npm install --save-dev spotcraft@0.5   # the CLI that still makes the kit's auth schema
 ```
 
 The kit has its own version ([ADR 0027](../decisions/0027-kit-version.md)). Its changelog says

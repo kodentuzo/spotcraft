@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { appRoleName } from 'spotcraft/provision'
+import { appRoleName } from '@kodentuzo/spotcraft/provision'
 import { NAME } from '../src/app-spec.ts'
 
 // The agent and provisioning (in the CLI package) each check app names. They must agree:

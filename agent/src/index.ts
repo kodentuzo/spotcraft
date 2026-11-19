@@ -1,4 +1,4 @@
-import { appRoleName, INSTANCE } from 'spotcraft/provision'
+import { appRoleName, INSTANCE } from '@kodentuzo/spotcraft/provision'
 import { AccessApps } from './access.ts'
 import { buildApp } from './app.ts'
 import { Apps } from './apps.ts'

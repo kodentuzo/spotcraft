@@ -65,6 +65,7 @@ describe('the user pool', { skip: !SUPERUSER_URL && 'KIT_TEST_POSTGRES_URL is no
     issuer: 'https://auth.example.test/main',
     protocol: 'https',
     trustedOrigins: ['https://expo.example.test'],
+    localOrigins: false,
     appGroup: GROUP,
     adminRole: ADMIN,
     guestDays: 180,
@@ -245,6 +246,54 @@ describe('the user pool', { skip: !SUPERUSER_URL && 'KIT_TEST_POSTGRES_URL is no
     const trusted = await signIn('auth.example.test', '203.0.113.3', 'https://expo.example.test')
     assert.equal(trusted.status, 200, trusted.body)
     assert.equal(trusted.headers['access-control-allow-origin'], 'https://expo.example.test')
+  })
+
+  it("trusts an app's dev server on this machine only in a local stack", async () => {
+    const local = { ...config, protocol: 'http' as const, localOrigins: true }
+    const server = createAuthServer(createPool(local, db), local, async () => true)
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    const localPort = (server.address() as AddressInfo).port
+    try {
+      const at = (path: string, origin: string, cookie?: string) =>
+        new Promise<Reply>((resolve, reject) => {
+          const req = request(
+            {
+              host: '127.0.0.1',
+              port: localPort,
+              method: 'POST',
+              path,
+              headers: {
+                host: `localhost:${localPort}`,
+                origin,
+                'content-type': 'application/json',
+                ...(cookie ? { cookie } : {}),
+              },
+            },
+            (res) => {
+              let text = ''
+              res.on('data', (chunk) => {
+                text += chunk
+              })
+              res.on('end', () =>
+                resolve({ status: res.statusCode ?? 0, headers: res.headers, body: text }),
+              )
+            },
+          )
+          req.on('error', reject)
+          req.end('{}')
+        })
+      const guest = await at('/_spotcraft/auth/sign-in/anonymous', 'http://localhost:3000')
+      assert.equal(guest.status, 200, guest.body)
+      assert.equal(guest.headers['access-control-allow-origin'], 'http://localhost:3000')
+      const cookie = String(guest.headers['set-cookie']).split(';')[0]
+      assert.match(cookie, /^better-auth\.session_token=/, 'no __Secure- prefix over http')
+      const forged = await at('/_spotcraft/auth/sign-out', 'https://evil.example.test', cookie)
+      assert.equal(forged.status, 403)
+      const own = await at('/_spotcraft/auth/sign-out', 'http://127.0.0.1:5173', cookie)
+      assert.equal(own.status, 200, own.body)
+    } finally {
+      await new Promise((resolve) => server.close(resolve))
+    }
   })
 
   it('gives a JWT that verifies against the JWKS, for cookies and bearer tokens', async () => {

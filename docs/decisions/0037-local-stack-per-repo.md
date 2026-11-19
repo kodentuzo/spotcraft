@@ -6,7 +6,7 @@ implementation: planned
 date: 2026-11-19
 supersedes: [17]
 superseded_by: []
-notes: "Wave 1: Postgres, the auth service and Mailpit per repository, spotcraft dev as the one first-run command, spotcraft.json. Umami joins the stack with analytics."
+notes: "Built: a Compose project per repository (root: the nearest .git or pnpm-workspace.yaml) with Postgres, the user pool from the Spotcraft image of the CLI's version (SPOTCRAFT_DEV_IMAGE overrides it) and Mailpit; ports and the pool's secret kept in .spotcraft/dev.json; spotcraft dev, env, db reset, migrate, status, stop, ls. Found while building: a local pool trusts any http://localhost:<port> origin (AUTH_LOCAL_ORIGINS), since dev servers run on any port. Not yet: CI using the same command instead of its Postgres service, and Umami (with analytics)."
 ---
 
 # Each repository gets its own local stack

@@ -11,9 +11,9 @@
     "test": "node --conditions=spotcraft-source --test 'test/**/*.test.ts'"
   },
   "dependencies": {
+    "@kodentuzo/spotcraft": "workspace:*",
     "fastify": "^5.12.8",
-    "pg": "^8.23.1",
-    "spotcraft": "workspace:*"
+    "pg": "^8.23.1"
   },
   "devDependencies": {
     "@spotcraft/kit": "workspace:*",

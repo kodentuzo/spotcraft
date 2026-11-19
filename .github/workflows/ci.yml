@@ -195,7 +195,7 @@ jobs:
   # NPM_TOKEN (environment `npm`) is only for the very first publish of a package, before a
   # trusted publisher can be linked; delete it after.
   npm:
-    name: npm (spotcraft)
+    name: npm (@kodentuzo/spotcraft)
     # node24: the CLI promises Node 24 (engines) and isn't published unless it works there.
     needs: [verify, images, node24]
     # Only the original repository publishes these names; forks of the template skip it.
@@ -231,9 +231,9 @@ jobs:
             exit 1
           }
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter spotcraft build
-      # npm doesn't know pnpm's workspace: protocol; the CLI depends on the kit's exact version,
-      # which verify checked is on npm.
+      - run: pnpm --filter ./packages/cli build
+      # npm doesn't know pnpm's workspace: protocol; this pins any workspace dependency to its
+      # exact version (the CLI has none today).
       - run: node scripts/pin-workspace-deps.ts packages/cli
       - name: Publish
         env:

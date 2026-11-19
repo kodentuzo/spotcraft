@@ -2,9 +2,9 @@
 // without KIT_TEST_POSTGRES_URL locally, required in CI.
 import assert from 'node:assert/strict'
 import { after, before, describe, it } from 'node:test'
+import type { Instance } from '@kodentuzo/spotcraft/provision'
 import { migrate } from '@spotcraft/kit/provision'
 import pg from 'pg'
-import type { Instance } from 'spotcraft/provision'
 import { AgentError } from '../src/apps.ts'
 import { postgresDatabases } from '../src/databases.ts'
 

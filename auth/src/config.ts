@@ -12,6 +12,11 @@ export interface Config {
   protocol: 'https' | 'http'
   /** Origins that may call the pool from another site, with bearer tokens (Expo, other hosts). */
   trustedOrigins: string[]
+  /**
+   * Only for a local stack (`spotcraft dev`): also trust any `http://localhost:<port>` and
+   * `http://127.0.0.1:<port>`, where apps' dev servers run.
+   */
+  localOrigins: boolean
   /** The role every app role belongs to; it may read and reference `auth.users`. */
   appGroup: string
   /** The agent's role, which may list and delete users for the dashboard. */
@@ -60,6 +65,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     issuer,
     protocol,
     trustedOrigins,
+    localOrigins: env.AUTH_LOCAL_ORIGINS === '1',
     appGroup: env.AUTH_APP_GROUP?.trim() || 'spotcraft_app',
     adminRole: env.AUTH_ADMIN_ROLE?.trim() || 'spotcraft_agent',
     guestDays,
