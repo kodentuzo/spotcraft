@@ -6,7 +6,7 @@ implementation: planned
 date: 2026-11-19
 supersedes: [17]
 superseded_by: []
-notes: "Built: a Compose project per repository (root: the nearest .git or pnpm-workspace.yaml) with Postgres, the user pool from the Spotcraft image of the CLI's version (SPOTCRAFT_DEV_IMAGE overrides it) and Mailpit; ports and the pool's secret kept in .spotcraft/dev.json; spotcraft dev, env, db reset, migrate, status, stop, ls. Found while building: a local pool trusts any http://localhost:<port> origin (AUTH_LOCAL_ORIGINS), since dev servers run on any port. Not yet: CI using the same command instead of its Postgres service, and Umami (with analytics)."
+notes: "Built: a Compose project per repository (root: the nearest .git or pnpm-workspace.yaml) with Postgres, the user pool from the Spotcraft image of the CLI's version (SPOTCRAFT_DEV_IMAGE overrides it) and Mailpit; ports, the pool's secret and the project name kept in .spotcraft/dev.json; the project is spotcraft-dev-<repo slug>-<6 hex of a hash of the root's path>, since two worktrees with the same folder name shared one stack (stacks from 0.6.0 keep spotcraft-dev-<repo slug>); spotcraft dev, env, db reset, migrate, status, stop, ls. Found while building: a local pool trusts any http://localhost:<port> origin (AUTH_LOCAL_ORIGINS), since dev servers run on any port. Not yet: CI using the same command instead of its Postgres service, and Umami (with analytics)."
 ---
 
 # Each repository gets its own local stack

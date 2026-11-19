@@ -153,7 +153,8 @@ export async function main(argv: string[]): Promise<number> {
     case 'ls': {
       const stacks = await listStacks()
       if (stacks.length === 0) print('No local stacks.')
-      for (const { name, status } of stacks) print(`${name.padEnd(30)} ${status}`)
+      const width = Math.max(...stacks.map(({ name }) => name.length))
+      for (const { name, status } of stacks) print(`${name.padEnd(width)}  ${status}`)
       return 0
     }
     case 'status': {

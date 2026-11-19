@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { randomBytes } from 'node:crypto'
+import { createHash, randomBytes } from 'node:crypto'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:net'
 import { join } from 'node:path'
@@ -7,10 +7,23 @@ import { appRoleName, INSTANCE } from './provision.ts'
 
 /**
  * The local stack of one repository (ADR 0037): Postgres set up like the Spotcraft server's,
- * the user pool, and Mailpit to catch email, as the Compose project `spotcraft-dev-<repo>`.
- * Tests keep the values below equal to the server's files.
+ * the user pool, and Mailpit to catch email, as the Compose project
+ * `spotcraft-dev-<repo>-<hash>`. Tests keep the values below equal to the server's files.
  */
 export const PROJECT_PREFIX = 'spotcraft-dev-'
+
+/**
+ * A new stack's Compose project: the repository folder's slug and 6 hex characters of a hash of
+ * its absolute path, so two checkouts with the same folder name get their own stacks.
+ */
+export function projectName(root: string, slug: string): string {
+  const hash = createHash('sha256').update(root).digest('hex').slice(0, 6)
+  return `${PROJECT_PREFIX}${slug}-${hash}`
+}
+
+/** A name Compose accepts as a project name. */
+const isProjectName = (name: unknown): name is string =>
+  typeof name === 'string' && /^[a-z0-9][a-z0-9_-]*$/.test(name)
 
 /** The server's Postgres image (infra/server/compose.yaml). */
 export const POSTGRES_IMAGE =
@@ -81,7 +94,7 @@ export const appPassword = (name: string) => `local-${name}-password`
 
 /** A repository's stack: where it keeps its state, and the ports it was given. */
 export interface Stack {
-  /** The Compose project, `spotcraft-dev-<repo>`. */
+  /** The Compose project, `spotcraft-dev-<repo>-<hash>` (or `spotcraft-dev-<repo>` from 0.6.0). */
   project: string
   /** `.spotcraft/` in the repository's root. */
   stateDir: string
@@ -107,16 +120,28 @@ function freePort(): Promise<number> {
 }
 
 /**
- * The repository's stack, from `.spotcraft/dev.json`, or a new one: free ports picked once and
- * kept, so URLs in `.env` stay the same. `.spotcraft/` ignores itself in git.
+ * The repository's stack, from `.spotcraft/dev.json`, or a new one: free ports and the project
+ * name picked once and kept, so URLs in `.env` stay the same. A `dev.json` from 0.6.0 has no
+ * project name; it keeps that version's `spotcraft-dev-<slug>`, now written down.
+ * `.spotcraft/` ignores itself in git.
  */
 export async function loadStack(root: string, slug: string, ports = freePort): Promise<Stack> {
   const stateDir = join(root, '.spotcraft')
   const file = join(stateDir, 'dev.json')
-  const project = `${PROJECT_PREFIX}${slug}`
+  const save = async (stack: Stack) => {
+    const { stateDir: _, ...saved } = stack
+    await writeFile(file, `${JSON.stringify(saved, null, 2)}\n`)
+  }
   try {
-    const saved = JSON.parse(await readFile(file, 'utf8')) as Omit<Stack, 'project' | 'stateDir'>
-    if (saved.ports && saved.authSecret) return { project, stateDir, ...saved }
+    const saved = JSON.parse(await readFile(file, 'utf8')) as Partial<Omit<Stack, 'stateDir'>>
+    if (saved.ports && saved.authSecret) {
+      const { ports, authSecret } = saved
+      if (isProjectName(saved.project))
+        return { project: saved.project, stateDir, ports, authSecret }
+      const stack = { project: `${PROJECT_PREFIX}${slug}`, stateDir, ports, authSecret }
+      await save(stack)
+      return stack
+    }
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT' && !(error instanceof SyntaxError))
       throw error
@@ -132,15 +157,14 @@ export async function loadStack(root: string, slug: string, ports = freePort): P
     }
   }
   const stack: Stack = {
-    project,
+    project: projectName(root, slug),
     stateDir,
     ports: { postgres: await next(), auth: await next(), smtp: await next(), mail: await next() },
     authSecret: randomBytes(32).toString('hex'),
   }
   await mkdir(stateDir, { recursive: true })
   await writeFile(join(stateDir, '.gitignore'), '*\n')
-  const { project: _, stateDir: __, ...saved } = stack
-  await writeFile(file, `${JSON.stringify(saved, null, 2)}\n`)
+  await save(stack)
   return stack
 }
 
