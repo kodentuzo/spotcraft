@@ -48,10 +48,14 @@ and `AUTH_SECRET`; `dev db reset` moves it to a schema.
 
 - **One per repository**, found from the folder you run it in: the nearest folder up with
   `.git` or `pnpm-workspace.yaml`. Every deployable in a monorepo shares it, so their tables can
-  point at the same local users. It is the Compose project `spotcraft-dev-<repo folder>`, with
-  its data in its own volume.
-- **Ports** are picked from the free ones on the first run and kept in `.spotcraft/dev.json`
-  at the repository's root, so `.env` stays valid. `.spotcraft/` ignores itself in git.
+  point at the same local users. It is the Compose project
+  `spotcraft-dev-<repo folder>-<hash>`, with its data in its own volume. The hash is 6 hex
+  characters of the root's absolute path, so two checkouts or worktrees with the same folder
+  name get their own stacks. `dev status` prints the name; `dev ls` lists every stack without
+  the `spotcraft-dev-` prefix.
+- **Ports and the name** are picked on the first run and kept in `.spotcraft/dev.json` at the
+  repository's root, so `.env` stays valid. A stack made by 0.6.0 keeps its name,
+  `spotcraft-dev-<repo folder>`. `.spotcraft/` ignores itself in git.
 - **Postgres:** the server's pinned image and login rules, the same roles and grants (the deploy
   script's SQL), and the same provisioning code as the agent (`@kodentuzo/spotcraft/provision`).
   Every app has its own schema and role in the `apps` database. Tests fail if the copies of the
@@ -66,7 +70,7 @@ and `AUTH_SECRET`; `dev db reset` moves it to a schema.
 
 Everything listens on `127.0.0.1` only. The passwords are fixed (`local-<name>-password` for an
 app), which is fine for throwaway data on your own machine and nowhere else. To remove a stack
-and its data: `docker compose -p spotcraft-dev-<repo> down -v`.
+and its data: `docker compose -p <name from dev status> down -v`.
 
 ## Developing
 

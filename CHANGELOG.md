@@ -18,6 +18,17 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
   wasn't enough. The contract now shows a few lines that apply drizzle-kit's files in Drizzle's
   own journal table.
 
+- **`spotcraft dev` gives every checkout its own stack:** a new stack is the Compose project
+  `spotcraft-dev-<repo folder>-<hash>`, where the hash is 6 hex characters of the repository
+  root's path. Before, two checkouts or git worktrees with the same folder name shared one
+  project, volume and network, and overwrote each other's ports. The name is kept in
+  `.spotcraft/dev.json` on first use. A stack made by 0.6.0 keeps its name
+  (`spotcraft-dev-<repo folder>`), so an app's Compose file that names the stack's network
+  (e.g. `spotcraft-dev-vinskiano_default`) keeps working. For a new stack, take the name from
+  `spotcraft dev status` (the network is `<name>_default`). To split two checkouts that share
+  a 0.6.0 stack, delete `.spotcraft/dev.json` in one of them and run `spotcraft dev` there: it
+  gets a new stack with new ports, so its `.env` URLs need the new values (`spotcraft dev env`).
+
 ## [0.6.0] - 2026-11-19
 
 ### Added
