@@ -14,7 +14,8 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
 
 - **The planned app contract** ([docs/contracts.md](docs/contracts.md)): what every app gets and
   what it must do. Decided in four records, none built yet:
-  - every app gets the same env vars and a database, with no switches
+  - every app gets the same env vars and its own schema in one instance database, like a
+    Supabase project, and the server runs its migrations
     ([ADR 0034](docs/decisions/0034-app-contract.md));
   - one user pool per instance, starting with guests ([ADR 0035](docs/decisions/0035-auth-pool.md));
   - the kit becomes `@kodentuzo/spotkit` in its own repository, and the CLI becomes

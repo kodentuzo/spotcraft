@@ -5,7 +5,7 @@ status: accepted
 implementation: done
 date: 2026-11-14
 supersedes: []
-superseded_by: []
+superseded_by: [34]
 notes: "Built: the agent's nightly backup (pg_dump plus app.json and secrets.json) to an S3-compatible bucket, an R2 bucket with a lifecycle rule and a bucket lock in infra/cloudflare, a restore that runs as the owning roles, Hetzner backups on by default, the dashboard's backup status and Back up now. No alerts beyond the dashboard."
 ---
 

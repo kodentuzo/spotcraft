@@ -23,15 +23,17 @@ later, email, so a database alone no longer matches what an app gets on the serv
   version pinned for the server), the auth service with a `main` pool, and Mailpit to catch email.
   It has its own volume. Free ports are picked on first start and kept in `.spotcraft/dev.json`,
   which is not committed. All deployables in a monorepo share the stack.
-- **Same as the server:** database and role names (`app_<slug>`) and limits, the provisioning
-  code, the reserved env var names, JWT claims, JWKS and webhook format
-  ([docs/contracts.md](../contracts.md)).
+- **Same as the server:** the `apps` database with the `auth` schema and a schema and role per
+  app (`app_<slug>`), their limits and grants, the provisioning code, the reserved env var
+  names, JWT claims and JWKS ([docs/contracts.md](../contracts.md)). In a monorepo, every
+  deployable has its own schema in the one database, so their tables can point at the same
+  users.
 - **Commands:**
-  - `spotcraft dev` starts the stack if needed, creates the app's database, writes the missing
+  - `spotcraft dev` starts the stack if needed, creates the app's schema, writes the missing
     reserved variables to `.env` (overwriting nothing), and runs the `migrate` command from
     `spotcraft.json`.
   - `spotcraft dev env` prints the variables.
-  - `spotcraft dev db reset` recreates the app's database after asking, then runs `migrate`.
+  - `spotcraft dev db reset` recreates the app's schema after asking, then runs `migrate`.
   - `spotcraft dev status`, `stop` and `ls` (every stack on the machine).
 - **CI uses the same command** before tests, instead of its own Postgres service.
 - Still no Studio and no copying production data down.
@@ -40,5 +42,5 @@ later, email, so a database alone no longer matches what an app gets on the serv
 
 - Repositories don't share local data, and CI runs what developers run.
 - Several stacks running at once use more memory.
-- The local pool only knows the repository's own users and only sends webhooks to its apps.
-  Testing one account across apps from different repositories needs a staging instance.
+- The local pool only knows the repository's own users. Testing one account across apps from
+  different repositories needs a staging instance.

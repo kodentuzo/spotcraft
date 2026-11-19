@@ -19,7 +19,7 @@ that supersedes the old one; old records are never rewritten.
 | 0012 | [Hardening from the v0.1.0 audit](0012-hardening-before-v0-1.md)                               | accepted                                     |
 | 0013 | [One Semantic Version for the whole project](0013-one-version.md)                              | superseded by 0019                           |
 | 0014 | [The website is static and hosted on Spotcraft itself](0014-website.md)                        | accepted, partly superseded by 0024          |
-| 0015 | [One Postgres on the apps server, a database per app](0015-shared-postgres.md)                 | accepted, partly superseded by 0034          |
+| 0015 | [One Postgres on the apps server, a database per app](0015-shared-postgres.md)                 | superseded by 0034                           |
 | 0016 | [A server-only backend kit, starting with guest accounts](0016-backend-kit.md)                 | superseded by 0035                           |
 | 0017 | [A local stack that matches the server](0017-local-stack.md)                                   | superseded by 0037                           |
 | 0018 | [The dashboard lists and deletes an app's users](0018-user-management.md)                      | superseded by 0035                           |
@@ -33,7 +33,7 @@ that supersedes the old one; old records are never rewritten.
 | 0027 | [The kit has its own version](0027-kit-version.md)                                             | superseded by 0036                           |
 | 0028 | [Deploys start the new version next to the old one](0028-zero-downtime-deploys.md)             | accepted                                     |
 | 0029 | [An app's CI deploys a new tag through a deploy hook](0029-deploy-hook.md)                     | accepted                                     |
-| 0030 | [Nightly dumps of every app to a bucket, and Hetzner backups of the server](0030-backups.md)   | accepted                                     |
+| 0030 | [Nightly dumps of every app to a bucket, and Hetzner backups of the server](0030-backups.md)   | accepted, partly superseded by 0034          |
 | 0031 | [The kit holds the server glue every app repeated](0031-kit-app-glue.md)                       | superseded by 0036                           |
 | 0032 | [An older app starts on a database a newer one migrated](0032-rollback-on-a-newer-database.md) | accepted                                     |
 | 0033 | [The theme and plain-CSS components come from spotstrap](0033-theme-from-spotstrap.md)         | accepted                                     |
