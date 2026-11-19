@@ -36,6 +36,22 @@ function fakeUmami(initialPassword = 'umami') {
       websites.set(id, body)
       return json(200, { id })
     }
+    const numbers = /^\/api\/websites\/[^/]+\/(stats|metrics)$/.exec(url.pathname)?.[1]
+    if (numbers === 'stats') return json(200, { pageviews: 12, visitors: 5, visits: 7 })
+    if (numbers === 'metrics') {
+      const type = url.searchParams.get('type')
+      // An older Umami refuses a type it doesn't know.
+      if (type === 'event') return json(400, { error: 'Invalid type' })
+      return json(
+        200,
+        type === 'country'
+          ? [
+              { x: 'HR', y: 4 },
+              { x: null, y: 1 },
+            ]
+          : [{ x: 'x', y: 2 }],
+      )
+    }
     const id = /^\/api\/websites\/(.+)$/.exec(url.pathname)?.[1]
     // Like Umami: an admin gets 200 and `null` for a website that doesn't exist.
     if (id && method === 'GET') {
@@ -91,5 +107,18 @@ describe("the agent's Umami client", () => {
       },
     })
     await assert.rejects(away.ensureWebsite('blog', 'blog.app'), /Umami did not answer/)
+  })
+
+  it('reads every breakdown, and leaves one Umami refuses empty', async () => {
+    const umami = fakeUmami(PASSWORD)
+    const client = new Umami('http://umami:3000', PASSWORD, umami)
+    const summary = await client.summary('site', 7)
+    assert.equal(summary.visitors, 5)
+    assert.deepEqual(summary.countries, [
+      { name: 'HR', count: 4 },
+      { name: '(unknown)', count: 1 },
+    ])
+    assert.deepEqual(summary.referrers, [{ name: 'x', count: 2 }])
+    assert.deepEqual(summary.events, [])
   })
 })

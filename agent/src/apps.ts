@@ -232,7 +232,20 @@ export interface VisitSummary {
   pages: { path: string; views: number }[]
   /** Visitors per operating system, most first. */
   systems: { name: string; visitors: number }[]
+  /**
+   * More breakdowns, most first, each empty when Umami can't say. Views for hostnames,
+   * referrers and events; visitors for countries (ISO codes), devices and browsers.
+   */
+  hostnames: Breakdown
+  referrers: Breakdown
+  countries: Breakdown
+  devices: Breakdown
+  browsers: Breakdown
+  /** Custom events the app sends (`umami.track`). */
+  events: Breakdown
 }
+
+export type Breakdown = { name: string; count: number }[]
 
 /** An app's usage, for the dashboard: each part absent when its source can't say. */
 export interface AppUsage {

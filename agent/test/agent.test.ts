@@ -1377,6 +1377,12 @@ describe('analytics (ADR 0038)', () => {
             previous: { views: 10, visitors: 4 },
             pages: [{ path: '/', views: 9 }],
             systems: [{ name: 'iOS', visitors: 3 }],
+            hostnames: [],
+            referrers: [],
+            countries: [],
+            devices: [],
+            browsers: [],
+            events: [],
           }
         },
       },

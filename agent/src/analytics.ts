@@ -71,11 +71,26 @@ export class Umami implements Analytics {
     }
     type Stats = { pageviews: number; visitors: number; visits: number }
     type Metric = { x: string | null; y: number }[]
-    const [stats, pages, systems] = await Promise.all([
-      get<Stats & { comparison?: Partial<Stats> }>(`/stats?${range}`),
-      get<Metric>(`/metrics?${range}&type=path&limit=5`),
-      get<Metric>(`/metrics?${range}&type=os&limit=5`),
-    ])
+    const metric = (type: string) => get<Metric>(`/metrics?${range}&type=${type}&limit=10`)
+    // A breakdown Umami can't give leaves its list empty; the totals still show.
+    const breakdown = (type: string) =>
+      metric(type).then(
+        (rows) =>
+          Array.isArray(rows) ? rows.map(({ x, y }) => ({ name: x ?? '(unknown)', count: y })) : [],
+        () => [],
+      )
+    const [stats, pages, systems, hostnames, referrers, countries, devices, browsers, events] =
+      await Promise.all([
+        get<Stats & { comparison?: Partial<Stats> }>(`/stats?${range}`),
+        get<Metric>(`/metrics?${range}&type=path&limit=10`),
+        get<Metric>(`/metrics?${range}&type=os&limit=10`),
+        breakdown('hostname'),
+        breakdown('referrer'),
+        breakdown('country'),
+        breakdown('device'),
+        breakdown('browser'),
+        breakdown('event'),
+      ])
     return {
       days,
       views: stats.pageviews ?? 0,
@@ -87,6 +102,12 @@ export class Umami implements Analytics {
       },
       pages: pages.map(({ x, y }) => ({ path: x ?? '(unknown)', views: y })),
       systems: systems.map(({ x, y }) => ({ name: x ?? '(unknown)', visitors: y })),
+      hostnames,
+      referrers,
+      countries,
+      devices,
+      browsers,
+      events,
     }
   }
 
