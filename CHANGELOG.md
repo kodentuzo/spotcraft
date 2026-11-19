@@ -10,40 +10,60 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-19
+
+Every app counts its usage, with no change to the app
+([ADR 0038](docs/decisions/0038-analytics.md)). Spotcraft runs Umami for the instance, Caddy adds
+its script to apps' HTML pages, and each app's page in the dashboard gets a Usage section:
+visitors and page views, the user pool's active and new accounts, requests with errors and
+latency, and the top pages, systems and app versions. Counts only: no cookies, and nothing that
+identifies a visitor.
+
+**Upgrading from 0.6:**
+
+1. **Rename any app called `umami`** (breaking): it is now a reserved name, like the server's
+   other services.
+2. **Deploy `0.7.0`** with the Deploy workflow. It generates the new passwords and secret in
+   `.env`, creates Umami's database and role, and runs Caddy from Spotcraft's image. When the
+   agent starts, it gives every app its Umami website, so apps start counting without a
+   redeploy.
+3. **Check an app with a strict CSP.** The script is same-origin, so `script-src 'self'` allows
+   it; an app whose CSP allows only scripts with a nonce should turn **Analytics** off in its
+   settings.
+
+The server needs about 512 MB more for Umami.
+
 ### Added
 
-- **Analytics, step one: Umami runs on the server** ([ADR 0038](docs/decisions/0038-analytics.md)).
-  The deploy adds an `umami` container and a `umami` database owned by its own role, with a
-  generated password and secret in `.env` (`POSTGRES_UMAMI_PASSWORD`, `UMAMI_SECRET`). It
-  counts nothing yet: Caddy's routes and the dashboard come next. Nightly backups add
-  `_umami/<time>/umami.dump`. `spotcraft dev` runs it too, and prints its address (sign in as
-  `admin` / `umami`); a stack made before keeps its ports and gets one more. `umami` is now a
-  reserved app name, like the server's other services.
-- **Every app counts its visits** ([ADR 0038](docs/decisions/0038-analytics.md)). On deploy, the
-  agent gives the app a website in Umami, and Caddy adds Umami's script to the app's HTML pages
-  (no cookies, nothing that identifies a visitor). Apps already running get theirs when the new
-  agent starts. Every app domain now serves `/_spotcraft/s.js`, `/_spotcraft/e`,
-  `/_spotcraft/config.json` and `/_spotcraft/privacy`. The app form has an **Analytics** switch,
-  on by default: turn it off for an app whose CSP allows only scripts with a nonce.
-- **Each app's usage in the dashboard** ([ADR 0038](docs/decisions/0038-analytics.md)): a
-  Usage section with visitors and page views from Umami (7 days, against the 7 before), the
-  pool's active accounts (today, 7 and 30 days) and new accounts per day, requests, errors and
-  p95 latency from Caddy over 24 hours, and the top pages, operating systems and app versions.
-  The user pool now records on each session the host and the `Spotcraft-Client` header (its
-  migration 0004), Caddy exports requests per host, and the agent answers
-  `GET /apps/:name/usage`. Counts only: no ids.
-- **The app contract's analytics** ([docs/contracts.md](docs/contracts.md#analytics)): the paths
-  `/_spotcraft/s.js`, `/_spotcraft/e`, `/_spotcraft/config.json` and `/_spotcraft/privacy`, and the
-  `Spotcraft-Client` header.
+- **Analytics with Umami** ([ADR 0038](docs/decisions/0038-analytics.md)): an `umami` container
+  with its own `umami` database and role, set up by the deploy script, which generates
+  `POSTGRES_UMAMI_PASSWORD`, `UMAMI_SECRET` and `UMAMI_ADMIN_PASSWORD` and keeps them in `.env`.
+  The agent replaces Umami's default admin password with the generated one. Nightly backups add
+  `_umami/<time>/umami.dump`. `spotcraft dev` runs Umami too and prints its address (sign in as
+  `admin` / `umami`); a stack made before keeps its ports and gets one more.
+- **Every app counts its visits.** On deploy, the agent gives the app a website in Umami, kept
+  with the app and deleted with it, and Caddy adds Umami's script before `</head>` in the app's
+  HTML responses. Apps already running get theirs when the agent starts. If Umami is down, a
+  deploy still goes through and counting starts later. The app form has an **Analytics** switch,
+  on by default.
+- **Each app's usage in the dashboard:** visitors and page views from Umami (7 days, against
+  the 7 before), the pool's active accounts (today, 7 and 30 days) and new accounts per day,
+  requests, the share of errors and p95 latency from Caddy over 24 hours, and the top pages,
+  operating systems and app versions. The agent answers `GET /apps/:name/usage`.
+- **The app contract's analytics** ([docs/contracts.md](docs/contracts.md#analytics)): every app
+  domain serves `/_spotcraft/s.js`, `/_spotcraft/e`, `/_spotcraft/config.json` (the app's
+  analytics id, for native clients) and `/_spotcraft/privacy` (what is counted, with an opt-out
+  for the browser). Clients may send `Spotcraft-Client: <platform>/<version>` to the pool.
+- **The user pool records on each session** the host it was made or renewed on and the
+  `Spotcraft-Client` header (its migration 0004).
 
 ### Changed
 
 - **Caddy runs from Spotcraft's own image**, built with the `replace-response` module, instead of
   the official `caddy` image. Same version (2.11.9), same volumes, so certificates carry over.
-  The agent's health probe for images without a `HEALTHCHECK` now runs with Node in Caddy's
-  container.
-- The deploy generates `UMAMI_ADMIN_PASSWORD` and keeps it in `.env`; the agent gives it to
-  Umami's `admin` account in place of the default.
+  It exports requests per host on port 2020, to the monitoring network only. The agent's health
+  probe for images without a `HEALTHCHECK` now runs with Node in Caddy's container.
+- `umami` is a reserved app name.
 
 ### Fixed
 
@@ -521,7 +541,8 @@ handful of server-rendered apps from Docker Hub images behind HTTPS.
 - Servers: key-only SSH as a `deploy` user with modern algorithms only, root login refused,
   two firewalls, automatic security updates.
 
-[Unreleased]: https://github.com/kodentuzo/spotcraft/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/kodentuzo/spotcraft/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/kodentuzo/spotcraft/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/kodentuzo/spotcraft/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/kodentuzo/spotcraft/compare/v0.5.2...v0.6.0
 [0.5.2]: https://github.com/kodentuzo/spotcraft/compare/v0.5.1...v0.5.2
