@@ -1,5 +1,6 @@
 import { appRoleName, INSTANCE } from '@kodentuzo/spotcraft/provision'
 import { AccessApps } from './access.ts'
+import { Umami } from './analytics.ts'
 import { buildApp } from './app.ts'
 import { ANALYTICS_BACKUP, Apps, POOL_BACKUP } from './apps.ts'
 import { dockerDump, untilNext } from './backups.ts'
@@ -58,6 +59,7 @@ const apps = new Apps(
     ],
   },
 )
+if (config.analytics) apps.analytics = new Umami(config.analytics.url, config.analytics.password)
 const app = buildApp({
   token: config.token,
   apps,
@@ -98,6 +100,13 @@ for (let attempt = 1; attempt <= 24; attempt++) {
     await new Promise((resolve) => setTimeout(resolve, 5000))
   }
 }
+
+// Apps without an Umami website (made before analytics, or while Umami was down) get one, and
+// their sites start counting. Umami may still be starting; this waits for it in the background.
+apps.backfillAnalytics().then(
+  (started) => started.length > 0 && app.log.info({ started }, 'analytics on for these apps'),
+  (error) => app.log.warn({ err: error }, 'could not turn analytics on for every app'),
+)
 
 // After an upgrade, bring every app database up to date. Postgres may still be starting
 // (both start in the same deploy), so failures are retried for a few minutes.

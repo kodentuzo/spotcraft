@@ -1,8 +1,9 @@
-# Spotcraft: one image for the agent, the user pool and the dashboard (ADR 0025). Compose runs
-# it three times, choosing the program with `working_dir` and `command`:
+# Spotcraft: one image for the agent, the user pool, the dashboard and Caddy (ADR 0025). Compose
+# runs it four times, choosing the program with `working_dir` and `command` (or `entrypoint`):
 #   agent      working_dir /app/agent      command ["src/index.ts"]
 #   auth       working_dir /app/auth       command ["src/index.ts"]
 #   dashboard  working_dir /app/dashboard  command ["build"]
+#   caddy      entrypoint ["caddy"]        command ["run", "--config", "/etc/caddy/Caddyfile", ...]
 # Only the agent's container gets the Docker socket. Per-service settings (ports, proxy headers,
 # paths) are set in Compose, not here.
 # Build from the repository root: docker build .
@@ -10,6 +11,14 @@
 
 # The Docker CLI and Compose plugin (static binaries) from the official image, for the agent.
 FROM docker:29.10.0-cli@sha256:34507eb5069d8be82c95dd3b6987d4250fd5fee49b82e2509b7d7a7030740d6d AS docker-cli
+
+# Caddy with the replace-response module, which adds the analytics script to apps' HTML
+# (ADR 0038). Cross-compiled on the native platform; the module is pinned to a commit.
+FROM --platform=$BUILDPLATFORM caddy:2.11.9-builder@sha256:f9beaa5ddbe7df6f26ebbcf9cbf44e05a1917b9bba464f0c3229038d7e2e6e13 AS caddy
+ARG TARGETOS TARGETARCH
+RUN GOOS=$TARGETOS GOARCH=$TARGETARCH CGO_ENABLED=0 xcaddy build v2.11.9 \
+    --with github.com/caddyserver/replace-response@80962887e4c6 \
+    --output /usr/bin/caddy
 
 # The build output is plain JavaScript, so it is built once on the native platform.
 FROM --platform=$BUILDPLATFORM node:26.13.1-slim@sha256:e6bedef217677b276c591795e169840edd9096dbf13f29df8ef8d1856b8820bc AS build
@@ -41,6 +50,7 @@ RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
 FROM gcr.io/distroless/nodejs26-debian13:nonroot@sha256:1d736cf8b5716c07a245301f92717143215d248fd55771ee1936ef4b3302e531
 COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker
 COPY --from=docker-cli /usr/local/libexec/docker/cli-plugins/docker-compose /usr/local/libexec/docker/cli-plugins/docker-compose
+COPY --from=caddy /usr/bin/caddy /usr/bin/caddy
 WORKDIR /app
 COPY --from=build /out ./
 # The dashboard's probes volume starts from this directory, so uid 1000 can write the targets file.

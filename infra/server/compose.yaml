@@ -20,9 +20,15 @@ x-hardened: &hardened
   pids_limit: 256
 
 services:
+  # Caddy 2.11.9 from Spotcraft's own image, built with the replace-response module that adds the
+  # analytics script to apps' HTML (ADR 0038). It runs as root, as the official image does, so
+  # the certificates in caddy_data stay readable; it keeps only NET_BIND_SERVICE.
   caddy:
     <<: *hardened
-    image: caddy:2.11.9@sha256:4851e54a46b206517c574821bb5cc67f170d2156041e9fbc4c9193b45e84a75b
+    image: ${SPOTCRAFT_IMAGE:-vindotski/spotcraft}:${SPOTCRAFT_TAG:-latest}
+    user: "0:0"
+    entrypoint: ["caddy"]
+    command: ["run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
     cap_add: [NET_BIND_SERVICE] # ports 80 and 443
     read_only: true
     tmpfs:
@@ -43,6 +49,9 @@ services:
       DASHBOARD_PEERS: ${DASHBOARD_PEERS:-0.0.0.0/0 ::/0}
       # http:// behind a Cloudflare Tunnel: Cloudflare holds the certificate.
       DASHBOARD_SCHEME: ${DASHBOARD_SCHEME:-}
+      # Where Caddy keeps certificates and its config, as in the official image.
+      XDG_DATA_HOME: /data
+      XDG_CONFIG_HOME: /config
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ./sites:/etc/caddy/sites:ro # one file per app, written by the agent
@@ -56,7 +65,13 @@ services:
       web: {}
     # The admin API only answers once the config has loaded.
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:2019/config/"]
+      test:
+        [
+          "CMD",
+          "/nodejs/bin/node",
+          "-e",
+          "fetch('http://127.0.0.1:2019/config/').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))",
+        ]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -112,6 +127,10 @@ services:
       DASHBOARD_DOMAIN: ${DASHBOARD_DOMAIN}
       # The user pool's `iss`, the same as the auth service's: apps get it as AUTH_ISSUER.
       AUTH_ISSUER: https://${DASHBOARD_DOMAIN}/pools/main
+      # Analytics (ADR 0038): Umami on the `db` network, and the password the agent gives its
+      # admin account in place of Umami's default.
+      UMAMI_URL: http://umami:3000
+      UMAMI_ADMIN_PASSWORD: ${UMAMI_ADMIN_PASSWORD:?set UMAMI_ADMIN_PASSWORD in .env}
       # cloudflare: site blocks are plain HTTP, the tunnel brings requests to Caddy (ADR 0021).
       EDGE: ${EDGE:-direct}
       # Optional, all four together: custom domains' DNS through the Cloudflare API.

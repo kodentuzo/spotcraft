@@ -44,6 +44,8 @@ export interface Config {
         postgresContainer: string
       }
     | undefined
+  /** Set together: every app gets an Umami website, and its site counts visits (ADR 0038). */
+  analytics: { url: string; password: string } | undefined
   /** Settings that are present but have no effect, worth a line in the log at startup. */
   notices: string[]
 }
@@ -158,6 +160,19 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     edge,
     cloudflare: loadCloudflare(env, edge, appsDomain, notices),
     backup: loadBackup(env),
+    analytics: loadAnalytics(env),
     notices,
   }
+}
+
+/** Umami's address on the `db` network and the password the agent gives its admin account. */
+function loadAnalytics(env: NodeJS.ProcessEnv): Config['analytics'] {
+  const url = env.UMAMI_URL?.trim()
+  const password = env.UMAMI_ADMIN_PASSWORD ?? ''
+  if (!url && !password) return undefined
+  if (!url || !URL.canParse(url)) throw new Error('UMAMI_URL must be a URL like http://umami:3000')
+  if (password.length < 32) {
+    throw new Error('UMAMI_ADMIN_PASSWORD must be set with UMAMI_URL, at least 32 characters')
+  }
+  return { url, password }
 }

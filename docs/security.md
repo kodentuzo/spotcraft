@@ -90,9 +90,12 @@ sets no cookies and stores no IP addresses: it hashes the address and User-Agent
 rotates monthly, and keeps the country. Telemetry and update checks are off. Only its tracker
 script and its collect endpoint are reachable, through Caddy, at `/_spotcraft/s.js` and
 `/_spotcraft/e`; its interface and API are not. It starts with Umami's default account
-(`admin`), which the agent will replace with a generated password before the API is used. Its
-container is not read-only, because Umami writes the collect path into its script when it
-starts.
+(`admin`), whose password the agent replaces with a generated one (`UMAMI_ADMIN_PASSWORD`) the
+first time it signs in, over the internal `db` network. Its container is not read-only, because
+Umami writes the collect path into its script when it starts. Caddy adds Umami's script to apps'
+HTML responses only, as a same-origin file, so a `script-src 'self'` CSP allows it; an app can
+turn analytics off. Caddy itself runs from Spotcraft's image, built with the pinned
+`replace-response` module, as root with only `NET_BIND_SERVICE`, as the official image did.
 
 **Spotcraft's own containers** run without capabilities (Caddy keeps `NET_BIND_SERVICE` for ports
 80 and 443), with `no-new-privileges`, read-only root filesystems where the software allows,
