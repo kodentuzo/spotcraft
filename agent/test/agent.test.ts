@@ -124,16 +124,16 @@ function fakeDatabases() {
     async dropSchema(name) {
       calls.push(['dropSchema', name])
     },
-    async accountUsage(hosts: string[]) {
-      calls.push(['accountUsage', ...hosts])
+    async accountUsage(hosts?: string[] | null) {
+      calls.push(['accountUsage', ...(hosts ?? ['(all)'])])
       return {
         active: { day: 1, week: 2, month: 3 },
         newPerDay: [{ day: '2026-11-19', count: 1 }],
         clients: [{ client: 'ios/1.4.0', active: 1 }],
       }
     },
-    async listUsers({ limit, cursor }) {
-      calls.push(['listUsers', String(limit), cursor ?? ''])
+    async listUsers({ limit, cursor, hosts }) {
+      calls.push(['listUsers', String(limit), cursor ?? '', ...(hosts ?? [])])
       return {
         available: true,
         total: 1,
@@ -1135,6 +1135,18 @@ describe('agent', () => {
         assert.deepEqual(db.calls.at(-1), ['listUsers', '10', 'b2xkZXI'])
         await get('/pool/users')
         assert.deepEqual(db.calls.at(-1), ['listUsers', '50', ''], 'default limit')
+      })
+
+      it("lists one app's users by its hosts, and counts the whole pool (ADR 0040)", async () => {
+        assert.equal((await put(dbSpec)).statusCode, 200)
+        assert.equal((await get('/pool/users?app=tagtape')).statusCode, 200)
+        assert.deepEqual(db.calls.at(-1), ['listUsers', '50', '', 'tagtape.app'])
+        assert.equal((await get('/pool/users?app=nope')).statusCode, 404)
+        assert.equal((await get('/pool/users?app=Bad_Name')).statusCode, 400)
+        const usage = await get('/pool/usage')
+        assert.equal(usage.statusCode, 200, usage.body)
+        assert.deepEqual(usage.json().accounts.active, { day: 1, week: 2, month: 3 })
+        assert.deepEqual(db.calls.at(-1), ['accountUsage', '(all)'])
       })
 
       it("deletes a user: 204, then 404, and 409 when an app's key holds on", async () => {

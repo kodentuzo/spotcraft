@@ -38,8 +38,9 @@ The files it writes are the only record of which apps exist:
 | GET    | `/apps/:name/usage`      | `{ visits?, accounts? }` over `?days=` (7): counts, top pages, hosts, referrers, countries, devices, browsers, systems, events, per day; `?brief=true` totals only |
 | GET    | `/apps/:name/database`   | `{ layout }`: `schema`, `database` (its own) or `none`                                                                                                             |
 | POST   | `/apps/:name/move`       | `{ tag }`: move it from its own database into its schema                                                                                                           |
-| GET    | `/pool/users`            | the user pool's users, newest first (`?limit=`, `?cursor=`)                                                                                                        |
+| GET    | `/pool/users`            | the user pool's users, newest first (`?limit=`, `?cursor=`; `?app=` for one app's)                                                                                 |
 | DELETE | `/pool/users/:id`        | delete a user and what every app kept for them; 204, 404, 409                                                                                                      |
+| GET    | `/pool/usage`            | `{ accounts? }`: the whole pool's account counts, as an app's usage counts its own                                                                                 |
 
 `PUT` body (unknown fields are rejected):
 
@@ -359,6 +360,11 @@ in the `auth` schema of the `apps` database. The pool grants it `SELECT` on `aut
   `guest` (no sign-up), `createdAt` and `lastSeen` (their most recently used session, or
   `null`). Pages hold `?limit=` users (default 50, max 200); pass `next` back as `?cursor=` for
   the older ones. `available` is false until the pool has set up `auth` and its grants.
+  With `?app=<name>` ([ADR 0040](../docs/decisions/0040-admin-sees-app-users.md)), only the users
+  with a session on the app's hosts, `lastSeen` from those sessions, and `total` and `guests`
+  counted among them; an unknown app answers 404.
+- `GET /pool/usage` returns the whole pool's `accounts` (active in a day, 7 and 30 days; new per
+  day; clients), the same shape as an app's usage, left out until the pool records hosts.
 - `DELETE /pool/users/:id` (a uuid) deletes the user. Their sessions, and every app's rows for
   them, go with them through the foreign keys' cascades. An app's foreign key that blocks the
   delete answers 409, naming its table.

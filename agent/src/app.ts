@@ -4,6 +4,7 @@ import type { AppBody } from './app-spec.ts'
 import {
   appBodySchema,
   isReservedName,
+  NAME,
   nameParamsSchema,
   PLATFORM_ENV,
   RESERVED_NAMES,
@@ -194,7 +195,7 @@ export function buildApp({ token, apps, allowedIps = [], logger = false }: Build
   )
 
   // The user pool's users (ADR 0035), read and deleted in the instance database's `auth`.
-  app.get<{ Querystring: { limit: number; cursor?: string } }>(
+  app.get<{ Querystring: { limit: number; cursor?: string; app?: string } }>(
     '/pool/users',
     {
       schema: {
@@ -204,12 +205,17 @@ export function buildApp({ token, apps, allowedIps = [], logger = false }: Build
           properties: {
             limit: { type: 'integer', minimum: 1, maximum: 200, default: 50 },
             cursor: { type: 'string', maxLength: 200, pattern: '^[A-Za-z0-9_-]+$' },
+            // One app's users: those with a session on its hosts (ADR 0040).
+            app: { type: 'string', pattern: NAME },
           },
         },
       },
     },
     async (request) => apps.listUsers(request.query),
   )
+
+  // The whole pool's account counts, as an app's usage counts its own (ADR 0040).
+  app.get('/pool/usage', async () => apps.poolUsage())
 
   app.delete<{ Params: { id: string } }>(
     '/pool/users/:id',
