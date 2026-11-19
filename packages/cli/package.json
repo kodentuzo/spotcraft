@@ -1,6 +1,6 @@
 {
   "name": "@kodentuzo/spotcraft",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "The spotcraft command: a local stack that matches a Spotcraft server, per repository",
   "keywords": [
     "spotcraft",

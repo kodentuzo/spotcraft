@@ -10,6 +10,8 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-19
+
 ### Added
 
 - **Showcase on the website:** `/showcase` lists the apps running on Spotcraft today, Sokobanko
@@ -589,7 +591,8 @@ handful of server-rendered apps from Docker Hub images behind HTTPS.
 - Servers: key-only SSH as a `deploy` user with modern algorithms only, root login refused,
   two firewalls, automatic security updates.
 
-[Unreleased]: https://github.com/kodentuzo/spotcraft/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/kodentuzo/spotcraft/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/kodentuzo/spotcraft/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/kodentuzo/spotcraft/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/kodentuzo/spotcraft/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/kodentuzo/spotcraft/compare/v0.5.2...v0.6.0
