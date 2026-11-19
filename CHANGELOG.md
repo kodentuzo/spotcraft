@@ -10,6 +10,21 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-11-19
+
+### Fixed
+
+- **`spotcraft dev` gives every checkout its own stack:** a new stack is the Compose project
+  `spotcraft-dev-<repo folder>-<hash>`, where the hash is 6 hex characters of the repository
+  root's path. Before, two checkouts or git worktrees with the same folder name shared one
+  project, volume and network, and overwrote each other's ports. The name is kept in
+  `.spotcraft/dev.json` on first use. A stack made by 0.6.0 keeps its name
+  (`spotcraft-dev-<repo folder>`), so an app's Compose file that names the stack's network
+  (e.g. `spotcraft-dev-vinskiano_default`) keeps working. For a new stack, take the name from
+  `spotcraft dev status` (the network is `<name>_default`). To split two checkouts that share
+  a 0.6.0 stack, delete `.spotcraft/dev.json` in one of them and run `spotcraft dev` there: it
+  gets a new stack with new ports, so its `.env` URLs need the new values (`spotcraft dev env`).
+
 ## [0.6.0] - 2026-11-19
 
 ### Added
@@ -456,7 +471,8 @@ handful of server-rendered apps from Docker Hub images behind HTTPS.
 - Servers: key-only SSH as a `deploy` user with modern algorithms only, root login refused,
   two firewalls, automatic security updates.
 
-[Unreleased]: https://github.com/kodentuzo/spotcraft/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/kodentuzo/spotcraft/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/kodentuzo/spotcraft/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/kodentuzo/spotcraft/compare/v0.5.2...v0.6.0
 [0.5.2]: https://github.com/kodentuzo/spotcraft/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/kodentuzo/spotcraft/compare/v0.5.0...v0.5.1
