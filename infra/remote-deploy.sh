@@ -101,8 +101,8 @@ DOCKER_GID="$(getent group docker | cut -d: -f3)"
 # Postgres needs a superuser password once, when its data directory is created; nobody uses
 # it afterwards (the superuser only works over the container's local socket). It is generated
 # here on the first deploy and kept in .env, never stored in GitHub.
-# The user pool's database password and secret (ADR 0035) are made the same way: nobody types
-# them, and changing AUTH_SECRET would sign every guest out.
+# The user pool's database password and secret (ADR 0035), and analytics' (ADR 0038), are made
+# the same way: nobody types them, and changing AUTH_SECRET would sign every guest out.
 kept_or_new() {
   local value
   value="$(sed -n "s/^$1=//p" .env 2>/dev/null || true)"
@@ -112,6 +112,8 @@ kept_or_new() {
 kept_or_new POSTGRES_SUPERUSER_PASSWORD
 kept_or_new POSTGRES_AUTH_PASSWORD
 kept_or_new AUTH_SECRET
+kept_or_new POSTGRES_UMAMI_PASSWORD
+kept_or_new UMAMI_SECRET
 cat > .env.new <<ENV
 DASHBOARD_DOMAIN=$DASHBOARD_DOMAIN
 SPOTCRAFT_TAG=$SPOTCRAFT_TAG
@@ -125,6 +127,8 @@ POSTGRES_SUPERUSER_PASSWORD=$POSTGRES_SUPERUSER_PASSWORD
 POSTGRES_AUTH_PASSWORD=$POSTGRES_AUTH_PASSWORD
 AUTH_SECRET=$AUTH_SECRET
 AUTH_TRUSTED_ORIGINS=$AUTH_TRUSTED_ORIGINS
+POSTGRES_UMAMI_PASSWORD=$POSTGRES_UMAMI_PASSWORD
+UMAMI_SECRET=$UMAMI_SECRET
 APPS_DOMAIN=$APPS_DOMAIN
 EDGE=$EDGE
 CLOUDFLARE_API_TOKEN=$CLOUDFLARE_API_TOKEN
@@ -203,6 +207,7 @@ docker compose up -d --wait --wait-timeout 180 postgres
 {
   printf '\\set pw %s\n' "$POSTGRES_AGENT_PASSWORD"
   printf '\\set auth_pw %s\n' "$POSTGRES_AUTH_PASSWORD"
+  printf '\\set umami_pw %s\n' "$POSTGRES_UMAMI_PASSWORD"
   cat <<'SQL'
 SELECT NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'spotcraft_agent') AS missing \gset
 \if :missing
@@ -236,6 +241,19 @@ SELECT NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'spotcraft_auth') AS mis
   ALTER ROLE spotcraft_auth LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE PASSWORD :'auth_pw';
 \endif
 GRANT CONNECT ON DATABASE apps TO spotcraft_auth;
+-- Analytics' role (ADR 0038): it owns the umami database, and nothing else.
+SELECT NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'spotcraft_umami') AS missing \gset
+\if :missing
+  CREATE ROLE spotcraft_umami LOGIN PASSWORD :'umami_pw';
+\else
+  ALTER ROLE spotcraft_umami LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE PASSWORD :'umami_pw';
+\endif
+SELECT NOT EXISTS (SELECT FROM pg_database WHERE datname = 'umami') AS missing \gset
+\if :missing
+  CREATE DATABASE umami OWNER spotcraft_umami;
+\endif
+REVOKE ALL ON DATABASE umami FROM PUBLIC;
+GRANT CONNECT ON DATABASE umami TO spotcraft_umami;
 \c apps
 REVOKE ALL ON SCHEMA public FROM PUBLIC;
 CREATE SCHEMA IF NOT EXISTS auth AUTHORIZATION spotcraft_auth;

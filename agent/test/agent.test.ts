@@ -752,7 +752,7 @@ describe('agent', () => {
     assert.equal((await put('Bad_Name', spec)).statusCode, 400)
     assert.equal((await put('caddy', spec)).statusCode, 400)
     // The server's own services on the shared networks (ADR 0026).
-    for (const reserved of ['dashboard', 'victoriametrics', 'cloudflared', 'blackbox']) {
+    for (const reserved of ['dashboard', 'victoriametrics', 'cloudflared', 'blackbox', 'umami']) {
       assert.equal((await put(reserved, spec)).statusCode, 400, reserved)
     }
     // `app-<name>` is the alias Caddy reaches each app by: `app-blog` would answer for `blog`.

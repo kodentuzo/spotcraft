@@ -66,6 +66,8 @@ export const RESERVED_NAMES = new Set([
   'fallback',
   // The user pool: its container, and `auth.<APPS_DOMAIN>`, its address for bearer clients.
   'auth',
+  // Analytics' container (ADR 0038).
+  'umami',
 ])
 
 /**

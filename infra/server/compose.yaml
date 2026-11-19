@@ -4,8 +4,8 @@
 # Third-party images are pinned by digest; bump the version and digest together.
 #
 # Networks: hosted apps share `edge` with Caddy and Postgres, and nothing else. The dashboard,
-# the user pool and the monitoring are on `web` (with Caddy); only the dashboard and the agent
-# are on `control`; only the agent, the user pool and Postgres are on `db`.
+# the user pool, analytics and the monitoring are on `web` (with Caddy); only the dashboard and
+# the agent are on `control`; only the agent, the user pool, analytics and Postgres are on `db`.
 #
 # The project keeps the name it had on the two-server setup, so the existing volumes
 # (certificates, Postgres data) and container names carry over unchanged.
@@ -188,6 +188,36 @@ services:
       timeout: 3s
       retries: 3
       start_period: 20s
+
+  # Analytics (ADR 0038): Umami over its own `umami` database, which it migrates when it starts.
+  # Caddy routes /_spotcraft/s.js and /_spotcraft/e on app domains to it; its interface isn't
+  # exposed. Its role, database and secret are set up by the deploy script.
+  umami:
+    <<: *hardened
+    image: ghcr.io/umami-software/umami:3.4.1@sha256:e69d1a7932e9dab0fc523edc7be1f3a53f3c261f57856fc2167ae74a8fc022e8
+    # Not read-only: when it starts, Umami writes the collect path into its tracker script.
+    tmpfs:
+      - /tmp:size=16m,noexec,nosuid,nodev
+    # About 360 MB once started (Next.js).
+    mem_limit: 512m
+    environment:
+      DATABASE_URL: postgresql://spotcraft_umami:${POSTGRES_UMAMI_PASSWORD:?set POSTGRES_UMAMI_PASSWORD in .env}@postgres:5432/umami
+      APP_SECRET: ${UMAMI_SECRET:?set UMAMI_SECRET in .env}
+      # The paths reserved on every app domain (docs/contracts.md).
+      TRACKER_SCRIPT_NAME: _spotcraft/s.js
+      COLLECT_API_ENDPOINT: /_spotcraft/e
+      # The visitor's address as Caddy resolved it, for the country; Umami doesn't store it.
+      CLIENT_IP_HEADER: x-spotcraft-client-ip
+      DISABLE_TELEMETRY: 1
+      DISABLE_UPDATES: 1
+    # `web`: Caddy in front. `db`: Postgres. Never on `edge`, which hosted apps share.
+    networks: [web, db]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://127.0.0.1:3000/api/heartbeat"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 60s
 
   # One Postgres for every hosted app that asks for a database (ADR 0015): each app gets its
   # own role and database, created by the agent as `spotcraft_agent` (set up by the deploy

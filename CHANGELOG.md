@@ -10,6 +10,19 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
 
 ## [Unreleased]
 
+### Added
+
+- **Analytics, step one: Umami runs on the server** ([ADR 0038](docs/decisions/0038-analytics.md)).
+  The deploy adds an `umami` container and a `umami` database owned by its own role, with a
+  generated password and secret in `.env` (`POSTGRES_UMAMI_PASSWORD`, `UMAMI_SECRET`). It
+  counts nothing yet: Caddy's routes and the dashboard come next. Nightly backups add
+  `_umami/<time>/umami.dump`. `spotcraft dev` runs it too, and prints its address (sign in as
+  `admin` / `umami`); a stack made before keeps its ports and gets one more. `umami` is now a
+  reserved app name, like the server's other services.
+- **The app contract's analytics** ([docs/contracts.md](docs/contracts.md#analytics)): the paths
+  `/_spotcraft/s.js`, `/_spotcraft/e`, `/_spotcraft/config.json` and `/_spotcraft/privacy`, and the
+  `Spotcraft-Client` header.
+
 ### Fixed
 
 - **An app that still has its own database refuses a version made for its schema.** A deploy,

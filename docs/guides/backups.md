@@ -11,6 +11,13 @@ Spotcraft keeps two kinds of backups ([ADR 0030](../decisions/0030-backups.md)):
   - `app.json`, its settings and env;
   - `secrets.json`, its database password and deploy hook hash.
 
+  After the apps come the platform's own databases, in folders whose names start with `_`,
+  which app names can't:
+  - `_auth/<time>/auth.dump`, the user pool's `auth` schema
+    ([ADR 0035](../decisions/0035-auth-pool.md));
+  - `_umami/<time>/umami.dump`, analytics' whole `umami` database
+    ([ADR 0038](../decisions/0038-analytics.md)).
+
   With the R2 bucket from `infra/cloudflare`, they can't be deleted or overwritten for 29
   days, not even with the agent's key, and R2 deletes them after 30 (`backup_retention_days`).
   With another S3-compatible store, set a lifecycle rule yourself, or they are kept forever.

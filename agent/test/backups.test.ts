@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, it } from 'node:test'
 import { buildApp } from '../src/app.ts'
-import { Apps, POOL_BACKUP } from '../src/apps.ts'
+import { ANALYTICS_BACKUP, Apps, POOL_BACKUP } from '../src/apps.ts'
 import { type BackupTarget, backupStamp, untilNext } from '../src/backups.ts'
 import type { Runner } from '../src/runner.ts'
 import { amzDate, S3, signV4 } from '../src/s3.ts'
@@ -209,16 +209,32 @@ describe('backups', () => {
     clock = new Date('2026-11-14T03:00:00Z')
   })
 
-  it("backs up the user pool's schema after the apps, when it can be dumped", async () => {
+  it("backs up the platform's databases after the apps: the user pool and analytics", async () => {
     const pooled = new Apps(new Store(dir), docker, 'caddy', undefined, undefined, undefined, {
       target: bucket.target,
       dump: async (name) => Buffer.from(`dump of ${name}`),
-      dumpPool: async () => Buffer.from('dump of auth'),
+      platform: [
+        { folder: POOL_BACKUP, file: 'auth.dump', dump: async () => Buffer.from('dump of auth') },
+        {
+          folder: ANALYTICS_BACKUP,
+          file: 'umami.dump',
+          dump: async () => Buffer.from('dump of umami'),
+        },
+      ],
       now: () => clock,
     })
     const results = await pooled.backupAll()
-    assert.deepEqual(Object.keys(results).sort(), [POOL_BACKUP, 'site', 'sokobanko'])
+    assert.deepEqual(Object.keys(results).sort(), [
+      POOL_BACKUP,
+      ANALYTICS_BACKUP,
+      'site',
+      'sokobanko',
+    ])
     assert.equal(bucket.objects.get('_auth/20261114T030000Z/auth.dump')?.toString(), 'dump of auth')
+    assert.equal(
+      bucket.objects.get('_umami/20261114T030000Z/umami.dump')?.toString(),
+      'dump of umami',
+    )
     bucket.fail()
     const failed = await pooled.backupAll()
     assert.equal(failed[POOL_BACKUP]?.ok, false)

@@ -17,6 +17,7 @@ import {
 import { appLayout, appRoleName, provision, purge } from './provision.ts'
 import {
   adminUrl,
+  analyticsUrl,
   appPassword,
   databaseUrl,
   down,
@@ -108,6 +109,7 @@ function addresses(stack: Stack) {
   print(`Postgres  127.0.0.1:${stack.ports.postgres}`)
   print(`Users     ${poolUrl(stack)}`)
   print(`Mail      ${mailUrl(stack)}`)
+  print(`Analytics ${analyticsUrl(stack)} (admin / umami)`)
 }
 
 export async function main(argv: string[]): Promise<number> {

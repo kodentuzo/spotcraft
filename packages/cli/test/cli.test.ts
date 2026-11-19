@@ -26,6 +26,7 @@ import {
   type RunResult,
   type Stack,
   StackError,
+  UMAMI_IMAGE,
   up,
 } from '../src/stack.ts'
 
@@ -36,7 +37,7 @@ const repoFile = (path: string) => readFile(new URL(path, repo), 'utf8')
 const stack: Stack = {
   project: 'spotcraft-dev-lifts',
   stateDir: '/tmp/lifts/.spotcraft',
-  ports: { postgres: 50001, auth: 50002, smtp: 50003, mail: 50004 },
+  ports: { postgres: 50001, auth: 50002, smtp: 50003, mail: 50004, analytics: 50005 },
   authSecret: 'a'.repeat(64),
 }
 
@@ -49,6 +50,15 @@ describe('same as the server', () => {
     // CI has a database for each job that runs the database tests: every one must match.
     assert.ok(images(ci).length > 0)
     assert.deepEqual(new Set(images(ci)), new Set([POSTGRES_IMAGE]))
+  })
+
+  it('uses the Umami image of the server, and the same paths', async () => {
+    const server = await repoFile('infra/server/compose.yaml')
+    const local = JSON.parse(composeFile(stack, 'image:tag')).services.umami
+    assert.equal(local.image, UMAMI_IMAGE)
+    assert.ok(server.includes(`image: ${UMAMI_IMAGE}\n`), 'the server pins the same image')
+    for (const name of ['TRACKER_SCRIPT_NAME', 'COLLECT_API_ENDPOINT', 'DISABLE_TELEMETRY'])
+      assert.ok(server.includes(`${name}: ${local.environment[name]}\n`), name)
   })
 
   it('uses the login rules of the server', async () => {
@@ -88,6 +98,7 @@ describe('same as the server', () => {
       '127.0.0.1:50003:1025',
       '127.0.0.1:50004:8025',
     ])
+    assert.deepEqual(compose.services.umami.ports, ['127.0.0.1:50005:3000'])
     assert.equal(compose.configs.pg_hba.content, PG_HBA)
   })
 
@@ -120,7 +131,7 @@ describe('a repository and its stack', () => {
     const ports = async () => (next++ % 2 === 0 ? 49000 : next)
     const first = await loadStack(dir, 'lifts', ports)
     const all = Object.values(first.ports)
-    assert.equal(new Set(all).size, 4, 'four different ports')
+    assert.equal(new Set(all).size, 5, 'five different ports')
     assert.equal(first.project, projectName(dir, 'lifts'))
     assert.match(first.project, /^spotcraft-dev-lifts-[0-9a-f]{6}$/)
     assert.match(first.authSecret, /^[0-9a-f]{64}$/)
@@ -153,8 +164,21 @@ describe('a repository and its stack', () => {
     await writeFile(file, JSON.stringify({ ports, authSecret: 'b'.repeat(64) }))
     const old = await loadStack(dir, 'lifts', async () => 1)
     assert.equal(old.project, 'spotcraft-dev-lifts')
-    assert.deepEqual(old.ports, ports)
+    assert.deepEqual(old.ports, { ...ports, analytics: 1 })
     assert.equal(JSON.parse(await readFile(file, 'utf8')).project, 'spotcraft-dev-lifts')
+  })
+
+  it('gives a stack from before analytics a port for it, without moving the others', async () => {
+    const ports = { postgres: 50001, auth: 50002, smtp: 50003, mail: 50004 }
+    await mkdir(join(dir, '.spotcraft'))
+    const file = join(dir, '.spotcraft/dev.json')
+    const project = 'spotcraft-dev-lifts-0a1b2c'
+    await writeFile(file, JSON.stringify({ project, ports, authSecret: 'b'.repeat(64) }))
+    const taken = [50002, 50001, 50006]
+    const stack = await loadStack(dir, 'lifts', async () => taken.shift() ?? 0)
+    assert.deepEqual(stack.ports, { ...ports, analytics: 50006 })
+    assert.deepEqual(JSON.parse(await readFile(file, 'utf8')).ports, stack.ports)
+    assert.equal(stack.project, project)
   })
 
   it('lists only the local stacks', async () => {
@@ -310,7 +334,7 @@ describe('starting the stack', () => {
       'postgres',
       'spotcraft-dev-lifts-postgres-1',
     ])
-    assert.match(calls[2].input ?? '', /^\\set pw \S+\n\\set auth_pw \S+\n/)
+    assert.match(calls[2].input ?? '', /^\\set pw \S+\n\\set auth_pw \S+\n\\set umami_pw \S+\n/)
     assert.ok(calls[2].input?.endsWith(ADMIN_SQL))
     assert.ok(calls[3].args.includes('--wait'))
     assert.notEqual(calls[3].args.at(-1), 'postgres', 'then everything')

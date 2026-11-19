@@ -73,6 +73,18 @@ export function readImageConfig(inspected: string): { migrate?: string[]; health
 
 /** Where the user pool's backups go in the bucket, and its key in `backupAll`'s result. */
 export const POOL_BACKUP = '_auth'
+/** Analytics' database in the bucket (ADR 0038), beside the apps and the pool. */
+export const ANALYTICS_BACKUP = '_umami'
+
+/**
+ * A database the platform runs for itself, backed up nightly after the apps, as
+ * `<folder>/<time>/<file>`. Folders start with `_`, which app names can't.
+ */
+export interface PlatformDump {
+  folder: string
+  file: string
+  dump: () => Promise<Buffer>
+}
 
 export type { BackupStatus }
 
@@ -236,7 +248,7 @@ export class Apps {
   readonly #domains: Domains | undefined
   readonly #access: AccessApps | undefined
   readonly #backups:
-    | { target: BackupTarget; dump: Dump; dumpPool?: () => Promise<Buffer>; now: () => Date }
+    | { target: BackupTarget; dump: Dump; platform: PlatformDump[]; now: () => Date }
     | undefined
   /** Apps with a backup on request waiting or running. */
   readonly #backingUp = new Set<string>()
@@ -264,13 +276,14 @@ export class Apps {
      */
     cloudflare?: { domains: Domains; access?: AccessApps },
     /**
-     * With it, apps are backed up to a bucket (ADR 0030): `backupAll`, nightly. `dumpPool`
-     * dumps the user pool's `auth` schema (ADR 0035), backed up after the apps.
+     * With it, apps are backed up to a bucket (ADR 0030): `backupAll`, nightly. `platform`
+     * lists the platform's own databases, backed up after the apps: the user pool's `auth`
+     * schema (ADR 0035) and analytics' database (ADR 0038).
      */
     backups?: {
       target: BackupTarget
       dump: Dump
-      dumpPool?: () => Promise<Buffer>
+      platform?: PlatformDump[]
       now?: () => Date
     },
   ) {
@@ -284,7 +297,7 @@ export class Apps {
       access: Boolean(cloudflare?.access),
       backups: Boolean(backups),
     }
-    this.#backups = backups && { now: () => new Date(), ...backups }
+    this.#backups = backups && { now: () => new Date(), platform: [], ...backups }
     this.#domains = cloudflare?.domains
     this.#access = cloudflare?.access
   }
@@ -1084,7 +1097,8 @@ export class Apps {
 
   /**
    * Backs up every app, one at a time, each in its own turn in the queue so deploys can go
-   * between them, then the user pool (under `POOL_BACKUP`). A failure doesn't stop the others;
+   * between them, then the platform's databases (the pool under `POOL_BACKUP`, analytics under
+   * `ANALYTICS_BACKUP`). A failure doesn't stop the others;
    * its status says why.
    */
   async backupAll(): Promise<Record<string, BackupStatus>> {
@@ -1096,27 +1110,28 @@ export class Apps {
       )
       if (status) result[spec.name] = status
     }
-    const dumpPool = this.#backups.dumpPool
-    if (dumpPool) result[POOL_BACKUP] = await this.#exclusive(() => this.#backupPool(dumpPool))
+    for (const platform of this.#backups.platform)
+      result[platform.folder] = await this.#exclusive(() => this.#backupPlatform(platform))
     return result
   }
 
   /**
-   * The user pool's `auth` schema, as `_auth/<time>/auth.dump` (app names can't start with
-   * `_`). Its secret is in the server's .env, which Hetzner's backups hold.
+   * One of the platform's databases, as `<folder>/<time>/<file>`, such as
+   * `_auth/<time>/auth.dump`. Their secrets are in the server's .env, which Hetzner's backups
+   * hold.
    */
-  async #backupPool(dump: () => Promise<Buffer>): Promise<BackupStatus> {
+  async #backupPlatform({ folder, file, dump }: PlatformDump): Promise<BackupStatus> {
     const backups = this.#backups
     if (!backups) throw new AgentError('Backups are not set up on this server', 409)
-    const key = `${POOL_BACKUP}/${backupStamp(backups.now())}/`
+    const key = `${folder}/${backupStamp(backups.now())}/`
     try {
       const data = await dump()
-      await backups.target.put(`${key}auth.dump`, data)
+      await backups.target.put(`${key}${file}`, data)
       const at = backups.now().toISOString()
       return { at, ok: true, key, bytes: data.length, lastOkAt: at }
     } catch (error) {
       const status = { at: backups.now().toISOString(), ok: false, error: message(error) }
-      console.warn(`backup of the user pool failed: ${status.error}`)
+      console.warn(`backup of ${folder} failed: ${status.error}`)
       return status
     }
   }

@@ -2,11 +2,11 @@
 title: Every app gets usage numbers, collected by the platform with Umami
 number: 38
 status: accepted
-implementation: planned
+implementation: skeleton
 date: 2026-11-19
 supersedes: []
 superseded_by: []
-notes: "Fills in the analytics that ADR 0034 lists among what Spotcraft does. Nothing built yet. To check while building: Umami's settings for serving its tracker and collect endpoint under /_spotcraft/, its API for websites and stats, whether it prunes old events, its bot filter against native User-Agents, and its memory; that Better Auth 1.7's session hooks see the request."
+notes: "Fills in the analytics that ADR 0034 lists among what Spotcraft does. Built: Umami 3.4.1 on the server and in spotcraft dev, with its own database and role and nightly dumps. Found while building: TRACKER_SCRIPT_NAME and COLLECT_API_ENDPOINT serve the tracker and the collect endpoint at /_spotcraft/s.js and /_spotcraft/e, and Umami rewrites its script to send there, so its container is not read-only. It uses about 360 MB once started. Its bot filter drops Android's default User-Agent (okhttp), so native clients send a browser-style one. It starts with the default admin account, which the agent must replace. To build: the routes, the website per app, usage in the dashboard, the client package. Still to check: whether it prunes old events; that Better Auth 1.7's session hooks see the request."
 ---
 
 # Every app gets usage numbers, collected by the platform with Umami
