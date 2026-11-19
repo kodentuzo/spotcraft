@@ -25,6 +25,13 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
   agent starts. Every app domain now serves `/_spotcraft/s.js`, `/_spotcraft/e`,
   `/_spotcraft/config.json` and `/_spotcraft/privacy`. The app form has an **Analytics** switch,
   on by default: turn it off for an app whose CSP allows only scripts with a nonce.
+- **Each app's usage in the dashboard** ([ADR 0038](docs/decisions/0038-analytics.md)): a
+  Usage section with visitors and page views from Umami (7 days, against the 7 before), the
+  pool's active accounts (today, 7 and 30 days) and new accounts per day, requests, errors and
+  p95 latency from Caddy over 24 hours, and the top pages, operating systems and app versions.
+  The user pool now records on each session the host and the `Spotcraft-Client` header (its
+  migration 0004), Caddy exports requests per host, and the agent answers
+  `GET /apps/:name/usage`. Counts only: no ids.
 - **The app contract's analytics** ([docs/contracts.md](docs/contracts.md#analytics)): the paths
   `/_spotcraft/s.js`, `/_spotcraft/e`, `/_spotcraft/config.json` and `/_spotcraft/privacy`, and the
   `Spotcraft-Client` header.

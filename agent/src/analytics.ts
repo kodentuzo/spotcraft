@@ -1,3 +1,5 @@
+import type { VisitSummary } from './apps.ts'
+
 /**
  * The instance's analytics, Umami (ADR 0038), as the agent uses it: one Umami "website" per app,
  * the bucket its page views and events go into. The agent signs in as Umami's `admin`; the first
@@ -11,6 +13,8 @@ export interface Analytics {
   ensureWebsite(name: string, domain: string, known?: string): Promise<string>
   /** Deletes the website and its numbers; one that is already gone is fine. */
   deleteWebsite(id: string): Promise<void>
+  /** What the website counted over the last `days` days, and the days before. */
+  summary(id: string, days: number): Promise<VisitSummary>
 }
 
 /** Umami's account on a fresh install. Nothing exposes it: Caddy routes only the tracker. */
@@ -53,6 +57,37 @@ export class Umami implements Analytics {
     if (typeof id !== 'string')
       throw new UmamiError(`Umami made a website for ${name} without an id`)
     return id
+  }
+
+  async summary(id: string, days: number): Promise<VisitSummary> {
+    const endAt = Date.now()
+    const startAt = endAt - days * 24 * 60 * 60 * 1000
+    const range = `startAt=${startAt}&endAt=${endAt}`
+    const base = `/api/websites/${encodeURIComponent(id)}`
+    const get = async <T>(path: string): Promise<T> => {
+      const response = await this.#call('GET', `${base}${path}`)
+      if (!response.ok) throw await this.#error(response, `read the numbers of website ${id}`)
+      return (await response.json()) as T
+    }
+    type Stats = { pageviews: number; visitors: number; visits: number }
+    type Metric = { x: string | null; y: number }[]
+    const [stats, pages, systems] = await Promise.all([
+      get<Stats & { comparison?: Partial<Stats> }>(`/stats?${range}`),
+      get<Metric>(`/metrics?${range}&type=path&limit=5`),
+      get<Metric>(`/metrics?${range}&type=os&limit=5`),
+    ])
+    return {
+      days,
+      views: stats.pageviews ?? 0,
+      visitors: stats.visitors ?? 0,
+      visits: stats.visits ?? 0,
+      previous: {
+        views: stats.comparison?.pageviews ?? 0,
+        visitors: stats.comparison?.visitors ?? 0,
+      },
+      pages: pages.map(({ x, y }) => ({ path: x ?? '(unknown)', views: y })),
+      systems: systems.map(({ x, y }) => ({ name: x ?? '(unknown)', visitors: y })),
+    }
   }
 
   async deleteWebsite(id: string): Promise<void> {

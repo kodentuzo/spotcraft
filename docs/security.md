@@ -94,7 +94,10 @@ script and its collect endpoint are reachable, through Caddy, at `/_spotcraft/s.
 first time it signs in, over the internal `db` network. Its container is not read-only, because
 Umami writes the collect path into its script when it starts. Caddy adds Umami's script to apps'
 HTML responses only, as a same-origin file, so a `script-src 'self'` CSP allows it; an app can
-turn analytics off. Caddy itself runs from Spotcraft's image, built with the pinned
+turn analytics off. Caddy's metrics, with request counts per host, answer on port 2020 only to
+the monitoring network; hosted apps, which reach Caddy too, get a 403. The dashboard shows each
+app's usage as counts only: the pool's sessions record the host and the `Spotcraft-Client`
+header, and the agent never returns account ids from them. Caddy itself runs from Spotcraft's image, built with the pinned
 `replace-response` module, as root with only `NET_BIND_SERVICE`, as the official image did.
 
 **Spotcraft's own containers** run without capabilities (Caddy keeps `NET_BIND_SERVICE` for ports

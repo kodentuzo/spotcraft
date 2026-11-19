@@ -63,6 +63,12 @@ keys, private keys encrypted with `AUTH_SECRET`) and `former_secrets` (moved app
 `timestamptz` times. `src/schema.ts` mirrors Better Auth's for its Drizzle adapter, and a test
 checks the two agree.
 
+Each session also records the host it was made or last renewed on (`host`) and the client's
+`Spotcraft-Client: <platform>/<version>` header (`client`; anything else is ignored), set by
+Better Auth's session hooks. Renewals happen at most once a day. The agent counts an app's
+accounts from these ([ADR 0038](../docs/decisions/0038-analytics.md)); CORS allows the header
+for bearer clients.
+
 Once a day, guests created and unused for `AUTH_GUEST_DAYS` are deleted, one at a time. Their
 rows in apps go with them through the apps' `on delete cascade` keys. A guest an app's key
 blocks is skipped and logged.

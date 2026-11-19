@@ -186,6 +186,40 @@ export interface Databases {
    * False if not found.
    */
   deleteUser(id: string): Promise<boolean>
+  /**
+   * Counts of the pool's accounts that use an app through `hosts` (ADR 0038), from the host each
+   * session was made or renewed on. Undefined until the pool records hosts.
+   */
+  accountUsage(hosts: string[]): Promise<AccountUsage | undefined>
+}
+
+/** An app's accounts, counted from the pool's sessions on its hosts. Counts only, no ids. */
+export interface AccountUsage {
+  /** Accounts with a session made or renewed in the last day, 7 days and 30 days. */
+  active: { day: number; week: number; month: number }
+  /** Accounts whose first session on the app's hosts started that day (UTC), last 30 days. */
+  newPerDay: { day: string; count: number }[]
+  /** Active accounts in the last 30 days per `Spotcraft-Client`, most first. */
+  clients: { client: string; active: number }[]
+}
+
+/** What Umami counted for an app (ADR 0038), over `days` days, and the days before. */
+export interface VisitSummary {
+  days: number
+  views: number
+  visitors: number
+  visits: number
+  previous: { views: number; visitors: number }
+  /** The most viewed pages (or screens), most first. */
+  pages: { path: string; views: number }[]
+  /** Visitors per operating system, most first. */
+  systems: { name: string; visitors: number }[]
+}
+
+/** An app's usage, for the dashboard: each part absent when its source can't say. */
+export interface AppUsage {
+  visits?: VisitSummary
+  accounts?: AccountUsage
 }
 
 /** What a move copied: guests, sessions, and rows per table. */
@@ -876,6 +910,26 @@ export class Apps {
       if (done.length === missing.length || attempt >= attempts) return done
       await new Promise((resolve) => setTimeout(resolve, retryMs))
     }
+  }
+
+  /**
+   * The app's usage (ADR 0038): what Umami counted on its website, and its accounts in the pool.
+   * A source that fails or doesn't answer leaves its part out; this never fails because of one.
+   */
+  async usage(name: string, days = 7): Promise<AppUsage> {
+    const spec = await this.#store.get(name)
+    if (!spec) throw new AgentError('No such app', 404)
+    const { analyticsId } = await this.#store.readSecrets(name)
+    const quietly = <T>(what: string, task: Promise<T> | undefined) =>
+      task?.catch((error) => {
+        console.warn(`${what} of ${name}: ${message(error)}`)
+        return undefined
+      })
+    const [visits, accounts] = await Promise.all([
+      quietly('visits', analyticsId ? this.analytics?.summary(analyticsId, days) : undefined),
+      quietly('accounts', this.#databases?.accountUsage(hostnames(spec, this.settings.appsDomain))),
+    ])
+    return { ...(visits ? { visits } : {}), ...(accounts ? { accounts } : {}) }
   }
 
   async #refreshSites(): Promise<string[]> {
