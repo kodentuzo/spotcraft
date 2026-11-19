@@ -34,6 +34,18 @@ In arbitrary values, use those names: `var(--color-secondary)`, not `var(--secon
 | `./components/<name>` | a component (`button`, `card`)          |
 | `./utils`             | `cn` and the shadcn-svelte helper types |
 
+The components keep shadcn-svelte's props but draw with spotstrap's classes where it has them:
+
+| Component           | spotstrap classes                                                           |
+| ------------------- | --------------------------------------------------------------------------- |
+| `button`            | `btn` and its variants; `sm`/`xs` are `btn-compact`, `icon*` are `btn-icon` |
+| `input`, `textarea` | `input`, `textarea` (44px, text at least 16px)                              |
+| `label`             | `label`                                                                     |
+| `alert-dialog`      | `dialog`, `dialog-title`, `dialog-description`, `dialog-actions`            |
+
+Buttons and fields are 44px. In dense rows, use `size="sm"`: 36px, with a 44px hit area.
+`badge`, `card`, `table`, `alert` and `separator` are shadcn-svelte's own; spotstrap has none.
+
 Inside the package, files import each other through `#ui/*` (package `imports`).
 
 ## Add a component

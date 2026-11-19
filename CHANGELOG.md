@@ -17,6 +17,10 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
   ([ADR 0033](docs/decisions/0033-theme-from-spotstrap.md)). The colors, corners and font stay
   the same. Body text is 17px instead of 16px, muted text is slightly darker, and the website's
   buttons are 44px tall.
+- **The dashboard's buttons, fields and dialogs use spotstrap's classes.** Buttons and fields
+  are 44px tall (were 36px), with 17px text. The users table's Delete is 36px with a 44px hit
+  area. Destructive buttons are solid red. On a phone, the confirmation dialog opens as a sheet at
+  the bottom of the screen, its buttons full width, over a darker backdrop.
 
 ## [0.5.2] - 2026-11-18
 
