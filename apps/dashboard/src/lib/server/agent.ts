@@ -1,5 +1,5 @@
 import type { AgentSettings, AppBody, AppSpec, DomainStatus } from '@spotcraft/agent/app-spec'
-import type { AppStatus, BackupStatus, ReleaseState, UserPage } from '@spotcraft/agent/apps'
+import type { AppStatus, BackupStatus, Moved, ReleaseState, UserPage } from '@spotcraft/agent/apps'
 import { AGENT_TOKEN, AGENT_URL } from '$app/env/private'
 
 export type {
@@ -183,4 +183,34 @@ export async function getBackup(name: string): Promise<BackupStatus | null> {
 /** Backs the app up now. It waits its turn behind deploys, so the timeout is generous. */
 export async function backupNow(name: string): Promise<BackupStatus> {
   return expectJson(await call(`${appPath(name)}/backup`, { method: 'POST' }, 900_000))
+}
+
+/** Where the app's tables are: its schema, its own database (before ADR 0034), or none. */
+export async function databaseLayout(name: string): Promise<'schema' | 'database' | 'none'> {
+  return (
+    await expectJson<{ layout: 'schema' | 'database' | 'none' }>(
+      await call(`${appPath(name)}/database`),
+    )
+  ).layout
+}
+
+/**
+ * Moves an app from its own database into its schema, deploying `tag` (a version made for the
+ * schema and the user pool). A backup and a deploy: the timeout is generous.
+ */
+export async function moveApp(
+  name: string,
+  tag: string,
+): Promise<{ status: AppStatus; moved: Moved }> {
+  return expectJson(
+    await call(
+      `${appPath(name)}/move`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ tag }),
+      },
+      900_000,
+    ),
+  )
 }

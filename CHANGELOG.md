@@ -12,6 +12,15 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
 
 ### Added
 
+- **Moving an app into the user pool** ([guide](docs/guides/move-into-the-pool.md)): an app
+  made before ADR 0034, with its own database and the kit's guests, moves into its schema with
+  one form on its dashboard page (`POST /apps/:name/move` with the new version's tag). The agent
+  backs it up, deploys the new version, and between its migrations and its start copies the
+  guests and live sessions into the pool with the same tokens, and the rows of the tables the
+  new version made. The pool re-signs cookies signed with the app's old `AUTH_SECRET`, so
+  guests stay signed in. If anything fails, the old version keeps running. The old database is
+  kept until you drop it. `GET /apps/:name/database` says where an app's tables are.
+
 - **`spotcraft dev` runs a stack per repository** ([ADR 0037](docs/decisions/0037-local-stack-per-repo.md)):
   Postgres set up as on the server, the user pool, and Mailpit, on free ports kept in
   `.spotcraft/dev.json`. One command starts it, sets up the app's schema, adds the server's

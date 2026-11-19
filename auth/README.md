@@ -30,6 +30,12 @@ Caddy will route `/_spotcraft/auth/*` on every app's domain here. Nothing routes
 - **New guests are limited** to 30 per client address per 10 minutes, per host. The address is
   `X-Spotcraft-Client-IP`, which Caddy sets to the address it resolved, replacing anything the
   client sent. An IPv6 address counts as its /64.
+- **Guests moved in from the kit keep their cookies.** An app that kept its own guests with
+  `@spotcraft/kit` signed their session cookies with its own `AUTH_SECRET`. When the agent
+  moves it, the guests and sessions come with the same tokens and the secret goes into
+  `auth.former_secrets`. A session cookie signed with one of those is re-signed with the pool's
+  secret before Better Auth reads it, and the browser gets the re-signed cookie. The list is
+  read again at most once a minute.
 - **The origin and CSRF checks are on explicitly.** Better Auth turns them off when it sees a
   test runner, so the tests would otherwise pass without them.
 
@@ -46,14 +52,15 @@ start, the service:
    read emails, sessions, accounts or keys.
 3. grants the agent's role (`AUTH_ADMIN_ROLE`, default `spotcraft_agent`), if it exists,
    `SELECT` on `auth.users` and `auth.sessions` and `DELETE` on `auth.users`, for the
-   dashboard's Users page.
+   dashboard's Users page, and `INSERT` on `auth.users`, `auth.sessions` and
+   `auth.former_secrets`, for moving an app's guests in.
 
 Postgres may still be starting, so it retries every 5 seconds for 3 minutes; `/health` answers
 503 until then.
 
-Tables: `users`, `sessions`, `accounts`, `verifications` (Better Auth's) and `jwks` (signing
-keys, private keys encrypted with `AUTH_SECRET`). Plural snake_case names, `uuid` ids,
-`timestamptz` times. `src/schema.ts` mirrors them for Better Auth's Drizzle adapter, and a test
+Tables: `users`, `sessions`, `accounts`, `verifications` (Better Auth's), `jwks` (signing
+keys, private keys encrypted with `AUTH_SECRET`) and `former_secrets` (moved apps' old secrets). Plural snake_case names, `uuid` ids,
+`timestamptz` times. `src/schema.ts` mirrors Better Auth's for its Drizzle adapter, and a test
 checks the two agree.
 
 Once a day, guests created and unused for `AUTH_GUEST_DAYS` are deleted, one at a time. Their

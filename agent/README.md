@@ -34,6 +34,8 @@ The files it writes are the only record of which apps exist:
 | GET    | `/backups`               | `{ enabled, apps }`: every app's last backup, or null         |
 | GET    | `/apps/:name/backup`     | the app's last backup, or null                                |
 | POST   | `/apps/:name/backup`     | back it up now; the status (409 without backups)              |
+| GET    | `/apps/:name/database`   | `{ layout }`: `schema`, `database` (its own) or `none`        |
+| POST   | `/apps/:name/move`       | `{ tag }`: move it from its own database into its schema      |
 | GET    | `/pool/users`            | the user pool's users, newest first (`?limit=`, `?cursor=`)   |
 | DELETE | `/pool/users/:id`        | delete a user and what every app kept for them; 204, 404, 409 |
 
@@ -275,6 +277,28 @@ and `DATABASE_SCHEMA=app_<name>`, which its own env can't set. It reaches Postgr
 schema, and get only `DATABASE_URL` to it. Nothing migrates `auth` any more. Backups and purges
 handle both.
 
+`POST /apps/:name/move` with `{ tag }` moves such an app into its schema and its guests into the
+user pool ([guide](../docs/guides/move-into-the-pool.md)). `tag` is a version made for the
+schema and the pool. In the queue, it:
+
+1. backs the app up, if backups are set up, and stops if that fails;
+2. deploys `tag` as usual, with the schema set up although the app has its own database. The
+   role's `search_path` is set in `apps` only, so the running version still finds its tables;
+3. after the new version's migrations, copies in one transaction:
+   - the kit's guests and their live sessions into `auth.users` and `auth.sessions`, with the
+     same ids and tokens;
+   - the app's `AUTH_SECRET` into `auth.former_secrets`, so the pool accepts the guests'
+     cookies (signed with it) and re-signs them;
+   - the rows of each table in the old `public` that the new version made in its schema and
+     left empty, in foreign-key order, by column name; serial columns continue after them.
+     Tables the migrations filled (their journal, say) are left alone;
+4. starts the new version, as any deploy.
+
+It answers `{ status, moved: { users, sessions, tables } }`. What the old version writes after
+the copy stays behind, so pick a quiet moment. If anything fails, the schema is dropped and the
+old version keeps running on its own database. After a move the schema wins: the old database
+stays, unused, until you drop it (`DROP DATABASE app_<name>` as `postgres`).
+
 Removing an app keeps its schema (and the data in it). `DELETE ?purge=true` drops the schema,
 or the old app's database, and its role after the app is removed. To delete the data of an app
 that was already removed, add it again and remove it with `?purge=true`.
@@ -288,7 +312,8 @@ Without `POSTGRES_URL`, the agent runs as before, and asking for a database retu
 
 The agent reads and deletes the user pool's users ([ADR 0035](../docs/decisions/0035-auth-pool.md))
 in the `auth` schema of the `apps` database. The pool grants it `SELECT` on `auth.users` and
-`auth.sessions` and `DELETE` on `auth.users`, and nothing else. It works while the pool is down.
+`auth.sessions`, `DELETE` on `auth.users`, and `INSERT` on `auth.users`, `auth.sessions` and
+`auth.former_secrets` for moves, and nothing else. It works while the pool is down.
 
 - `GET /pool/users` returns `{ available, total, guests, users, next }`. Each user has `id`,
   `guest` (no sign-up), `createdAt` and `lastSeen` (their most recently used session, or
@@ -300,7 +325,7 @@ in the `auth` schema of the `apps` database. The pool grants it `SELECT` on `aut
 - A server without Postgres answers 409.
 
 Apps made before ADR 0034 keep their guests in their own database's `auth` schema until they
-move to the pool; the dashboard doesn't show those.
+move to the pool (`POST /apps/:name/move`); the dashboard doesn't show those.
 
 ## Settings
 

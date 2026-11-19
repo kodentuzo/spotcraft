@@ -132,6 +132,13 @@ describe('backups', () => {
       async deleteUser() {
         return false
       },
+      async layout() {
+        return 'schema' as const
+      },
+      async move() {
+        return { users: 0, sessions: 0, tables: {} }
+      },
+      async dropSchema() {},
     }
     apps = new Apps(new Store(dir), docker, 'caddy', databases, undefined, undefined, {
       target: bucket.target,

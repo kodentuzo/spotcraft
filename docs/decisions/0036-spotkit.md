@@ -6,7 +6,7 @@ implementation: planned
 date: 2026-11-19
 supersedes: [27, 31]
 superseded_by: []
-notes: "Built: provisioning in the CLI package (spotcraft/provision), a schema per app in the apps database, legacy per-app databases kept; the agent no longer ships the kit, and a release no longer checks that the kit is published. The CLI is renamed @kodentuzo/spotcraft (export @kodentuzo/spotcraft/provision); its first publish and deprecating the old spotcraft package on npm are left to the release. To build in wave 1: spotkit 0.1 in kodentuzo/spotkit; @spotcraft/kit and the spotcraft npm package deprecated."
+notes: "Built: provisioning in the CLI package (spotcraft/provision), a schema per app in the apps database, legacy per-app databases kept; the agent no longer ships the kit, and a release no longer checks that the kit is published. The CLI is renamed @kodentuzo/spotcraft (export @kodentuzo/spotcraft/provision); its first publish and deprecating the old spotcraft package on npm are left to the release. Also built: spotkit 0.1 in kodentuzo/spotkit (user(request) from a JWT, a session cookie or a session token, clientAddress, health). Guests are made in the browser with Better Auth's client, not by spotkit: from the app's server, every new guest would come from the server's address and hit the per-address limit. To build in wave 1: publishing spotkit; @spotcraft/kit and the spotcraft npm package deprecated."
 ---
 
 # The kit becomes spotkit, outside this repository

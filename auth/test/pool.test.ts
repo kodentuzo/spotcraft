@@ -2,6 +2,7 @@
 // them. KIT_TEST_POSTGRES_URL is a superuser URL for a throwaway server (CI starts one);
 // without it these tests are skipped locally and fail in CI.
 import assert from 'node:assert/strict'
+import { createHmac } from 'node:crypto'
 import { request } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { after, before, describe, it } from 'node:test'
@@ -10,6 +11,7 @@ import { createRemoteJWKSet, jwtVerify } from 'jose'
 import pg from 'pg'
 import { deleteIdleGuests } from '../src/cleanup.ts'
 import type { Config } from '../src/config.ts'
+import { formerSecrets } from '../src/former.ts'
 import { loadMigrations, migrate } from '../src/migrate.ts'
 import { createPool } from '../src/pool.ts'
 import { accounts, jwks, sessions, users, verifications } from '../src/schema.ts'
@@ -159,7 +161,12 @@ describe('the user pool', { skip: !SUPERUSER_URL && 'KIT_TEST_POSTGRES_URL is no
     } finally {
       client.release()
     }
-    const server = createAuthServer(createPool(config, db), config, async () => true)
+    const server = createAuthServer(
+      createPool(config, db),
+      config,
+      async () => true,
+      formerSecrets(db, 0),
+    )
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
     port = (server.address() as AddressInfo).port
     close = () => new Promise((resolve) => server.close(() => resolve()))
@@ -181,7 +188,8 @@ describe('the user pool', { skip: !SUPERUSER_URL && 'KIT_TEST_POSTGRES_URL is no
     }>(
       urlFor(POOL_ROLE, PASSWORD),
       `SELECT table_name, column_name, data_type, is_nullable FROM information_schema.columns
-       WHERE table_schema = 'auth' AND table_name <> 'migrations' ORDER BY table_name, column_name`,
+       WHERE table_schema = 'auth' AND table_name NOT IN ('migrations', 'former_secrets')
+       ORDER BY table_name, column_name`,
     )
     const fromDrizzle = [users, sessions, accounts, verifications, jwks]
       .flatMap((table: PgTable) => {
@@ -319,6 +327,52 @@ describe('the user pool', { skip: !SUPERUSER_URL && 'KIT_TEST_POSTGRES_URL is no
       assert.equal(payload.email, undefined, 'only the claims in the contract')
       assert.ok(Number(payload.exp) - Number(payload.iat) <= 15 * 60)
     }
+  })
+
+  it("keeps the sessions of an app's guests moved in from the kit, signed with its old secret", async () => {
+    const agent = urlFor(ADMIN, PASSWORD)
+    const kitSecret = 'kit-app-secret-0123456789-0123456789'
+    const { rows } = await query<{ id: string }>(
+      agent,
+      `INSERT INTO auth.users (email, is_anonymous) VALUES ('temp@moved.example.test', true)
+       RETURNING id`,
+    )
+    const token = 'moved-session-token-0123456789ab'
+    await query(
+      agent,
+      `INSERT INTO auth.sessions (user_id, token, expires_at)
+       VALUES ($1, $2, now() + interval '30 days')`,
+      [rows[0].id, token],
+    )
+    const sign = (secret: string) => createHmac('sha256', secret).update(token).digest('base64')
+    const name = '__Secure-better-auth.session_token'
+    const cookie = `${name}=${encodeURIComponent(`${token}.${sign(kitSecret)}`)}`
+    const asApp = () =>
+      send('GET', '/_spotcraft/auth/token', { host: 'game.example.test', headers: { cookie } })
+
+    assert.equal((await asApp()).status, 401, 'an unknown signature is no session')
+    await query(agent, "INSERT INTO auth.former_secrets (secret, app) VALUES ($1, 'game')", [
+      kitSecret,
+    ])
+    const moved = await asApp()
+    assert.equal(moved.status, 200, moved.body)
+    const keys = createRemoteJWKSet(new URL(`http://127.0.0.1:${port}/_spotcraft/auth/jwks`))
+    const { payload } = await jwtVerify(JSON.parse(moved.body).token, keys)
+    assert.equal(payload.sub, rows[0].id)
+    const resigned = String(moved.headers['set-cookie'])
+    assert.ok(
+      resigned.startsWith(`${name}=${encodeURIComponent(`${token}.${sign(config.secret)}`)};`),
+      "the browser gets the cookie signed with the pool's secret",
+    )
+    for (const attribute of ['HttpOnly', 'Secure', 'SameSite=Lax', 'Path=/']) {
+      assert.ok(resigned.includes(`; ${attribute}`), attribute)
+    }
+    const again = await send('GET', '/_spotcraft/auth/token', {
+      host: 'game.example.test',
+      headers: { cookie: resigned.split(';')[0] },
+    })
+    assert.equal(again.status, 200, 'the re-signed cookie works on its own')
+    assert.equal(again.headers['set-cookie'], undefined, 'and needs no re-signing')
   })
 
   it('limits new guests per client address', async () => {

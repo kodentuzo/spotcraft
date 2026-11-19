@@ -27,6 +27,7 @@ const pageFiles = new Map<string, string>([
   ['guides/kit-tanstack-start', 'docs/guides/kit-tanstack-start.md'],
   ['guides/deploy-from-ci', 'docs/guides/deploy-from-ci.md'],
   ['guides/backups', 'docs/guides/backups.md'],
+  ['guides/move-into-the-pool', 'docs/guides/move-into-the-pool.md'],
   ['changelog', 'CHANGELOG.md'],
   ['kit-changelog', 'packages/kit/CHANGELOG.md'],
   ['decisions', 'docs/decisions/README.md'],

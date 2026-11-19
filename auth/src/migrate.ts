@@ -66,7 +66,8 @@ export async function migrate(
       `GRANT SELECT (id, is_anonymous, created_at, updated_at), REFERENCES (id) ON auth.users TO ${group}`,
     )
     // The dashboard's Pool page, through the agent: who is in the pool, and deleting someone
-    // (their sessions and app rows go through the foreign keys' cascades).
+    // (their sessions and app rows go through the foreign keys' cascades). Moving an app that
+    // kept its own guests: adding them, their sessions and the app's former secret.
     const admin = adminRole
       ? await client.query('SELECT 1 FROM pg_roles WHERE rolname = $1', [adminRole])
       : undefined
@@ -74,6 +75,9 @@ export async function migrate(
       await client.query(`GRANT USAGE ON SCHEMA auth TO ${id(adminRole)}`)
       await client.query(`GRANT SELECT ON auth.users, auth.sessions TO ${id(adminRole)}`)
       await client.query(`GRANT DELETE ON auth.users TO ${id(adminRole)}`)
+      await client.query(
+        `GRANT INSERT ON auth.users, auth.sessions, auth.former_secrets TO ${id(adminRole)}`,
+      )
     }
     await client.query('COMMIT')
     return { from, to }
