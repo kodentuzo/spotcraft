@@ -10,6 +10,13 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
 
 ## [Unreleased]
 
+### Added
+
+- **Showcase on the website:** `/showcase` lists the apps running on Spotcraft today, Sokobanko
+  and Vinskiano, and each has a page: what it is, the Spotcraft features it uses, dated numbers
+  from the dashboard, its story, its stack and screenshots. Each app is one Markdown file in
+  `apps/site/src/content/showcase/`.
+
 ### Changed
 
 - **Docs:** in two parts, as hosting platforms split theirs. [Run Spotcraft](docs/run.md) is

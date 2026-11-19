@@ -1,0 +1,49 @@
+---
+import { getCollection } from 'astro:content'
+import Screenshot from '../../components/Screenshot.astro'
+import Base from '../../layouts/Base.astro'
+
+const apps = (await getCollection('showcase')).sort((a, b) => a.data.order - b.data.order)
+const description = 'Apps running on Spotcraft today, and what Spotcraft does for each of them.'
+---
+
+<Base title="Showcase · Spotcraft" description={description}>
+  <section class="mx-auto max-w-6xl px-4 py-16 sm:py-20">
+    <h1 class="font-heading text-3xl font-bold sm:text-4xl">Showcase</h1>
+    <p class="mt-4 max-w-2xl text-lg text-muted-foreground">
+      These apps run on Spotcraft today, on one server their owner rents. Each page says what the
+      app is, which parts of Spotcraft it uses, and how it got there.
+    </p>
+    <ul class="mt-12 grid gap-px border bg-border md:grid-cols-2">
+      {
+        apps.map(({ id, data }) => (
+          <li class="flex flex-col bg-background">
+            <a href={`/showcase/${id}`} class="group block p-6 pb-0 hover:bg-muted">
+              <Screenshot {...data.screenshots[0]} />
+              <h2 class="mt-6 font-heading text-xl font-semibold group-hover:underline group-hover:underline-offset-4">
+                {data.name}
+              </h2>
+              <p class="mt-2 text-sm text-muted-foreground">{data.oneLiner}</p>
+            </a>
+            <ul class="mt-4 flex flex-wrap gap-2 px-6" aria-label="Spotcraft features it uses">
+              {data.features.slice(0, 4).map((feature) => (
+                <li class="border px-2 py-0.5 font-mono text-xs text-muted-foreground">{feature.name}</li>
+              ))}
+            </ul>
+            <p class="mt-auto flex flex-wrap gap-x-5 gap-y-2 px-6 pt-6 pb-6 text-sm">
+              <a href={`/showcase/${id}`} class="font-medium underline-offset-4 hover:underline">
+                Read the story
+              </a>
+              <a href={data.url} class="text-muted-foreground hover:text-foreground" rel="noopener noreferrer">
+                Open the app
+              </a>
+              <a href={data.source} class="text-muted-foreground hover:text-foreground" rel="noopener noreferrer">
+                Source
+              </a>
+            </p>
+          </li>
+        ))
+      }
+    </ul>
+  </section>
+</Base>
