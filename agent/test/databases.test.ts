@@ -2,6 +2,7 @@
 // without KIT_TEST_POSTGRES_URL locally, required in CI.
 import assert from 'node:assert/strict'
 import { after, before, describe, it } from 'node:test'
+import { migrate } from '@spotcraft/kit/provision'
 import pg from 'pg'
 import { AgentError } from '../src/apps.ts'
 import { postgresDatabases } from '../src/databases.ts'
@@ -45,6 +46,18 @@ describe('postgres app databases', {
     await query(SUPERUSER_URL, `DROP ROLE IF EXISTS ${ADMIN}`)
   })
 
+  /** The kit's `auth` schema, as apps made before ADR 0035 have it: owned by the agent. */
+  async function addKitAuthSchema() {
+    const asAgent = new URL(adminUrl())
+    asAgent.pathname = '/app_agent_test'
+    await migrate(asAgent.toString())
+    await query(asAgent.toString(), 'GRANT USAGE ON SCHEMA auth TO app_agent_test')
+    await query(
+      asAgent.toString(),
+      'GRANT SELECT, INSERT, UPDATE, DELETE, REFERENCES ON ALL TABLES IN SCHEMA auth TO app_agent_test',
+    )
+  }
+
   it('returns a DATABASE_URL the app can use, and purges', async () => {
     const databases = postgresDatabases(adminUrl())
     const url = await databases.provision('agent-test', 'app-password-0123456789')
@@ -55,8 +68,9 @@ describe('postgres app databases', {
 
     const { rows } = await query(url, 'SELECT current_database() AS db, current_user AS me')
     assert.deepEqual(rows[0], { db: 'app_agent_test', me: 'app_agent_test' })
-    const users = await query(url, 'SELECT count(*)::int AS n FROM auth.users')
-    assert.equal(users.rows[0].n, 0)
+    // Only the role and database: no `auth` schema since ADR 0035; the app migrates the rest.
+    const schemas = await query(url, `SELECT to_regnamespace('auth') IS NULL AS none`)
+    assert.equal(schemas.rows[0].none, true)
 
     await databases.purge('agent-test')
     const left = await query(
@@ -71,6 +85,12 @@ describe('postgres app databases', {
   it("lists an app's users newest first, page by page, and deletes with cascades", async () => {
     const databases = postgresDatabases(adminUrl())
     const url = await databases.provision('agent-test', 'app-password-0123456789')
+    assert.deepEqual(await databases.listUsers('agent-test', { limit: 2 }), {
+      available: false,
+      total: 0,
+      users: [],
+    })
+    await addKitAuthSchema()
     // Three users a minute apart: a registered one and two guests, one with an old session.
     await query(
       url,

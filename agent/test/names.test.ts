@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { appDatabaseName } from '@spotcraft/kit/provision'
+import { appDatabaseName } from 'spotcraft/provision'
 import { NAME } from '../src/app-spec.ts'
 
-// The agent and the kit each check app names (the kit can't import the agent). They must agree:
-// a name the agent accepts but the kit refuses would deploy an app that can't get a database.
+// The agent and provisioning (in the CLI package) each check app names. They must agree:
+// a name the agent accepts but provisioning refuses would deploy an app that can't get a database.
 describe('app names', () => {
-  it('are accepted by the agent and the kit alike', () => {
+  it('are accepted by the agent and provisioning alike', () => {
     const agent = new RegExp(NAME)
     const kitAccepts = (name: string) => {
       try {

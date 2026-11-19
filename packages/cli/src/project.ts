@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { appDatabaseName } from '@spotcraft/kit/provision'
+import { appDatabaseName } from './provision.ts'
 
 /**
  * The app's name: `--name`, or else the `name` in package.json, made into a Spotcraft app

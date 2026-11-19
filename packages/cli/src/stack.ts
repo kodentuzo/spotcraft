@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { appDatabaseName } from '@spotcraft/kit/provision'
+import { appDatabaseName } from './provision.ts'
 
 /**
  * The local stack: one Postgres for every app repository on this machine, set up like the

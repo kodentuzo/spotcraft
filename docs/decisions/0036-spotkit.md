@@ -6,7 +6,7 @@ implementation: planned
 date: 2026-11-19
 supersedes: [27, 31]
 superseded_by: []
-notes: "Wave 1: provisioning moves into a private workspace package; the CLI is published as @kodentuzo/spotcraft; spotkit 0.1 in kodentuzo/spotkit; @spotcraft/kit and the spotcraft npm package are deprecated. ADR 0032's rule for older apps on newer databases carries over to spotkit's migrate."
+notes: "Built: provisioning in the CLI package (spotcraft/provision), with no auth schema; the agent no longer ships the kit, and a release no longer checks that the kit is published. To build in wave 1: the CLI is published as @kodentuzo/spotcraft; spotkit 0.1 in kodentuzo/spotkit; @spotcraft/kit and the spotcraft npm package are deprecated. ADR 0032's rule for older apps on newer databases carries over to spotkit's migrate."
 ---
 
 # The kit becomes spotkit, outside this repository
@@ -24,10 +24,11 @@ their database, and the remaining app helpers have nothing to do with Spotcraft'
 
 ## Decision
 
-- **Provisioning moves into the platform:** `provision` and `purge` become a private workspace
-  package used by the agent and the CLI. It is not published. It creates the role and the
-  database only, without an `auth` schema. Existing `auth` schemas are left alone until their app
-  drops them.
+- **Provisioning moves into the platform:** `provision` and `purge` live in the CLI package, as
+  its `spotcraft/provision` export, and the agent imports them from there. They can't be a
+  private package, because the published CLI needs them. The export is for Spotcraft only, not
+  for apps. It creates the role and the database only, without an `auth` schema. Existing `auth`
+  schemas are left alone until their app drops them.
 - **App helpers become `@kodentuzo/spotkit`,** in its own repository, `kodentuzo/spotkit`, with its
   own version. It uses Web `Request`, `Response` and `Headers` only, and has no framework
   adapters:

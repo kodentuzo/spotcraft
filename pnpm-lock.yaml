@@ -202,16 +202,19 @@ importers:
 
   agent:
     dependencies:
-      '@spotcraft/kit':
-        specifier: workspace:*
-        version: link:../packages/kit
       fastify:
         specifier: ^5.12.8
         version: 5.12.8
       pg:
         specifier: ^8.23.1
         version: 8.23.1
+      spotcraft:
+        specifier: workspace:*
+        version: link:../packages/cli
     devDependencies:
+      '@spotcraft/kit':
+        specifier: workspace:*
+        version: link:../packages/kit
       '@types/node':
         specifier: 'catalog:'
         version: 26.6.6
@@ -293,9 +296,6 @@ importers:
 
   packages/cli:
     dependencies:
-      '@spotcraft/kit':
-        specifier: workspace:*
-        version: link:../kit
       pg:
         specifier: ^8.23.1
         version: 8.23.1

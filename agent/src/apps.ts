@@ -718,7 +718,7 @@ export class Apps {
   }
 
   /**
-   * Brings every app database up to date (role settings, grants, `auth` migrations), e.g.
+   * Brings every app database up to date (role settings and grants), e.g.
    * after Spotcraft was upgraded. Each app is tried even if another fails.
    */
   upgradeDatabases(): Promise<{ upgraded: string[]; failed: { name: string; error: string }[] }> {

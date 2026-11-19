@@ -73,20 +73,20 @@ changes are listed in the [changelog](CHANGELOG.md).
 
 ## Repository
 
-| Path                     | What                                                 |
-| ------------------------ | ---------------------------------------------------- |
-| `agent`                  | the agent (Fastify): deploys the apps                |
-| `apps/dashboard`         | the dashboard (SvelteKit)                            |
-| `apps/site`              | the website (Astro, on GitHub Pages)                 |
-| `packages/cli`           | the `spotcraft` command: `spotcraft dev` local stack |
-| `packages/kit`           | app databases' `auth` schema and their provisioning  |
-| `packages/ui`            | shared components and theme (shadcn-svelte)          |
-| `infra/cloud-init.yaml`  | first-boot setup for the server                      |
-| `infra/server`           | compose file, Caddyfile and monitoring config        |
-| `infra/hetzner`          | optional OpenTofu module for Hetzner Cloud           |
-| `infra/cloudflare`       | optional OpenTofu module: tunnel, DNS, WAF, Access   |
-| `infra/remote-deploy.sh` | what the Deploy workflow runs on the server          |
-| `docs`                   | security model and decision records                  |
+| Path                     | What                                               |
+| ------------------------ | -------------------------------------------------- |
+| `agent`                  | the agent (Fastify): deploys the apps              |
+| `apps/dashboard`         | the dashboard (SvelteKit)                          |
+| `apps/site`              | the website (Astro, on GitHub Pages)               |
+| `packages/cli`           | `spotcraft dev`, and app database provisioning     |
+| `packages/kit`           | guest accounts for apps (moving to spotkit)        |
+| `packages/ui`            | shared components and theme (shadcn-svelte)        |
+| `infra/cloud-init.yaml`  | first-boot setup for the server                    |
+| `infra/server`           | compose file, Caddyfile and monitoring config      |
+| `infra/hetzner`          | optional OpenTofu module for Hetzner Cloud         |
+| `infra/cloudflare`       | optional OpenTofu module: tunnel, DNS, WAF, Access |
+| `infra/remote-deploy.sh` | what the Deploy workflow runs on the server        |
+| `docs`                   | security model and decision records                |
 
 ## Development
 

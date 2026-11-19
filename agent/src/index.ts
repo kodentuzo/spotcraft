@@ -1,4 +1,4 @@
-import { appDatabaseName } from '@spotcraft/kit/provision'
+import { appDatabaseName } from 'spotcraft/provision'
 import { AccessApps } from './access.ts'
 import { buildApp } from './app.ts'
 import { Apps } from './apps.ts'

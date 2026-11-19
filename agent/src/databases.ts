@@ -1,5 +1,5 @@
-import { appDatabaseName, provision, purge } from '@spotcraft/kit/provision'
 import pg from 'pg'
+import { appDatabaseName, provision, purge } from 'spotcraft/provision'
 import { AgentError, type AppUser, type Databases } from './apps.ts'
 
 /** Keyset cursor for user pages: the last row's creation time and id. */

@@ -14,12 +14,15 @@ npx spotcraft dev env --write      # add DATABASE_URL and AUTH_SECRET to .env (o
 | ------------------- | ------------------------------------------------------------------------------------- |
 | `dev start`         | starts the local Postgres if needed, sets up this app's database, prints its settings |
 | `dev stop`          | stops the local Postgres; the data stays                                              |
-| `dev status`        | whether it runs, and this app's `auth` schema version                                 |
+| `dev status`        | whether it runs, and whether this app's database exists                               |
 | `dev env [--write]` | prints `DATABASE_URL` and `AUTH_SECRET`; `--write` adds missing ones to `.env`        |
 | `dev reset [--yes]` | deletes this app's database and creates it empty again (asks first)                   |
-| `dev migrate`       | brings this app's database up to date after upgrading the CLI                         |
+| `dev migrate`       | brings this app's role settings up to date after upgrading the CLI                    |
 
-How an app uses it with the kit: [Guest accounts with the backend kit](https://github.com/kodentuzo/spotcraft/blob/main/docs/guides/backend-kit.md).
+The database is empty: no `auth` schema
+([ADR 0035](https://github.com/kodentuzo/spotcraft/blob/main/docs/decisions/0035-auth-pool.md)).
+The app creates its own tables. Apps that still use `@spotcraft/kit` need its `auth` schema, so
+they stay on `spotcraft` 0.5 until they move to the instance's user pool.
 
 The app name comes from `--name`, or from the `name` in `package.json` made into an app name
 (`@acme/Blog_API` → `blog-api`). Its database is `app_<name>`, with dashes as underscores.
@@ -28,14 +31,14 @@ The app name comes from `--name`, or from the `name` in `package.json` made into
 
 - **One Postgres for every app on the machine.** It's a Compose project, `spotcraft-dev`, with
   the data in the `spotcraft-dev_data` volume. Each app gets its own role and database,
-  created with the kit's `provision`, the same code the agent uses. So one app can't open
+  created by `spotcraft/provision`, the same code the agent uses. So one app can't open
   another's database here either.
 - **The same image and login rules** as the server: the pinned Postgres image, and the
   superuser only over the container's socket. **The same admin role**: `spotcraft_agent`, set up
   with the deploy script's SQL. Tests fail if the CLI's copies of the image, the rules or that
   SQL drift from `infra/`.
-- **The same `auth` schema**: the CLI's version matches the Spotcraft it deploys to (one
-  version for the project).
+- **The same version**: the CLI's version matches the Spotcraft it deploys to (one version for
+  the project).
 
 ## Local only
 
@@ -50,4 +53,5 @@ To remove everything: `docker compose -p spotcraft-dev down -v`.
 
 In the workspace, run it from source with `pnpm --filter spotcraft spotcraft dev …`. Note
 that pnpm runs it in `packages/cli`, so pass `--name`. `pnpm --filter spotcraft build`
-writes `dist/` (the `spotcraft` bin); it uses the kit's build, so build the kit first.
+writes `dist/`: the `spotcraft` bin, and `spotcraft/provision`, which the agent imports. That
+export is for Spotcraft itself, not for apps.

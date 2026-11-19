@@ -30,6 +30,13 @@
   "bin": {
     "spotcraft": "./dist/cli.js"
   },
+  "exports": {
+    "./provision": {
+      "spotcraft-source": "./src/provision.ts",
+      "types": "./dist/provision.d.ts",
+      "default": "./dist/provision.js"
+    }
+  },
   "publishConfig": {
     "access": "public"
   },
@@ -41,7 +48,6 @@
     "prepack": "node -e \"const fs = require('node:fs'); if (!fs.existsSync('dist')) throw new Error('Build first: pnpm --recursive run build'); for (const f of ['LICENSE', 'NOTICE']) fs.copyFileSync('../../' + f, f)\""
   },
   "dependencies": {
-    "@spotcraft/kit": "workspace:*",
     "pg": "^8.23.1"
   },
   "devDependencies": {

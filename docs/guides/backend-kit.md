@@ -6,6 +6,11 @@ data under its id. The data lives in the app's own Postgres database on the serv
 `spotcraft dev` command runs the same setup. Why it works this way is in
 [ADR 0016](../decisions/0016-backend-kit.md) and [ADR 0017](../decisions/0017-local-stack.md).
 
+> **Since ADR 0036,** Spotcraft no longer creates the `auth` schema in a new app's database.
+> Call the kit's `migrate(DATABASE_URL)` from `@spotcraft/kit/provision` at start, before
+> `backend.check()`. The kit is being replaced by the instance's user pool
+> ([ADR 0035](../decisions/0035-auth-pool.md)).
+
 This guide uses SvelteKit 3. For Nuxt and TanStack Start, the kit has adapters:
 [Guest accounts in Nuxt](kit-nuxt.md) and [Guest accounts in TanStack Start](kit-tanstack-start.md)
 cover the wiring, and this guide the rest. Any server framework works that gives you the

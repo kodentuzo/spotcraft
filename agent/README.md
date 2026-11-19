@@ -230,7 +230,8 @@ All four `BACKUP_*` or none; the agent refuses to start with some.
 
 With `database: true`, a deploy first prepares the app's own role and database on the apps
 server's Postgres (`app_<name>`, with dashes as underscores), using
-[`@spotcraft/kit/provision`](../packages/kit/README.md). Only then are the files written, so a
+`spotcraft/provision` from [the CLI package](../packages/cli/README.md), so a laptop gets the
+same setup. The database is empty: apps run their own migrations. Only then are the files written, so a
 database that can't be prepared changes nothing (the error and Postgres's message come back
 as a 502). The password is generated on the first deploy and kept in `secrets.json`. The app
 gets `DATABASE_URL=postgres://app_<name>:…@postgres:5432/app_<name>`; it reaches Postgres on
@@ -241,8 +242,9 @@ database and its role after the app is removed. To delete the database of an app
 already removed, add it again and remove it with `?purge=true`. Turning `database` off keeps the
 database too; the app only stops getting `DATABASE_URL`.
 
-When the agent starts, it brings every app database up to date: role settings, grants and the
-`auth` migrations of the kit it was built with. Postgres may still be starting, so failures
+When the agent starts, it brings every app database up to date: role settings and grants.
+Databases made before [ADR 0035](../docs/decisions/0035-auth-pool.md) keep their `auth`
+schema as it is; nothing migrates it any more. Postgres may still be starting, so failures
 are retried every 5 seconds for 3 minutes and logged.
 
 Without `POSTGRES_URL`, the agent runs as before, and asking for a database returns 409.

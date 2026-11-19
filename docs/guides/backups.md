@@ -54,8 +54,8 @@ For example, after a bad migration. You need shell access to the server as `depl
 **Never restore as the `postgres` superuser alone.** An app owns its database, so its dump
 can hold functions that run while the dump is restored, with the restoring role's rights. The
 commands below restore each part as the role that owns it: the app's own tables as the app's
-role, and the `auth` schema (guests and sessions) as the agent's role, which the app can't
-write to.
+role, and the `auth` schema (guests and sessions), if the database has one, as the agent's
+role, which the app can't write to.
 
 1. In R2, open the app's folder of the backup to restore and download `database.dump`. Restore
    only a backup you trust: the agent's key can add new folders. Copy it to the server, into a

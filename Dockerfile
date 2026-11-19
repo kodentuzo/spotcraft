@@ -21,13 +21,14 @@ COPY pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
   pnpm fetch --store-dir "$PNPM_STORE_DIR"
 COPY . .
-# The agent runs its TypeScript directly, with production node_modules; the kit (app databases)
-# ships as built JavaScript, since Node won't run TypeScript from node_modules. The dashboard is
-# bundled into build/ and needs no node_modules.
+# The agent runs its TypeScript directly, with production node_modules; the CLI package (app
+# database provisioning) ships as built JavaScript, since Node won't run TypeScript from
+# node_modules. It is selected by folder: `spotcraft` is also the workspace root's name. The
+# dashboard is bundled into build/ and needs no node_modules.
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
   pnpm install --frozen-lockfile --store-dir "$PNPM_STORE_DIR" \
-    --filter @spotcraft/agent... --filter @spotcraft/dashboard... \
-  && pnpm --filter @spotcraft/kit build \
+    --filter @spotcraft/agent... --filter @spotcraft/dashboard... --filter ./packages/cli \
+  && pnpm --filter ./packages/cli build \
   && pnpm --filter @spotcraft/agent deploy --prod --store-dir "$PNPM_STORE_DIR" /out/agent \
   && pnpm --filter @spotcraft/dashboard build \
   && mkdir -p /out/dashboard /probes \

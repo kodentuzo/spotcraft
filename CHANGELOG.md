@@ -23,6 +23,16 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
 
 ### Changed
 
+- **New app databases are empty** (breaking for apps on `@spotcraft/kit`). The agent and
+  `spotcraft dev` create the app's role and database only, without the kit's `auth` schema
+  ([ADR 0036](docs/decisions/0036-spotkit.md)); apps get users from the instance's pool once it
+  exists ([ADR 0035](docs/decisions/0035-auth-pool.md)). Databases that already have the
+  `auth` schema keep it and their data, but the agent no longer migrates it. `dev status` no
+  longer shows an `auth` schema version.
+
+  **Migrating:** apps already deployed need nothing. A new app that uses `@spotcraft/kit` calls
+  the kit's `migrate(DATABASE_URL)` at start, before `backend.check()`, as apps hosted elsewhere
+  do; the `auth` schema is then the app's own. The same works locally.
 - **The theme comes from [spotstrap](https://spotstrap.dev)** (`@kodentuzo/spotstrap`), the
   owner's UI library, through `@spotcraft/ui`
   ([ADR 0033](docs/decisions/0033-theme-from-spotstrap.md)). The colors, corners and font stay

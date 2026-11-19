@@ -1,10 +1,9 @@
 #!/usr/bin/env node
 import { createInterface } from 'node:readline/promises'
 import { parseArgs } from 'node:util'
-import { appDatabaseName, authSchemaVersion, provision, purge } from '@spotcraft/kit/provision'
-import { AUTH_SCHEMA_VERSION } from '@spotcraft/kit/schema'
 import pg from 'pg'
 import { appName, localEnv, writeMissing } from './project.ts'
+import { appDatabaseName, provision, purge } from './provision.ts'
 import {
   adminUrl,
   appPassword,
@@ -26,7 +25,7 @@ Commands:
   status        show whether it runs and this app's database
   env [--write] print DATABASE_URL and AUTH_SECRET; --write adds missing ones to .env
   reset [--yes] delete this app's database and start it empty
-  migrate       bring this app's database up to date after upgrading
+  migrate       bring this app's database settings up to date after upgrading
 
 The app name comes from --name or package.json. Needs Docker.
 `
@@ -38,24 +37,17 @@ async function ensureRunning() {
     throw new StackError('The local Postgres is not running; run `spotcraft dev start`')
 }
 
-/** The auth schema version of the app's database, or undefined if it doesn't exist. */
-async function appDatabaseVersion(name: string): Promise<number | undefined> {
+/** Whether the app's database exists on the local Postgres. */
+async function hasAppDatabase(name: string): Promise<boolean> {
   const admin = new pg.Client({ connectionString: adminUrl() })
   await admin.connect()
   try {
     const found = await admin.query('SELECT 1 FROM pg_database WHERE datname = $1', [
       appDatabaseName(name),
     ])
-    if (!found.rowCount) return undefined
+    return Boolean(found.rowCount)
   } finally {
     await admin.end()
-  }
-  const db = new pg.Client({ connectionString: databaseUrl(name) })
-  await db.connect()
-  try {
-    return await authSchemaVersion(db)
-  } finally {
-    await db.end()
   }
 }
 
@@ -109,13 +101,9 @@ export async function main(argv: string[]): Promise<number> {
         return 0
       }
       // Running but never set up (e.g. started by hand) reads as "no database yet".
-      const version = await appDatabaseVersion(name).catch(() => undefined)
+      const ready = await hasAppDatabase(name).catch(() => false)
       print(`Local Postgres: running on 127.0.0.1:${PORT}`)
-      if (version === undefined) print(`${appDatabaseName(name)}: none yet (spotcraft dev start)`)
-      else {
-        const note = version < AUTH_SCHEMA_VERSION ? ' (spotcraft dev migrate)' : ''
-        print(`${appDatabaseName(name)}: auth schema ${version} of ${AUTH_SCHEMA_VERSION}${note}`)
-      }
+      print(`${appDatabaseName(name)}: ${ready ? 'ready' : 'none yet (spotcraft dev start)'}`)
       return 0
     }
     case 'env': {
@@ -150,7 +138,7 @@ export async function main(argv: string[]): Promise<number> {
       const name = await appName(cwd, values.name)
       await ensureRunning()
       await provision(adminUrl(), { name, password: appPassword(name) })
-      print(`${appDatabaseName(name)}: auth schema ${AUTH_SCHEMA_VERSION}.`)
+      print(`${appDatabaseName(name)}: up to date.`)
       return 0
     }
     default:
