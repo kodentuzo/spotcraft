@@ -22,6 +22,7 @@ import {
   PG_HBA,
   POSTGRES_IMAGE,
   poolImage,
+  projectName,
   type RunResult,
   type Stack,
   StackError,
@@ -120,11 +121,40 @@ describe('a repository and its stack', () => {
     const first = await loadStack(dir, 'lifts', ports)
     const all = Object.values(first.ports)
     assert.equal(new Set(all).size, 4, 'four different ports')
-    assert.equal(first.project, 'spotcraft-dev-lifts')
+    assert.equal(first.project, projectName(dir, 'lifts'))
+    assert.match(first.project, /^spotcraft-dev-lifts-[0-9a-f]{6}$/)
     assert.match(first.authSecret, /^[0-9a-f]{64}$/)
     assert.equal(await readFile(join(dir, '.spotcraft/.gitignore'), 'utf8'), '*\n')
     const again = await loadStack(dir, 'lifts', async () => 1)
     assert.deepEqual(again, first, 'read back, not picked again')
+  })
+
+  it('names stacks of same-named folders apart, within Compose’s rules', () => {
+    const one = projectName('/work/sokobanko/.claude/worktrees/user-pool', 'user-pool')
+    const two = projectName('/work/vinskiano/.claude/worktrees/user-pool', 'user-pool')
+    assert.notEqual(one, two)
+    for (const name of [one, two]) assert.match(name, /^spotcraft-dev-user-pool-[0-9a-f]{6}$/)
+    assert.equal(projectName('/work/a', 'a'), projectName('/work/a', 'a'), 'the same every time')
+  })
+
+  it('keeps the name a stack was given, even if the folder is renamed', async () => {
+    let next = 49000
+    const first = await loadStack(dir, 'lifts', async () => next++)
+    const saved = JSON.parse(await readFile(join(dir, '.spotcraft/dev.json'), 'utf8'))
+    assert.equal(saved.project, first.project)
+    const renamed = await loadStack(dir, 'other-name', async () => 1)
+    assert.equal(renamed.project, first.project)
+  })
+
+  it('keeps the name of a stack made by 0.6.0, and writes it down', async () => {
+    const ports = { postgres: 50001, auth: 50002, smtp: 50003, mail: 50004 }
+    await mkdir(join(dir, '.spotcraft'))
+    const file = join(dir, '.spotcraft/dev.json')
+    await writeFile(file, JSON.stringify({ ports, authSecret: 'b'.repeat(64) }))
+    const old = await loadStack(dir, 'lifts', async () => 1)
+    assert.equal(old.project, 'spotcraft-dev-lifts')
+    assert.deepEqual(old.ports, ports)
+    assert.equal(JSON.parse(await readFile(file, 'utf8')).project, 'spotcraft-dev-lifts')
   })
 
   it('lists only the local stacks', async () => {
