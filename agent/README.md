@@ -58,8 +58,8 @@ The files it writes are the only record of which apps exist:
 `database`, `protected` and `takeOver` keep their current value when left out.
 
 App names: lower-case letters, digits and dashes, 2–32 characters. The names of the server's
-own services (`caddy`, `cloudflared`, `agent`, `dashboard`, `postgres`, `victoriametrics`,
-`vmagent`, `blackbox`, `node-exporter`, `cadvisor`), since an app's service joins the same
+own services (`caddy`, `cloudflared`, `agent`, `dashboard`, `auth`, `umami`, `postgres`,
+`victoriametrics`, `vmagent`, `blackbox`, `node-exporter`, `cadvisor`), since an app's service joins the same
 network, plus `www` and `fallback`, are reserved, and so is every name starting with `app-`
 (Caddy reaches each app as `app-<name>`). A host can belong to one app only: a custom domain
 can't be another app's default host, and no app may use `DASHBOARD_DOMAIN` or a reserved host

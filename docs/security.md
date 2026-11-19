@@ -84,6 +84,16 @@ gets its own base URL, so a session cookie is first-party on that domain and the
 accepts only that origin, plus the origins set in `AUTH_TRUSTED_ORIGINS` for bearer clients. New
 guests are limited per client address, which Caddy sets in a header of its own.
 
+**Analytics** ([ADR 0038](decisions/0038-analytics.md)) is Umami in its own container on the
+`web` and `db` networks, never on `edge`. Its Postgres role owns only the `umami` database. It
+sets no cookies and stores no IP addresses: it hashes the address and User-Agent with a salt that
+rotates monthly, and keeps the country. Telemetry and update checks are off. Only its tracker
+script and its collect endpoint are reachable, through Caddy, at `/_spotcraft/s.js` and
+`/_spotcraft/e`; its interface and API are not. It starts with Umami's default account
+(`admin`), which the agent will replace with a generated password before the API is used. Its
+container is not read-only, because Umami writes the collect path into its script when it
+starts.
+
 **Spotcraft's own containers** run without capabilities (Caddy keeps `NET_BIND_SERVICE` for ports
 80 and 443), with `no-new-privileges`, read-only root filesystems where the software allows,
 limits and health checks. None runs privileged. The agent and the dashboard run from one

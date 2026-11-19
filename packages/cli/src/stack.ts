@@ -36,6 +36,10 @@ export const MAILPIT_IMAGE =
 /** The user pool runs from the Spotcraft image of the same version as this CLI. */
 export const SPOTCRAFT_IMAGE = 'vindotski/spotcraft'
 
+/** Analytics (ADR 0038), the same image and version as on the server. */
+export const UMAMI_IMAGE =
+  'ghcr.io/umami-software/umami:3.4.1@sha256:e69d1a7932e9dab0fc523edc7be1f3a53f3c261f57856fc2167ae74a8fc022e8'
+
 /** The local pool's `iss`; it names the pool, it is not an address. */
 export const LOCAL_ISSUER = 'http://localhost/pools/main'
 
@@ -80,6 +84,19 @@ SELECT NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'spotcraft_auth') AS mis
   ALTER ROLE spotcraft_auth LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE PASSWORD :'auth_pw';
 \\endif
 GRANT CONNECT ON DATABASE apps TO spotcraft_auth;
+-- Analytics' role (ADR 0038): it owns the umami database, and nothing else.
+SELECT NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'spotcraft_umami') AS missing \\gset
+\\if :missing
+  CREATE ROLE spotcraft_umami LOGIN PASSWORD :'umami_pw';
+\\else
+  ALTER ROLE spotcraft_umami LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE PASSWORD :'umami_pw';
+\\endif
+SELECT NOT EXISTS (SELECT FROM pg_database WHERE datname = 'umami') AS missing \\gset
+\\if :missing
+  CREATE DATABASE umami OWNER spotcraft_umami;
+\\endif
+REVOKE ALL ON DATABASE umami FROM PUBLIC;
+GRANT CONNECT ON DATABASE umami TO spotcraft_umami;
 \\c apps
 REVOKE ALL ON SCHEMA public FROM PUBLIC;
 CREATE SCHEMA IF NOT EXISTS auth AUTHORIZATION spotcraft_auth;
@@ -90,6 +107,7 @@ CREATE SCHEMA IF NOT EXISTS auth AUTHORIZATION spotcraft_auth;
 const SUPERUSER_PASSWORD = 'spotcraft-dev-superuser'
 const ADMIN_PASSWORD = 'spotcraft-dev-admin-password'
 const AUTH_PASSWORD = 'spotcraft-dev-auth-password'
+const UMAMI_PASSWORD = 'spotcraft-dev-umami-password'
 export const appPassword = (name: string) => `local-${name}-password`
 
 /** A repository's stack: where it keeps its state, and the ports it was given. */
@@ -98,7 +116,7 @@ export interface Stack {
   project: string
   /** `.spotcraft/` in the repository's root. */
   stateDir: string
-  ports: { postgres: number; auth: number; smtp: number; mail: number }
+  ports: { postgres: number; auth: number; smtp: number; mail: number; analytics: number }
   /** The local pool's secret, made once. */
   authSecret: string
 }
@@ -132,20 +150,6 @@ export async function loadStack(root: string, slug: string, ports = freePort): P
     const { stateDir: _, ...saved } = stack
     await writeFile(file, `${JSON.stringify(saved, null, 2)}\n`)
   }
-  try {
-    const saved = JSON.parse(await readFile(file, 'utf8')) as Partial<Omit<Stack, 'stateDir'>>
-    if (saved.ports && saved.authSecret) {
-      const { ports, authSecret } = saved
-      if (isProjectName(saved.project))
-        return { project: saved.project, stateDir, ports, authSecret }
-      const stack = { project: `${PROJECT_PREFIX}${slug}`, stateDir, ports, authSecret }
-      await save(stack)
-      return stack
-    }
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT' && !(error instanceof SyntaxError))
-      throw error
-  }
   const picked = new Set<number>()
   const next = async () => {
     for (;;) {
@@ -156,10 +160,37 @@ export async function loadStack(root: string, slug: string, ports = freePort): P
       }
     }
   }
+  try {
+    const saved = JSON.parse(await readFile(file, 'utf8')) as Partial<Omit<Stack, 'stateDir'>>
+    if (saved.ports && saved.authSecret) {
+      const { authSecret } = saved
+      let changed = !isProjectName(saved.project)
+      const project = isProjectName(saved.project) ? saved.project : `${PROJECT_PREFIX}${slug}`
+      // A stack from before analytics (0.6) gets a port for it, kept like the others.
+      for (const port of Object.values(saved.ports)) picked.add(port)
+      const ports = { ...saved.ports }
+      if (!ports.analytics) {
+        ports.analytics = await next()
+        changed = true
+      }
+      const stack = { project, stateDir, ports, authSecret }
+      if (changed) await save(stack)
+      return stack
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT' && !(error instanceof SyntaxError))
+      throw error
+  }
   const stack: Stack = {
     project: projectName(root, slug),
     stateDir,
-    ports: { postgres: await next(), auth: await next(), smtp: await next(), mail: await next() },
+    ports: {
+      postgres: await next(),
+      auth: await next(),
+      smtp: await next(),
+      mail: await next(),
+      analytics: await next(),
+    },
     authSecret: randomBytes(32).toString('hex'),
   }
   await mkdir(stateDir, { recursive: true })
@@ -183,6 +214,8 @@ export function databaseUrl(stack: Stack, name: string, database = INSTANCE.data
 export const poolUrl = (stack: Stack) => `http://localhost:${stack.ports.auth}/_spotcraft/auth`
 export const smtpUrl = (stack: Stack) => `smtp://localhost:${stack.ports.smtp}`
 export const mailUrl = (stack: Stack) => `http://localhost:${stack.ports.mail}`
+/** Umami's own interface, for a look at what an app sends (sign in as admin / umami). */
+export const analyticsUrl = (stack: Stack) => `http://localhost:${stack.ports.analytics}`
 
 const container = (stack: Stack, service: string) => `${stack.project}-${service}-1`
 
@@ -244,6 +277,27 @@ export function composeFile(stack: Stack, image: string): string {
           interval: '2s',
           timeout: '3s',
           retries: 60,
+        },
+      },
+      // Analytics, as on the server (ADR 0038), with its interface published for a look.
+      umami: {
+        image: UMAMI_IMAGE,
+        restart: 'unless-stopped',
+        environment: {
+          DATABASE_URL: `postgresql://spotcraft_umami:${UMAMI_PASSWORD}@postgres:5432/umami`,
+          APP_SECRET: stack.authSecret,
+          TRACKER_SCRIPT_NAME: '_spotcraft/s.js',
+          COLLECT_API_ENDPOINT: '/_spotcraft/e',
+          DISABLE_TELEMETRY: '1',
+          DISABLE_UPDATES: '1',
+        },
+        ports: [local(stack.ports.analytics, 3000)],
+        depends_on: { postgres: { condition: 'service_healthy' } },
+        healthcheck: {
+          test: ['CMD', 'curl', '-fsS', '-o', '/dev/null', 'http://127.0.0.1:3000/api/heartbeat'],
+          interval: '2s',
+          timeout: '3s',
+          retries: 90,
         },
       },
       mailpit: {
@@ -332,7 +386,7 @@ export async function up(stack: Stack, image: string, runner: Runner = run) {
       '-d',
       'postgres',
     ],
-    `\\set pw ${ADMIN_PASSWORD}\n\\set auth_pw ${AUTH_PASSWORD}\n${ADMIN_SQL}`,
+    `\\set pw ${ADMIN_PASSWORD}\n\\set auth_pw ${AUTH_PASSWORD}\n\\set umami_pw ${UMAMI_PASSWORD}\n${ADMIN_SQL}`,
   )
   if (roles.code !== 0) fail("Could not set up the agent's and the user pool's roles.", roles)
   const rest = await compose(stack, image, runner, wait)

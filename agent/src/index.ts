@@ -1,7 +1,7 @@
 import { appRoleName, INSTANCE } from '@kodentuzo/spotcraft/provision'
 import { AccessApps } from './access.ts'
 import { buildApp } from './app.ts'
-import { Apps } from './apps.ts'
+import { ANALYTICS_BACKUP, Apps, POOL_BACKUP } from './apps.ts'
 import { dockerDump, untilNext } from './backups.ts'
 import { CloudflareApi } from './cloudflare.ts'
 import { loadConfig } from './config.ts'
@@ -12,9 +12,9 @@ import { S3 } from './s3.ts'
 import { Store } from './store.ts'
 
 const config = loadConfig()
-/** One schema's dump, whatever the app: for the user pool's `auth`. */
-const dumpOf = (container: string, database: string, schema: string) => () =>
-  dockerDump(container, async () => ({ database, schema }))(schema)
+/** A dump of the platform's own data: the user pool's `auth` schema, or a whole database. */
+const dumpOf = (container: string, database: string, schema?: string) => () =>
+  dockerDump(container, async () => ({ database, schema }))(schema ?? database)
 const databases = config.postgresUrl ? postgresDatabases(config.postgresUrl) : undefined
 const cf = config.cloudflare
 const api = cf ? new CloudflareApi(cf.apiToken, cf.accountId) : undefined
@@ -42,8 +42,20 @@ const apps = new Apps(
     dump: dockerDump(config.backup.postgresContainer, async (app) =>
       databases ? databases.dumpTarget(app) : { database: appRoleName(app) },
     ),
-    // The user pool's schema in the apps database (ADR 0035).
-    dumpPool: dumpOf(config.backup.postgresContainer, INSTANCE.database, 'auth'),
+    platform: [
+      // The user pool's schema in the apps database (ADR 0035).
+      {
+        folder: POOL_BACKUP,
+        file: 'auth.dump',
+        dump: dumpOf(config.backup.postgresContainer, INSTANCE.database, 'auth'),
+      },
+      // Analytics' own database (ADR 0038).
+      {
+        folder: ANALYTICS_BACKUP,
+        file: 'umami.dump',
+        dump: dumpOf(config.backup.postgresContainer, 'umami'),
+      },
+    ],
   },
 )
 const app = buildApp({
