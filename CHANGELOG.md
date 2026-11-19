@@ -10,6 +10,12 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
 
 ## [Unreleased]
 
+### Changed
+
+- **Agent:** records each app's last deploy (time, tag, and the error if it failed) in
+  `deploy.json`, and returns it as `lastDeploy` with the app. Apps show it after their next
+  deploy.
+
 ## [0.7.0] - 2026-11-19
 
 Every app counts its usage, with no change to the app

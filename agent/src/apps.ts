@@ -117,6 +117,22 @@ export interface AppStatus extends AppSpec {
   status: string
   /** Every host the app answers on, its default host first (ADR 0021). */
   hostnames: string[]
+  /** How its last deploy went; missing for an app not deployed since this was recorded. */
+  lastDeploy?: DeployStatus
+}
+
+/** An app's last deploy, from the dashboard, its deploy hook or a move (`deploy.json`). */
+export interface DeployStatus {
+  /** When it finished (ISO). */
+  at: string
+  /** The tag it deployed. */
+  tag: string
+  ok: boolean
+  /** Why it failed; the previous version kept running. */
+  error?: string
+  /** When a deploy last worked, and its tag, failed attempts since included. */
+  lastOkAt?: string
+  lastOkTag?: string
 }
 
 /** The fields of `docker ps --format json` the agent reads. */
@@ -138,6 +154,7 @@ function withStatus(
   spec: AppSpec,
   row: ContainerRow | undefined,
   settings: AgentSettings,
+  lastDeploy?: DeployStatus,
 ): AppStatus {
   const status = row?.Status ?? ''
   // `docker ps` has no health field; Docker writes it into the status text.
@@ -148,6 +165,7 @@ function withStatus(
     health: health === 'health: starting' ? 'starting' : (health ?? ''),
     status,
     hostnames: hostnames(spec, settings.appsDomain),
+    ...(lastDeploy ? { lastDeploy } : {}),
   }
 }
 
@@ -397,6 +415,7 @@ export class Apps {
           spec,
           liveRow(containers.get(projectName(spec.name)), await this.#liveService(spec.name)),
           this.settings,
+          await this.#store.readDeployStatus(spec.name),
         ),
       ),
     )
@@ -411,7 +430,12 @@ export class Apps {
   async #status(spec: AppSpec): Promise<AppStatus> {
     const project = projectName(spec.name)
     const rows = (await this.#containers(project)).get(project)
-    return withStatus(spec, liveRow(rows, await this.#liveService(spec.name)), this.settings)
+    return withStatus(
+      spec,
+      liveRow(rows, await this.#liveService(spec.name)),
+      this.settings,
+      await this.#store.readDeployStatus(spec.name),
+    )
   }
 
   /** The service of the app's live slot, from its compose file; undefined if it has none. */
@@ -480,6 +504,32 @@ export class Apps {
    * setting, which stays as stored (a hook release, ADR 0029).
    */
   async #deploy(
+    spec: AppSpec,
+    options: { takeOver?: boolean; move?: () => Promise<void> } = {},
+  ): Promise<AppStatus> {
+    const previous = await this.#store.readDeployStatus(spec.name)
+    const record = async (status: Omit<DeployStatus, 'at' | 'tag'>) => {
+      const lastDeploy = { at: new Date().toISOString(), tag: spec.tag, ...status }
+      // A new app that failed has no folder left to write in.
+      await this.#store.writeDeployStatus(spec.name, lastDeploy).catch(() => {})
+      return lastDeploy
+    }
+    let status: AppStatus
+    try {
+      status = await this.#rollOutWithDns(spec, options)
+    } catch (error) {
+      await record({
+        ok: false,
+        error: message(error),
+        lastOkAt: previous?.ok ? previous.at : previous?.lastOkAt,
+        lastOkTag: previous?.ok ? previous.tag : previous?.lastOkTag,
+      })
+      throw error
+    }
+    return { ...status, lastDeploy: await record({ ok: true }) }
+  }
+
+  async #rollOutWithDns(
     spec: AppSpec,
     {
       takeOver = Boolean(spec.takeOver),
