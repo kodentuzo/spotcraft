@@ -78,9 +78,13 @@ function withStatus(
  * this module (which the dashboard imports for its types) doesn't load the database code.
  */
 export interface Databases {
-  /** Creates or updates the app's role and database; returns the app's DATABASE_URL. */
-  provision(name: string, password: string): Promise<string>
-  /** Drops the app's database and role, if they exist. */
+  /**
+   * Creates or updates the app's role and schema (or its own database, from before ADR 0034);
+   * returns the env that tells the app where it is: DATABASE_URL, and DATABASE_SCHEMA for a
+   * schema.
+   */
+  provision(name: string, password: string): Promise<Record<string, string>>
+  /** Drops the app's schema or database, and its role, if they exist. */
   purge(name: string): Promise<void>
   /** A page of the app's users (ADR 0018), newest first. */
   listUsers(name: string, page: { limit: number; cursor?: string }): Promise<UserPage>
@@ -504,14 +508,14 @@ export class Apps {
    * (`recover`).
    */
   async #rollOut(spec: AppSpec): Promise<AppStatus> {
-    const databaseUrl = spec.database ? await this.#provision(spec.name) : undefined
+    const databaseEnv = spec.database ? await this.#provision(spec.name) : undefined
     const previous = await this.#store.read(spec.name)
     const live = previous ? composeService(previous.compose) : undefined
     const slot = live === slotService(spec.name, 'blue') ? 'green' : 'blue'
     const service = slotService(spec.name, slot)
     await this.#store.stage(spec.name, {
       spec: `${JSON.stringify(spec, null, 2)}\n`,
-      compose: renderCompose(spec, service, databaseUrl),
+      compose: renderCompose(spec, service, databaseEnv),
     })
 
     const pull = await this.#compose(spec.name, ['pull', '--quiet'], { staged: true })
@@ -693,15 +697,15 @@ export class Apps {
   }
 
   /** Prepares the app's database with its stored password (generated the first time). */
-  async #provision(name: string): Promise<string> {
+  async #provision(name: string): Promise<Record<string, string>> {
     if (!this.#databases) {
       throw new AgentError('This server has no Postgres configured for app databases', 409)
     }
     const secrets = await this.#store.readSecrets(name)
     const password = secrets.databasePassword ?? randomBytes(24).toString('hex')
-    let url: string
+    let env: Record<string, string>
     try {
-      url = await this.#databases.provision(name, password)
+      env = await this.#databases.provision(name, password)
     } catch (error) {
       throw new AgentError(`Could not prepare the database for ${name}`, 502, message(error))
     }
@@ -714,11 +718,11 @@ export class Apps {
         }
       })
     }
-    return url
+    return env
   }
 
   /**
-   * Brings every app database up to date (role settings, grants, `auth` migrations), e.g.
+   * Brings every app database up to date (role settings and grants), e.g.
    * after Spotcraft was upgraded. Each app is tried even if another fails.
    */
   upgradeDatabases(): Promise<{ upgraded: string[]; failed: { name: string; error: string }[] }> {

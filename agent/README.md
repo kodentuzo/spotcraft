@@ -228,35 +228,49 @@ All four `BACKUP_*` or none; the agent refuses to start with some.
 
 ## App databases
 
-With `database: true`, a deploy first prepares the app's own role and database on the apps
-server's Postgres (`app_<name>`, with dashes as underscores), using
-[`@spotcraft/kit/provision`](../packages/kit/README.md). Only then are the files written, so a
-database that can't be prepared changes nothing (the error and Postgres's message come back
-as a 502). The password is generated on the first deploy and kept in `secrets.json`. The app
-gets `DATABASE_URL=postgres://app_<name>:…@postgres:5432/app_<name>`; it reaches Postgres on
+Apps share one database on the apps server's Postgres, `apps`, like a Supabase project
+([ADR 0034](../docs/decisions/0034-app-contract.md)). With `database: true`, a deploy first
+prepares the app's role and schema there, both `app_<name>` (dashes as underscores), using
+`spotcraft/provision` from [the CLI package](../packages/cli/README.md), so a laptop gets the
+same setup. The agent creates `apps` and the `spotcraft_app` group role the first time.
+
+- The role owns its schema and has it as its `search_path`. It may connect to `apps` and
+  nothing else: it can't create schemas or extensions, or see other apps' schemas.
+- Every app role belongs to `spotcraft_app`, which the user pool will let read and reference
+  `auth.users` ([ADR 0035](../docs/decisions/0035-auth-pool.md)).
+- The schema starts empty: apps run their own migrations.
+
+Only then are the files written, so a schema that can't be prepared changes nothing (the error
+and Postgres's message come back as a 502). The password is generated on the first deploy and
+kept in `secrets.json`. The app gets `DATABASE_URL=postgres://app_<name>:…@postgres:5432/apps`
+and `DATABASE_SCHEMA=app_<name>`, which its own env can't set. It reaches Postgres on
 `spotcraft-edge`, and the agent reaches it on the internal `db` network.
 
-Removing an app keeps its database (and the data in it). `DELETE ?purge=true` drops the
-database and its role after the app is removed. To delete the database of an app that was
-already removed, add it again and remove it with `?purge=true`. Turning `database` off keeps the
-database too; the app only stops getting `DATABASE_URL`.
+**Apps made before ADR 0034** keep their own database, `app_<name>`, with the kit's `auth`
+schema, and get only `DATABASE_URL` to it. Nothing migrates `auth` any more. Backups and purges
+handle both.
 
-When the agent starts, it brings every app database up to date: role settings, grants and the
-`auth` migrations of the kit it was built with. Postgres may still be starting, so failures
+Removing an app keeps its schema (and the data in it). `DELETE ?purge=true` drops the schema,
+or the old app's database, and its role after the app is removed. To delete the data of an app
+that was already removed, add it again and remove it with `?purge=true`. Turning `database` off
+keeps the data too; the app only stops getting `DATABASE_URL`.
+
+When the agent starts, it brings every app's role and grants up to date. Postgres may still be starting, so failures
 are retried every 5 seconds for 3 minutes and logged.
 
 Without `POSTGRES_URL`, the agent runs as before, and asking for a database returns 409.
 
 ## App users
 
-For an app with a database, the agent reads and deletes its users directly in the app's
-`auth` tables, which it owns ([ADR 0018](../docs/decisions/0018-user-management.md)). It works
+For an app made before ADR 0034, the agent reads and deletes its users directly in its own
+database's `auth` tables, which it owns ([ADR 0018](../docs/decisions/0018-user-management.md)). It works
 while the app is down.
 
 - `GET /apps/:name/users` returns `{ available, total, users, next }`. Each user has `id`,
   `guest` (no sign-up), `createdAt` and `lastSeen` (their most recently used session, or
   `null`). Pages hold `?limit=` users (default 50, max 200); pass `next` back as `?cursor=` for
-  the older ones. `available` is false if the database has no `auth` schema.
+  the older ones. `available` is false for an app in a schema, whose users are the instance's,
+  and for an old app whose database has no `auth` schema.
 - `DELETE /apps/:name/users/:id` (a uuid) deletes the user. Their sessions and the app's own
   rows go with them through their foreign keys.
 - An app without a database answers 409; an unknown app, 404.

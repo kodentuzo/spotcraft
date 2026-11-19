@@ -5,6 +5,13 @@ The backend kit for server-rendered apps hosted on Spotcraft
 accounts**: a visitor gets an account without signing up, and the app keeps their data under
 its id. It also holds the `auth` schema and the code that gives an app its own database
 ([ADR 0015](https://github.com/kodentuzo/spotcraft/blob/main/docs/decisions/0015-shared-postgres.md)).
+
+> **Spotcraft no longer creates the `auth` schema** in new app databases
+> ([ADR 0036](https://github.com/kodentuzo/spotcraft/blob/main/docs/decisions/0036-spotkit.md)).
+> Databases that have it keep it. A new app calls `migrate(DATABASE_URL)` at start, before
+> `backend.check()`. The kit is being replaced by `@kodentuzo/spotkit` and the instance's user
+> pool ([ADR 0035](https://github.com/kodentuzo/spotcraft/blob/main/docs/decisions/0035-auth-pool.md)).
+
 In the workspace, Node runs the TypeScript source through the `spotcraft-source` export condition
 (`node --conditions=spotcraft-source`, `customConditions` in `tsconfig.json`). Anything that installs the
 kit into `node_modules`, like the agent's image, uses the build: `pnpm --filter @spotcraft/kit

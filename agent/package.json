@@ -11,11 +11,12 @@
     "test": "node --conditions=spotcraft-source --test 'test/**/*.test.ts'"
   },
   "dependencies": {
-    "@spotcraft/kit": "workspace:*",
     "fastify": "^5.12.8",
-    "pg": "^8.23.1"
+    "pg": "^8.23.1",
+    "spotcraft": "workspace:*"
   },
   "devDependencies": {
+    "@spotcraft/kit": "workspace:*",
     "@types/node": "catalog:",
     "@types/pg": "^8.23.1",
     "typescript": "catalog:"

@@ -174,7 +174,7 @@
       <span class="text-sm">
         Database
         <span class="block text-xs text-muted-foreground">
-          Its own Postgres database on the server, given to the app as DATABASE_URL. Turning this off later keeps the data.
+          Its own schema in the server's Postgres, given to the app as DATABASE_URL and DATABASE_SCHEMA. Turning this off later keeps the data.
         </span>
       </span>
     </label>
