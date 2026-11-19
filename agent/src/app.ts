@@ -252,7 +252,7 @@ export function buildApp({ token, apps, allowedIps = [], logger = false }: Build
   )
 
   // The app's usage (ADR 0038): visits from Umami and accounts from the pool, counts only.
-  app.get<{ Params: NameParams; Querystring: { days: number } }>(
+  app.get<{ Params: NameParams; Querystring: { days: number; brief: boolean } }>(
     '/apps/:name/usage',
     {
       schema: {
@@ -260,11 +260,15 @@ export function buildApp({ token, apps, allowedIps = [], logger = false }: Build
         querystring: {
           type: 'object',
           additionalProperties: false,
-          properties: { days: { type: 'integer', minimum: 1, maximum: 90, default: 7 } },
+          properties: {
+            days: { type: 'integer', minimum: 1, maximum: 90, default: 7 },
+            // Totals only, for the app list: no breakdowns.
+            brief: { type: 'boolean', default: false },
+          },
         },
       },
     },
-    (request) => apps.usage(request.params.name, request.query.days),
+    (request) => apps.usage(request.params.name, request.query.days, request.query.brief),
   )
 
   // Where the app's tables are, and moving an app made before ADR 0034 into its schema.

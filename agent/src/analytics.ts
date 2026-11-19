@@ -14,7 +14,8 @@ export interface Analytics {
   /** Deletes the website and its numbers; one that is already gone is fine. */
   deleteWebsite(id: string): Promise<void>
   /** What the website counted over the last `days` days, and the days before. */
-  summary(id: string, days: number): Promise<VisitSummary>
+  /** With `brief`, only the totals: one call to Umami instead of one per breakdown. */
+  summary(id: string, days: number, brief?: boolean): Promise<VisitSummary>
 }
 
 /** Umami's account on a fresh install. Nothing exposes it: Caddy routes only the tracker. */
@@ -59,7 +60,7 @@ export class Umami implements Analytics {
     return id
   }
 
-  async summary(id: string, days: number): Promise<VisitSummary> {
+  async summary(id: string, days: number, brief = false): Promise<VisitSummary> {
     const endAt = Date.now()
     const startAt = endAt - days * 24 * 60 * 60 * 1000
     const range = `startAt=${startAt}&endAt=${endAt}`
@@ -71,7 +72,8 @@ export class Umami implements Analytics {
     }
     type Stats = { pageviews: number; visitors: number; visits: number }
     type Metric = { x: string | null; y: number }[]
-    const metric = (type: string) => get<Metric>(`/metrics?${range}&type=${type}&limit=10`)
+    const metric = (type: string): Promise<Metric> =>
+      brief ? Promise.resolve([]) : get<Metric>(`/metrics?${range}&type=${type}&limit=10`)
     // A breakdown Umami can't give leaves its list empty; the totals still show.
     const breakdown = (type: string) =>
       metric(type).then(
@@ -80,8 +82,9 @@ export class Umami implements Analytics {
         () => [],
       )
     type Series = { x: string; y: number }[]
-    const perDay = get<{ pageviews?: Series; sessions?: Series }>(
-      `/pageviews?${range}&unit=day&timezone=UTC`,
+    type Daily = { pageviews?: Series; sessions?: Series }
+    const perDay = (
+      brief ? Promise.resolve<Daily>({}) : get<Daily>(`/pageviews?${range}&unit=day&timezone=UTC`)
     ).then(
       ({ pageviews, sessions }) => {
         const byDay = new Map<string, { day: string; views: number; visitors: number }>()
@@ -110,8 +113,8 @@ export class Umami implements Analytics {
       daily,
     ] = await Promise.all([
       get<Stats & { comparison?: Partial<Stats> }>(`/stats?${range}`),
-      get<Metric>(`/metrics?${range}&type=path&limit=10`),
-      get<Metric>(`/metrics?${range}&type=os&limit=10`),
+      metric('path'),
+      metric('os'),
       breakdown('hostname'),
       breakdown('referrer'),
       breakdown('country'),

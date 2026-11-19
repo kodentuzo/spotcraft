@@ -981,7 +981,7 @@ export class Apps {
    * The app's usage (ADR 0038): what Umami counted on its website, and its accounts in the pool.
    * A source that fails or doesn't answer leaves its part out; this never fails because of one.
    */
-  async usage(name: string, days = 7): Promise<AppUsage> {
+  async usage(name: string, days = 7, brief = false): Promise<AppUsage> {
     const spec = await this.#store.get(name)
     if (!spec) throw new AgentError('No such app', 404)
     const { analyticsId } = await this.#store.readSecrets(name)
@@ -991,7 +991,10 @@ export class Apps {
         return undefined
       })
     const [visits, accounts] = await Promise.all([
-      quietly('visits', analyticsId ? this.analytics?.summary(analyticsId, days) : undefined),
+      quietly(
+        'visits',
+        analyticsId ? this.analytics?.summary(analyticsId, days, brief) : undefined,
+      ),
       quietly('accounts', this.#databases?.accountUsage(hostnames(spec, this.settings.appsDomain))),
     ])
     return { ...(visits ? { visits } : {}), ...(accounts ? { accounts } : {}) }

@@ -134,4 +134,16 @@ describe("the agent's Umami client", () => {
       { day: '2026-11-19', views: 6, visitors: 2 },
     ])
   })
+
+  it('asks only for the totals when brief', async () => {
+    const umami = fakeUmami(PASSWORD)
+    const summary = await new Umami('http://umami:3000', PASSWORD, umami).summary('site', 7, true)
+    assert.equal(summary.visitors, 5)
+    assert.deepEqual(summary.countries, [])
+    assert.deepEqual(summary.perDay, [])
+    assert.deepEqual(
+      umami.calls.filter((call) => call.includes('/websites/site/')),
+      ['GET /api/websites/site/stats'],
+    )
+  })
 })

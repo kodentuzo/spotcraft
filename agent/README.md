@@ -16,30 +16,30 @@ The files it writes are the only record of which apps exist:
 
 ## API
 
-| Method | Path                     | What                                                                                                                           |
-| ------ | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
-| GET    | `/health`                | `{ ok: true }`, no token needed                                                                                                |
-| GET    | `/settings`              | `{ appsDomain?, edge, dns, access }`: what is set up                                                                           |
-| GET    | `/apps`                  | settings plus `state`, `health`, `status`, `hostnames`, `lastDeploy`                                                           |
-| GET    | `/apps/:name`            | one app, or 404                                                                                                                |
-| PUT    | `/apps/:name`            | create or update, then deploy; returns the app with status                                                                     |
-| DELETE | `/apps/:name`            | stop and remove the app and its site; 204, or 404                                                                              |
-|        |                          | `?purge=true` also deletes its database and role                                                                               |
-| GET    | `/apps/:name/domain`     | custom domain status and records still to create                                                                               |
-| GET    | `/apps/:name/logs`       | last `?tail=` lines (default 200, max 5000), plain text                                                                        |
-| GET    | `/apps/:name/hook-token` | `{ enabled }`: whether the app has a deploy hook                                                                               |
-| POST   | `/apps/:name/hook-token` | a new deploy hook token, returned once (201)                                                                                   |
-| DELETE | `/apps/:name/hook-token` | turn the deploy hook off; 204                                                                                                  |
-| POST   | `/apps/:name/release`    | `{ tag }` with `X-Hook-Token`: deploy that tag; 202                                                                            |
-| GET    | `/apps/:name/release`    | with `X-Hook-Token`: how the last release went                                                                                 |
-| GET    | `/backups`               | `{ enabled, apps }`: every app's last backup, or null                                                                          |
-| GET    | `/apps/:name/backup`     | the app's last backup, or null                                                                                                 |
-| POST   | `/apps/:name/backup`     | back it up now; the status (409 without backups)                                                                               |
-| GET    | `/apps/:name/usage`      | `{ visits?, accounts? }` over `?days=` (7): counts, top pages, hosts, referrers, countries, devices, browsers, systems, events |
-| GET    | `/apps/:name/database`   | `{ layout }`: `schema`, `database` (its own) or `none`                                                                         |
-| POST   | `/apps/:name/move`       | `{ tag }`: move it from its own database into its schema                                                                       |
-| GET    | `/pool/users`            | the user pool's users, newest first (`?limit=`, `?cursor=`)                                                                    |
-| DELETE | `/pool/users/:id`        | delete a user and what every app kept for them; 204, 404, 409                                                                  |
+| Method | Path                     | What                                                                                                                                                               |
+| ------ | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| GET    | `/health`                | `{ ok: true }`, no token needed                                                                                                                                    |
+| GET    | `/settings`              | `{ appsDomain?, edge, dns, access }`: what is set up                                                                                                               |
+| GET    | `/apps`                  | settings plus `state`, `health`, `status`, `hostnames`, `lastDeploy`                                                                                               |
+| GET    | `/apps/:name`            | one app, or 404                                                                                                                                                    |
+| PUT    | `/apps/:name`            | create or update, then deploy; returns the app with status                                                                                                         |
+| DELETE | `/apps/:name`            | stop and remove the app and its site; 204, or 404                                                                                                                  |
+|        |                          | `?purge=true` also deletes its database and role                                                                                                                   |
+| GET    | `/apps/:name/domain`     | custom domain status and records still to create                                                                                                                   |
+| GET    | `/apps/:name/logs`       | last `?tail=` lines (default 200, max 5000), plain text                                                                                                            |
+| GET    | `/apps/:name/hook-token` | `{ enabled }`: whether the app has a deploy hook                                                                                                                   |
+| POST   | `/apps/:name/hook-token` | a new deploy hook token, returned once (201)                                                                                                                       |
+| DELETE | `/apps/:name/hook-token` | turn the deploy hook off; 204                                                                                                                                      |
+| POST   | `/apps/:name/release`    | `{ tag }` with `X-Hook-Token`: deploy that tag; 202                                                                                                                |
+| GET    | `/apps/:name/release`    | with `X-Hook-Token`: how the last release went                                                                                                                     |
+| GET    | `/backups`               | `{ enabled, apps }`: every app's last backup, or null                                                                                                              |
+| GET    | `/apps/:name/backup`     | the app's last backup, or null                                                                                                                                     |
+| POST   | `/apps/:name/backup`     | back it up now; the status (409 without backups)                                                                                                                   |
+| GET    | `/apps/:name/usage`      | `{ visits?, accounts? }` over `?days=` (7): counts, top pages, hosts, referrers, countries, devices, browsers, systems, events, per day; `?brief=true` totals only |
+| GET    | `/apps/:name/database`   | `{ layout }`: `schema`, `database` (its own) or `none`                                                                                                             |
+| POST   | `/apps/:name/move`       | `{ tag }`: move it from its own database into its schema                                                                                                           |
+| GET    | `/pool/users`            | the user pool's users, newest first (`?limit=`, `?cursor=`)                                                                                                        |
+| DELETE | `/pool/users/:id`        | delete a user and what every app kept for them; 204, 404, 409                                                                                                      |
 
 `PUT` body (unknown fields are rejected):
 
