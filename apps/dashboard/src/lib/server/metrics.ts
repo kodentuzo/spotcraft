@@ -120,6 +120,11 @@ export const promql = {
   appRequestsDay: (names: string[]) => `sum(increase(${requests(names)}[24h]))`,
   appErrorsDay: (names: string[]) =>
     `sum(increase(caddy_http_request_duration_seconds_count{${hostLabel(names)},code=~"5.."}[24h]))`,
+  /** Requests in the 7 days before now, or the 7 before those (`offset`). */
+  appRequestsWeek: (names: string[], offset = false) =>
+    `sum(increase(${requests(names)}[7d]${offset ? ' offset 7d' : ''}))`,
+  /** Requests in each day before a point, for a line over a week. */
+  appRequestsPerDay: (names: string[]) => `sum(increase(${requests(names)}[1d]))`,
   /** Requests per hour, for a line over a day. */
   appRequestsPerHour: (names: string[]) => `sum(rate(${requests(names)}[1h])) * 3600`,
   /** Caddy's own time for a request (to the app and back), 95th percentile over the last hour. */

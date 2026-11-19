@@ -69,9 +69,13 @@ export const load: PageServerLoad = async ({ params, url, untrack }) => {
     when(() => instant(promql.appErrorsDay(hosts)), null),
     when(() => instant(promql.appLatencyP95(hosts)), null),
     when(() => range(promql.appRequestsPerHour(hosts), 24 * 60, 3600), []),
-  ]).then(([counted, requests, errors, p95, perHour]) => ({
+    when(() => instant(promql.appRequestsWeek(hosts)), null),
+    when(() => instant(promql.appRequestsWeek(hosts, true)), null),
+    // Seven points a day apart, each the day before it, the last ending now.
+    when(() => range(promql.appRequestsPerDay(hosts), 6 * 24 * 60, 86400), []),
+  ]).then(([counted, requests, errors, p95, perHour, week, previousWeek, perDay]) => ({
     ...counted,
-    requests: { day: requests, errors, p95, perHour },
+    requests: { day: requests, errors, p95, perHour, week, previousWeek, perDay },
   }))
   return {
     app,
