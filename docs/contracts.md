@@ -1,9 +1,11 @@
 # The app contract
 
-> **Planned.** This is the contract decided in ADRs
+> **Mostly built.** This is the contract decided in ADRs
 > [0034](decisions/0034-app-contract.md), [0035](decisions/0035-auth-pool.md),
-> [0036](decisions/0036-spotkit.md) and [0037](decisions/0037-local-stack-per-repo.md). It is
-> being built; until then, apps work as described in the guides.
+> [0036](decisions/0036-spotkit.md) and [0037](decisions/0037-local-stack-per-repo.md). Built: a
+> schema per app, the environment Spotcraft sets, migrations from the image's label, the health
+> check, the user pool with guests, analytics and the [local stack](guides/local-stack.md). Not
+> yet: static apps, SMTP, signing in and turning a guest into a user, and spotkit on npm.
 
 Everything an app gets from Spotcraft, and everything Spotcraft expects from it. An app that
 follows this page runs anywhere that provides the same values: a Supabase project, say, has the

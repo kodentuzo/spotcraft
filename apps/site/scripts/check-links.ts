@@ -37,16 +37,22 @@ function idsOf(file: string): Set<string> {
 
 const problems: string[] = []
 
-// The pages the site has always had: home, docs, every docs page and every ADR.
+// The pages the site has always had: home, docs, every docs page and every ADR, and the showcase.
 const expected = [
   '/',
   '/docs',
+  '/docs/run',
+  '/docs/build',
   '/docs/getting-started',
+  '/docs/dashboard',
   '/docs/security',
   '/docs/guides/backend-kit',
   '/docs/decisions',
   '/docs/changelog',
   '/docs/kit-changelog',
+  '/showcase',
+  '/showcase/sokobanko',
+  '/showcase/vinskiano',
   '/404',
   ...readdirSync(join(repo, 'docs/decisions'))
     .filter((name) => /^\d{4}-[a-z0-9-]+\.md$/.test(name))

@@ -7,9 +7,11 @@
     format: (value: number) => string
     /** What the line shows, for screen readers. */
     label: string
+    /** The period under the line when no point is picked. */
+    period?: string
   }
 
-  let { series, format, label }: Props = $props()
+  let { series, format, label, period = 'Last hour' }: Props = $props()
 
   const WIDTH = 240
   const HEIGHT = 48
@@ -70,7 +72,7 @@
       {#if hover !== null}
         {clock(series[hover][0])} · {format(series[hover][1])}
       {:else}
-        Last hour
+        {period}
       {/if}
     </p>
   {:else}

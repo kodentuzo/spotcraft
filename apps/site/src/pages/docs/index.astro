@@ -2,27 +2,34 @@
 import Docs from '../../layouts/Docs.astro'
 import { VERSION } from '../../lib/site.ts'
 
-const sections = [
+// One part per reader, as hosting platforms split theirs; then what both share.
+const parts = [
   {
-    slug: 'getting-started',
-    title: 'Getting started',
-    text: 'Create the servers, deploy Spotcraft, add your first app, upgrade and roll back.',
+    slug: 'run',
+    title: 'Run Spotcraft',
+    text: 'For whoever owns the server: set it up, add apps, and look after them from the dashboard.',
+    start: [
+      { slug: 'getting-started', label: 'Getting started' },
+      { slug: 'dashboard', label: 'Using the dashboard' },
+      { slug: 'guides/backups', label: 'Backups and restoring' },
+    ],
   },
   {
-    slug: 'security',
-    title: 'Security model',
-    text: 'What Spotcraft trusts, where its boundaries are, and the risks it accepts.',
+    slug: 'build',
+    title: 'Build apps',
+    text: 'For the developers of the apps: what an app gets, what it must do, and working on it locally.',
+    start: [
+      { slug: 'contracts', label: 'The app contract' },
+      { slug: 'guides/local-stack', label: 'Develop locally' },
+      { slug: 'guides/deploy-from-ci', label: 'Deploy from CI' },
+    ],
   },
-  {
-    slug: 'decisions',
-    title: 'Decisions',
-    text: 'Why Spotcraft is built the way it is, one record per decision.',
-  },
-  {
-    slug: 'changelog',
-    title: 'Changelog',
-    text: 'What changed in each release, and how to upgrade across breaking changes.',
-  },
+]
+
+const reference = [
+  { slug: 'security', title: 'Security model', text: 'What Spotcraft trusts, where its boundaries are, and the risks it accepts.' },
+  { slug: 'decisions', title: 'Decisions', text: 'Why Spotcraft is built the way it is, one record per decision.' },
+  { slug: 'changelog', title: 'Changelog', text: 'What changed in each release, and how to upgrade across breaking changes.' },
 ]
 ---
 
@@ -31,13 +38,32 @@ const sections = [
   <p class="mt-3 text-muted-foreground">
     For Spotcraft v{VERSION}. Older versions’ docs are the docs folder at their tags on GitHub.
   </p>
-  <ul class="mt-10 grid gap-px border bg-border sm:grid-cols-2">
+  <div class="mt-10 grid gap-px border bg-border md:grid-cols-2">
     {
-      sections.map((section) => (
+      parts.map((part) => (
+        <section class="flex flex-col bg-background p-6">
+          <h2 class="font-heading text-xl font-semibold">
+            <a href={`/docs/${part.slug}`} class="hover:underline">{part.title}</a>
+          </h2>
+          <p class="mt-2 text-sm text-muted-foreground">{part.text}</p>
+          <ul class="mt-4 space-y-1 text-sm">
+            {part.start.map((page) => (
+              <li><a href={`/docs/${page.slug}`} class="hover:underline">{page.label} →</a></li>
+            ))}
+          </ul>
+        </section>
+      ))
+    }
+  </div>
+
+  <h2 class="mt-12 font-heading text-lg font-semibold">Reference</h2>
+  <ul class="mt-4 grid gap-px border bg-border sm:grid-cols-3">
+    {
+      reference.map((page) => (
         <li class="bg-background">
-          <a href={`/docs/${section.slug}`} class="block h-full p-6 hover:bg-muted">
-            <span class="font-heading font-semibold">{section.title}</span>
-            <span class="mt-2 block text-sm text-muted-foreground">{section.text}</span>
+          <a href={`/docs/${page.slug}`} class="block h-full p-5 hover:bg-muted">
+            <span class="font-heading font-semibold">{page.title}</span>
+            <span class="mt-2 block text-sm text-muted-foreground">{page.text}</span>
           </a>
         </li>
       ))

@@ -100,15 +100,28 @@ export async function removeApp(name: string, { purge = false } = {}): Promise<v
  * `next`. Undefined on a server without Postgres, which has no pool.
  */
 /** The app's usage (ADR 0038): Umami's visits and the pool's accounts, each when known. */
-export async function getUsage(name: string, days = 7): Promise<AppUsage> {
-  return expectJson<AppUsage>(await call(`/apps/${name}/usage?days=${days}`))
+/** With `brief`, visit totals only (no breakdowns): what the app list needs. */
+export async function getUsage(name: string, { days = 7, brief = false } = {}): Promise<AppUsage> {
+  // `brief` only when wanted: an agent from before it refuses the parameter.
+  const query = `days=${days}${brief ? '&brief=true' : ''}`
+  return expectJson<AppUsage>(await call(`${appPath(name)}/usage?${query}`))
 }
 
-export async function listUsers(cursor?: string): Promise<UserPage | undefined> {
-  const query = new URLSearchParams({ limit: '50', ...(cursor ? { cursor } : {}) })
+/** A page of the pool's users; with `app`, the users with a session on it (ADR 0040). */
+export async function listUsers(cursor?: string, app?: string): Promise<UserPage | undefined> {
+  const query = new URLSearchParams({
+    limit: '50',
+    ...(cursor ? { cursor } : {}),
+    ...(app ? { app } : {}),
+  })
   const response = await call(`/pool/users?${query}`)
   if (response.status === 409) return undefined
   return expectJson<UserPage>(response)
+}
+
+/** The whole pool's account counts (ADR 0040), as an app's usage counts its own. */
+export async function getPoolUsage(): Promise<AppUsage> {
+  return expectJson<AppUsage>(await call('/pool/usage'))
 }
 
 /**

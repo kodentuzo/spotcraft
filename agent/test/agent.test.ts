@@ -124,16 +124,16 @@ function fakeDatabases() {
     async dropSchema(name) {
       calls.push(['dropSchema', name])
     },
-    async accountUsage(hosts: string[]) {
-      calls.push(['accountUsage', ...hosts])
+    async accountUsage(hosts?: string[] | null) {
+      calls.push(['accountUsage', ...(hosts ?? ['(all)'])])
       return {
         active: { day: 1, week: 2, month: 3 },
         newPerDay: [{ day: '2026-11-19', count: 1 }],
         clients: [{ client: 'ios/1.4.0', active: 1 }],
       }
     },
-    async listUsers({ limit, cursor }) {
-      calls.push(['listUsers', String(limit), cursor ?? ''])
+    async listUsers({ limit, cursor, hosts }) {
+      calls.push(['listUsers', String(limit), cursor ?? '', ...(hosts ?? [])])
       return {
         available: true,
         total: 1,
@@ -768,6 +768,10 @@ describe('agent', () => {
     for (const reserved of ['dashboard', 'victoriametrics', 'cloudflared', 'blackbox', 'umami']) {
       assert.equal((await put(reserved, spec)).statusCode, 400, reserved)
     }
+    // The dashboard's pages: `/usage` is every app's usage, so no app may be called `usage`.
+    for (const page of ['usage', 'new', 'settings', 'login']) {
+      assert.equal((await put(page, spec)).statusCode, 400, page)
+    }
     // `app-<name>` is the alias Caddy reaches each app by: `app-blog` would answer for `blog`.
     assert.equal((await put('app-blog', spec)).statusCode, 400)
     // `<name>-blue` and `<name>-green` are the slots' services (ADR 0028).
@@ -841,6 +845,26 @@ describe('agent', () => {
     assert.equal(res.statusCode, 502)
     const stored = JSON.parse(await readFile(join(dir, 'apps/tagtape/app.json'), 'utf8'))
     assert.equal(stored.tag, '2.0.0')
+  })
+
+  it('records the last deploy, and the last one that worked when one fails', async () => {
+    await app.inject({ method: 'PUT', url: '/apps/tagtape', headers: auth, payload: spec })
+    const first = (await app.inject({ url: '/apps/tagtape', headers: auth })).json()
+    assert.equal(first.lastDeploy.ok, true)
+    assert.equal(first.lastDeploy.tag, '2.0.0')
+    docker.failWhen((args) => args.includes('pull'))
+    await app.inject({
+      method: 'PUT',
+      url: '/apps/tagtape',
+      headers: auth,
+      payload: { ...spec, tag: '9.9.9' },
+    })
+    const [listed] = (await app.inject({ url: '/apps', headers: auth })).json().apps
+    assert.equal(listed.lastDeploy.ok, false)
+    assert.equal(listed.lastDeploy.tag, '9.9.9')
+    assert.ok(listed.lastDeploy.error)
+    assert.equal(listed.lastDeploy.lastOkTag, '2.0.0')
+    assert.equal(listed.lastDeploy.lastOkAt, first.lastDeploy.at)
   })
 
   it('lists, shows logs for and removes apps', async () => {
@@ -1113,6 +1137,18 @@ describe('agent', () => {
         assert.deepEqual(db.calls.at(-1), ['listUsers', '50', ''], 'default limit')
       })
 
+      it("lists one app's users by its hosts, and counts the whole pool (ADR 0040)", async () => {
+        assert.equal((await put(dbSpec)).statusCode, 200)
+        assert.equal((await get('/pool/users?app=tagtape')).statusCode, 200)
+        assert.deepEqual(db.calls.at(-1), ['listUsers', '50', '', 'tagtape.app'])
+        assert.equal((await get('/pool/users?app=nope')).statusCode, 404)
+        assert.equal((await get('/pool/users?app=Bad_Name')).statusCode, 400)
+        const usage = await get('/pool/usage')
+        assert.equal(usage.statusCode, 200, usage.body)
+        assert.deepEqual(usage.json().accounts.active, { day: 1, week: 2, month: 3 })
+        assert.deepEqual(db.calls.at(-1), ['accountUsage', '(all)'])
+      })
+
       it("deletes a user: 204, then 404, and 409 when an app's key holds on", async () => {
         assert.equal((await del(`/pool/users/${GUEST_ID}`)).statusCode, 204)
         const other = '00000000-0000-4000-8000-000000000000'
@@ -1357,6 +1393,13 @@ describe('analytics (ADR 0038)', () => {
             previous: { views: 10, visitors: 4 },
             pages: [{ path: '/', views: 9 }],
             systems: [{ name: 'iOS', visitors: 3 }],
+            hostnames: [],
+            referrers: [],
+            countries: [],
+            devices: [],
+            browsers: [],
+            events: [],
+            perDay: [],
           }
         },
       },

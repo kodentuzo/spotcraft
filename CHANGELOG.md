@@ -10,6 +10,56 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-19
+
+### Added
+
+- **Showcase on the website:** `/showcase` lists the apps running on Spotcraft today, Sokobanko
+  and Vinskiano, and each has a page: what it is, the Spotcraft features it uses, dated numbers
+  from the dashboard, its story, its stack and screenshots. Each app is one Markdown file in
+  `apps/site/src/content/showcase/`.
+
+### Changed
+
+- **Docs:** in two parts, as hosting platforms split theirs. [Run Spotcraft](docs/run.md) is
+  for whoever owns the server, with a new page on [using the dashboard](docs/dashboard.md);
+  [Build apps](docs/build.md) is for the developers of the apps, with a new guide to
+  [developing locally](docs/guides/local-stack.md). Security, decisions and the changelogs are
+  shared. Every page keeps its address.
+- **Users pages:** the pool's Users page and an app's are now the same page: users and guests,
+  accounts active today, in 7 and 30 days, new accounts per day and app versions, then the
+  users with Delete. An app's lists the users with a session on it, last seen there
+  ([ADR 0040](docs/decisions/0040-admin-sees-app-users.md)). The agent's `GET /pool/users`
+  takes `?app=`, and `GET /pool/usage` gives the pool's counts.
+- **Dashboard sidebar:** every signed-in page gets a sidebar (instance domain and version, the
+  sections, Log out) and a header bar with an app switcher, the section's title and Add app; on
+  a phone the sidebar is a drawer. Each section (Overview, Usage, Logs, Server, Domains,
+  Backups, Users, Settings) shows every app, or the app picked in the switcher, app first:
+  `/<app>` and `/<app>/usage`. Adding an app is `/new`. Old `/apps/<app>` links redirect.
+  Above Log out, who is signed in: the Access email with its Gravatar, or "Admin" for the
+  password.
+- **App names** (breaking, unlikely to matter): the dashboard's pages are now reserved names,
+  since an app's pages are `/<app>/…`: `new`, `apps`, `api`, `hooks`, `login`, `logout`,
+  `usage`, `logs`, `server`, `domains`, `backups`, `users`, `settings`. To upgrade, rename an
+  app with one of these names first (add it under the new name, then remove the old one).
+- **Dashboard home:** an overview (apps running, server memory and disk, backups when set up)
+  above a list with a row per app: its icon (from its site) or initial, status, last deploy,
+  24 hourly uptime bars, memory against its limit, and visitors (or requests without
+  analytics). A failed backup, deploy or custom domain shows only when there is one. Apps
+  that need a look come first.
+- **App page:** a header with the app's icon, status and address (Redeploy, Edit, Visit);
+  failures first, then the deployment, its health and its usage totals. Its other pages are
+  the sidebar's sections for that app (Settings ends with Remove).
+- **Usage panels:** an app's Usage page opens with a chart of the last 7 days, with tabs for
+  visitors, page views, new accounts and requests and each one's change from the week
+  before. Then it breaks its visits down by page and host, referrer,
+  country, device and browser, operating system, custom event (`umami.track`) and app
+  version. The agent asks Umami for each; one Umami can't give stays empty.
+- **Agent:** records each app's last deploy (time, tag, and the error if it failed) in
+  `deploy.json`, and returns it as `lastDeploy` with the app
+  ([ADR 0039](docs/decisions/0039-app-status-at-a-glance.md)). Apps show it after their next
+  deploy.
+
 ## [0.7.0] - 2026-11-19
 
 Every app counts its usage, with no change to the app
@@ -541,7 +591,8 @@ handful of server-rendered apps from Docker Hub images behind HTTPS.
 - Servers: key-only SSH as a `deploy` user with modern algorithms only, root login refused,
   two firewalls, automatic security updates.
 
-[Unreleased]: https://github.com/kodentuzo/spotcraft/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/kodentuzo/spotcraft/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/kodentuzo/spotcraft/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/kodentuzo/spotcraft/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/kodentuzo/spotcraft/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/kodentuzo/spotcraft/compare/v0.5.2...v0.6.0

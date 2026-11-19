@@ -1,15 +1,26 @@
 # @spotcraft/site
 
-The Spotcraft website, [spotcraft.dev](https://spotcraft.dev): a home page and the
-documentation. Plain [Astro](https://astro.build) with no UI framework and no client-side
-JavaScript, published on GitHub Pages
+The Spotcraft website, [spotcraft.dev](https://spotcraft.dev): a home page, the
+documentation and a showcase of apps running on Spotcraft. Plain [Astro](https://astro.build)
+with no UI framework and no client-side JavaScript, published on GitHub Pages
 ([ADR 0024](../../docs/decisions/0024-website-on-pages.md)).
 
 ## How it works
 
-- **Pages** (`src/pages/`): `/` (home), `/docs`, every docs page at `/docs/<slug>`, and
-  `404.html` for GitHub Pages. Built as `x.html` files (`build.format: 'file'`), which Pages
-  serves at `/x`.
+- **Pages** (`src/pages/`): `/` (home), `/docs`, every docs page at `/docs/<slug>`, the
+  showcase, and `404.html` for GitHub Pages. Built as `x.html` files (`build.format: 'file'`),
+  which Pages serves at `/x`.
+- **Showcase** (`/showcase`, `/showcase/<app>`): an Astro content collection
+  (`src/content.config.ts`), one Markdown file per app in `src/content/showcase/`. The front
+  matter is typed: name, URLs, one line, what it is, the Spotcraft features it uses (the first
+  four are the card's tags), the numbers with the date they were read off the dashboard, the
+  stack and the screenshots. The body is the story. Adding an app is adding a file, its
+  screenshots and its page to the link check.
+- **Docs** come in two parts, one per reader, each with a landing page and a sidebar group:
+  **Run Spotcraft** (`docs/run.md`: setting up the server and using the dashboard) and **Build
+  apps** (`docs/build.md`: the app contract, the local stack, the kit, deploying from CI), then
+  a shared **Reference** group (security, decisions, changelogs). `NAV` in `src/lib/docs.ts`
+  holds the groups; pages keep their URLs whichever group they are in.
 - **Docs** are the repository's own Markdown, read at build time (`src/lib/docs.ts`):
   `docs/getting-started.md`, `docs/security.md`, `docs/guides/backend-kit.md`, the decision
   records and `CHANGELOG.md`. Links between those files become site links; any other repository
@@ -18,7 +29,10 @@ JavaScript, published on GitHub Pages
   `@spotcraft/ui/styles.css`, so it matches the dashboard. Dark mode follows the system.
   Button links (`src/components/ButtonLink.astro`) use spotstrap's `btn` classes.
 - **Content-Security-Policy**: a meta tag with `script-src 'none'` (`src/layouts/Base.astro`).
-- **Static files** (`public/`): `CNAME`, `robots.txt`, the favicon and the dashboard screenshots.
+- **Static files** (`public/`): `CNAME`, `robots.txt`, the favicon, the dashboard screenshots
+  (1280×800, light and dark, from the dashboard running on made-up demo apps) and the
+  showcase's screenshots (`public/showcase/`, 1280×800 WebP of the apps' public pages, light and
+  dark).
 
 ## Build
 

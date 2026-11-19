@@ -10,35 +10,37 @@ The files it writes are the only record of which apps exist:
 /opt/spotcraft/apps/<name>/app.json      settings sent by the dashboard
 /opt/spotcraft/apps/<name>/compose.yaml  generated Compose file (JSON, valid YAML)
 /opt/spotcraft/apps/<name>/secrets.json  generated database password (mode 600, never returned)
+/opt/spotcraft/apps/<name>/deploy.json   how the last deploy went: time, tag, ok or error
 /opt/spotcraft/sites/<name>.caddy        generated Caddy site block
 ```
 
 ## API
 
-| Method | Path                     | What                                                          |
-| ------ | ------------------------ | ------------------------------------------------------------- |
-| GET    | `/health`                | `{ ok: true }`, no token needed                               |
-| GET    | `/settings`              | `{ appsDomain?, edge, dns, access }`: what is set up          |
-| GET    | `/apps`                  | settings plus `state`, `health`, `status`, `hostnames`        |
-| GET    | `/apps/:name`            | one app, or 404                                               |
-| PUT    | `/apps/:name`            | create or update, then deploy; returns the app with status    |
-| DELETE | `/apps/:name`            | stop and remove the app and its site; 204, or 404             |
-|        |                          | `?purge=true` also deletes its database and role              |
-| GET    | `/apps/:name/domain`     | custom domain status and records still to create              |
-| GET    | `/apps/:name/logs`       | last `?tail=` lines (default 200, max 5000), plain text       |
-| GET    | `/apps/:name/hook-token` | `{ enabled }`: whether the app has a deploy hook              |
-| POST   | `/apps/:name/hook-token` | a new deploy hook token, returned once (201)                  |
-| DELETE | `/apps/:name/hook-token` | turn the deploy hook off; 204                                 |
-| POST   | `/apps/:name/release`    | `{ tag }` with `X-Hook-Token`: deploy that tag; 202           |
-| GET    | `/apps/:name/release`    | with `X-Hook-Token`: how the last release went                |
-| GET    | `/backups`               | `{ enabled, apps }`: every app's last backup, or null         |
-| GET    | `/apps/:name/backup`     | the app's last backup, or null                                |
-| POST   | `/apps/:name/backup`     | back it up now; the status (409 without backups)              |
-| GET    | `/apps/:name/usage`      | `{ visits?, accounts? }` over `?days=` (7): counts only       |
-| GET    | `/apps/:name/database`   | `{ layout }`: `schema`, `database` (its own) or `none`        |
-| POST   | `/apps/:name/move`       | `{ tag }`: move it from its own database into its schema      |
-| GET    | `/pool/users`            | the user pool's users, newest first (`?limit=`, `?cursor=`)   |
-| DELETE | `/pool/users/:id`        | delete a user and what every app kept for them; 204, 404, 409 |
+| Method | Path                     | What                                                                                                                                                               |
+| ------ | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| GET    | `/health`                | `{ ok: true }`, no token needed                                                                                                                                    |
+| GET    | `/settings`              | `{ appsDomain?, edge, dns, access }`: what is set up                                                                                                               |
+| GET    | `/apps`                  | settings plus `state`, `health`, `status`, `hostnames`, `lastDeploy`                                                                                               |
+| GET    | `/apps/:name`            | one app, or 404                                                                                                                                                    |
+| PUT    | `/apps/:name`            | create or update, then deploy; returns the app with status                                                                                                         |
+| DELETE | `/apps/:name`            | stop and remove the app and its site; 204, or 404                                                                                                                  |
+|        |                          | `?purge=true` also deletes its database and role                                                                                                                   |
+| GET    | `/apps/:name/domain`     | custom domain status and records still to create                                                                                                                   |
+| GET    | `/apps/:name/logs`       | last `?tail=` lines (default 200, max 5000), plain text                                                                                                            |
+| GET    | `/apps/:name/hook-token` | `{ enabled }`: whether the app has a deploy hook                                                                                                                   |
+| POST   | `/apps/:name/hook-token` | a new deploy hook token, returned once (201)                                                                                                                       |
+| DELETE | `/apps/:name/hook-token` | turn the deploy hook off; 204                                                                                                                                      |
+| POST   | `/apps/:name/release`    | `{ tag }` with `X-Hook-Token`: deploy that tag; 202                                                                                                                |
+| GET    | `/apps/:name/release`    | with `X-Hook-Token`: how the last release went                                                                                                                     |
+| GET    | `/backups`               | `{ enabled, apps }`: every app's last backup, or null                                                                                                              |
+| GET    | `/apps/:name/backup`     | the app's last backup, or null                                                                                                                                     |
+| POST   | `/apps/:name/backup`     | back it up now; the status (409 without backups)                                                                                                                   |
+| GET    | `/apps/:name/usage`      | `{ visits?, accounts? }` over `?days=` (7): counts, top pages, hosts, referrers, countries, devices, browsers, systems, events, per day; `?brief=true` totals only |
+| GET    | `/apps/:name/database`   | `{ layout }`: `schema`, `database` (its own) or `none`                                                                                                             |
+| POST   | `/apps/:name/move`       | `{ tag }`: move it from its own database into its schema                                                                                                           |
+| GET    | `/pool/users`            | the user pool's users, newest first (`?limit=`, `?cursor=`; `?app=` for one app's)                                                                                 |
+| DELETE | `/pool/users/:id`        | delete a user and what every app kept for them; 204, 404, 409                                                                                                      |
+| GET    | `/pool/usage`            | `{ accounts? }`: the whole pool's account counts, as an app's usage counts its own                                                                                 |
 
 `PUT` body (unknown fields are rejected):
 
@@ -62,7 +64,9 @@ App names: lower-case letters, digits and dashes, 2–32 characters. The names o
 own services (`caddy`, `cloudflared`, `agent`, `dashboard`, `auth`, `umami`, `postgres`,
 `victoriametrics`, `vmagent`, `blackbox`, `node-exporter`, `cadvisor`), since an app's service joins the same
 network, plus `www` and `fallback`, are reserved, and so is every name starting with `app-`
-(Caddy reaches each app as `app-<name>`). A host can belong to one app only: a custom domain
+(Caddy reaches each app as `app-<name>`). So are the dashboard's own pages, since an app's
+pages are `/<name>/…` there: `new`, `apps`, `api`, `hooks`, `login`, `logout`, `usage`, `logs`,
+`server`, `domains`, `backups`, `users`, `settings`. A host can belong to one app only: a custom domain
 can't be another app's default host, and no app may use `DASHBOARD_DOMAIN` or a reserved host
 of the apps domain such as `fallback.<APPS_DOMAIN>` (409). The apex itself may be an app's.
 
@@ -205,7 +209,9 @@ site then counts nothing, and after a start the agent keeps trying in the backgr
 `GET /apps/:name/usage` puts two counts together, each left out when its source can't answer:
 
 - `visits`, from Umami: views, visitors and visits over the last `days`, the same before, and
-  the top pages and operating systems;
+  and the top ten pages, hosts, referrers, countries (ISO codes), devices, browsers, operating
+  systems and custom events, and views and visitors per UTC day. A breakdown Umami refuses
+  stays empty, and the rest still show;
 - `accounts`, from the pool's sessions on the app's hosts: accounts active in the last day,
   7 days and 30 days, new accounts per day (their first session on these hosts), and active
   accounts per `Spotcraft-Client` value.
@@ -354,6 +360,11 @@ in the `auth` schema of the `apps` database. The pool grants it `SELECT` on `aut
   `guest` (no sign-up), `createdAt` and `lastSeen` (their most recently used session, or
   `null`). Pages hold `?limit=` users (default 50, max 200); pass `next` back as `?cursor=` for
   the older ones. `available` is false until the pool has set up `auth` and its grants.
+  With `?app=<name>` ([ADR 0040](../docs/decisions/0040-admin-sees-app-users.md)), only the users
+  with a session on the app's hosts, `lastSeen` from those sessions, and `total` and `guests`
+  counted among them; an unknown app answers 404.
+- `GET /pool/usage` returns the whole pool's `accounts` (active in a day, 7 and 30 days; new per
+  day; clients), the same shape as an app's usage, left out until the pool records hosts.
 - `DELETE /pool/users/:id` (a uuid) deletes the user. Their sessions, and every app's rows for
   them, go with them through the foreign keys' cascades. An app's foreign key that blocks the
   delete answers 409, naming its table.

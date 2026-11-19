@@ -1,0 +1,24 @@
+---
+// A 1280x800 screenshot that switches to its dark version with the system colour scheme.
+interface Props {
+  light: string
+  dark?: string | undefined
+  alt: string
+  class?: string
+  eager?: boolean
+}
+const { light, dark, alt, class: className, eager = false } = Astro.props
+---
+
+<picture>
+  {dark && <source srcset={dark} media="(prefers-color-scheme: dark)" />}
+  <img
+    src={light}
+    alt={alt}
+    width="1280"
+    height="800"
+    class:list={['aspect-[16/10] w-full border object-cover object-top', className]}
+    loading={eager ? 'eager' : 'lazy'}
+    fetchpriority={eager ? 'high' : undefined}
+  />
+</picture>

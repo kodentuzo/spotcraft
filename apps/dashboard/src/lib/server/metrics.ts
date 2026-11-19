@@ -58,6 +58,32 @@ export async function range(promql: string, minutes = 60, step = 60): Promise<Se
     .filter(([, v]) => Number.isFinite(v))
 }
 
+/** The last `minutes` of a query, one series per value of `label`. */
+export async function rangeBy(
+  promql: string,
+  label: string,
+  minutes = 60,
+  step = 60,
+): Promise<Record<string, Series>> {
+  const end = Math.floor(Date.now() / 1000)
+  const result = await query('/api/v1/query_range', {
+    query: promql,
+    start: String(end - minutes * 60),
+    end: String(end),
+    step: `${step}s`,
+  })
+  return Object.fromEntries(
+    result
+      .filter((row) => row.metric[label])
+      .map((row) => [
+        row.metric[label],
+        (row.values ?? [])
+          .map(([t, v]) => [t, Number(v)] as [number, number])
+          .filter(([, v]) => Number.isFinite(v)),
+      ]),
+  )
+}
+
 // Only valid app names (lower-case letters, digits, dashes) go into a selector; anything else
 // could change the query, so it is refused here whatever the caller checked.
 const appName = new RegExp(NAME)
@@ -80,12 +106,30 @@ export const promql = {
   appUp: (name: string) => `min(probe_success{${probes(name)}})`,
   appUptime: (name: string, window: string) =>
     `avg(avg_over_time(probe_success{${probes(name)}}[${window}]))`,
+  /** Memory of every app, keyed by its Compose project, for the home page. */
+  memoryByProject: `sum by (container_label_com_docker_compose_project) (container_memory_working_set_bytes{container_label_com_docker_compose_project=~"${projectName('')}.+"})`,
+  /** Each app's uptime per hour (its probes averaged), for a strip of bars. */
+  uptimeHourlyByApp: 'avg by (app) (avg_over_time(probe_success{job="probes"}[1h]))',
+  /** Requests in the 7 days before now (or the 7 before those), keyed by host. */
+  requestsWeekByHost: (offset = false) =>
+    `sum by (host) (increase(caddy_http_request_duration_seconds_count[7d]${offset ? ' offset 7d' : ''}))`,
+  /** Requests in each day before a point, keyed by host. */
+  requestsPerDayByHost: 'sum by (host) (increase(caddy_http_request_duration_seconds_count[1d]))',
+  /** Requests in the last 24 hours, keyed by Caddy's host label. */
+  requestsDayByHost: 'sum by (host) (increase(caddy_http_request_duration_seconds_count[24h]))',
+  /** The app's uptime per hour, for a strip of bars. */
+  appUptimeHourly: (name: string) => `avg(avg_over_time(probe_success{${probes(name)}}[1h]))`,
   uptimeByApp: (window: string) =>
     `avg by (app) (avg_over_time(probe_success{job="probes"}[${window}]))`,
   /** Requests to the app's hosts in the last 24 hours, and the 5xx among them. */
   appRequestsDay: (names: string[]) => `sum(increase(${requests(names)}[24h]))`,
   appErrorsDay: (names: string[]) =>
     `sum(increase(caddy_http_request_duration_seconds_count{${hostLabel(names)},code=~"5.."}[24h]))`,
+  /** Requests in the 7 days before now, or the 7 before those (`offset`). */
+  appRequestsWeek: (names: string[], offset = false) =>
+    `sum(increase(${requests(names)}[7d]${offset ? ' offset 7d' : ''}))`,
+  /** Requests in each day before a point, for a line over a week. */
+  appRequestsPerDay: (names: string[]) => `sum(increase(${requests(names)}[1d]))`,
   /** Requests per hour, for a line over a day. */
   appRequestsPerHour: (names: string[]) => `sum(rate(${requests(names)}[1h])) * 3600`,
   /** Caddy's own time for a request (to the app and back), 95th percentile over the last hour. */

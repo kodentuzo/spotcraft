@@ -246,6 +246,28 @@ describe('postgres app databases', {
       { client: 'android/1.3.0', active: 1 },
       { client: 'ios/1.4.0', active: 1 },
     ])
+
+    // The whole pool (ADR 0040): every host.
+    const all = await databases.accountUsage(null)
+    assert.deepEqual(all?.active, { day: 2, week: 3, month: 4 })
+    assert.deepEqual(all?.clients, [
+      { client: 'ios/1.4.0', active: 2 },
+      { client: 'android/1.3.0', active: 1 },
+    ])
+
+    // One app's users (ADR 0040): only those with a session on its hosts, last seen there.
+    const blog = await databases.listUsers({ limit: 10, hosts: ['blog.example.test', 'blog.test'] })
+    assert.equal(blog.total, 3)
+    assert.equal(blog.guests, 3)
+    assert.deepEqual(new Set(blog.users.map((u) => u.id)), new Set([a, b, c]))
+    const seenB = blog.users.find((u) => u.id === b)?.lastSeen ?? ''
+    assert.ok(Date.now() - Date.parse(seenB) > 4 * 86_400_000, 'from its blog session only')
+    const shop = await databases.listUsers({ limit: 10, hosts: ['shop.example.test'] })
+    assert.deepEqual(
+      shop.users.map((u) => u.id),
+      [d],
+    )
+    assert.equal((await databases.listUsers({ limit: 10 })).total, 4)
     await query(pool.toString(), 'DELETE FROM auth.users')
   })
   it("moves a kit app's guests, sessions and rows from its own database into its schema", async () => {

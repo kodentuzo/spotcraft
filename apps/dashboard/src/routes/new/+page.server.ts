@@ -30,6 +30,6 @@ export const actions: Actions = {
     if (!result.ok)
       return fail(502, { values, errors, deployError: result.error, output: result.output ?? null })
     await writeProbes(await listApps()).catch(() => {})
-    redirect(303, `/apps/${values.name}`)
+    redirect(303, `/${values.name}`)
   },
 }

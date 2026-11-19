@@ -19,7 +19,7 @@
 
 <svelte:head><title>Edit {data.values.name} · Spotcraft</title></svelte:head>
 
-<a href="/apps/{data.values.name}" class="text-sm text-muted-foreground hover:text-foreground">← {data.values.name}</a>
+<a href="/{data.values.name}" class="text-sm text-muted-foreground hover:text-foreground">← {data.values.name}</a>
 <h1 class="mt-2 mb-6 font-heading text-2xl font-bold">Edit {data.values.name}</h1>
 
 <AppForm

@@ -37,7 +37,10 @@ export const handle: Handle = async ({ event, resolve }) => {
   response.headers.set('X-Content-Type-Options', 'nosniff')
   response.headers.set('Referrer-Policy', 'same-origin')
   response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
-  // Nothing here should be cached by browsers or proxies: it's all behind a login.
-  response.headers.set('Cache-Control', 'no-store')
+  // Nothing here should be cached by browsers or proxies: it's all behind a login. A route that
+  // says otherwise keeps its own (only app icons, `private`, so never a shared cache).
+  if (!response.headers.get('Cache-Control')?.startsWith('private')) {
+    response.headers.set('Cache-Control', 'no-store')
+  }
   return response
 }

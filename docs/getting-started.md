@@ -159,5 +159,8 @@ an existing instance** in the [`infra/cloudflare` README](../infra/cloudflare/RE
 
 ## Next
 
+- [Using the dashboard](dashboard.md): every page, for all apps and for one.
+- [Backups and restoring](guides/backups.md): set up nightly backups before you need them.
+- [Build apps](build.md): for the developers of your apps, what Spotcraft gives an app and how
+  to work on one locally.
 - [Security model](security.md): what Spotcraft trusts and the risks it accepts.
-- [Decision records](decisions/README.md): why it's built the way it is.

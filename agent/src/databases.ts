@@ -257,7 +257,7 @@ export function postgresDatabases(
       }
     },
 
-    accountUsage: (hosts) =>
+    accountUsage: (hosts = null) =>
       inPool(async (db) => {
         const found = await db.query<{ ok: boolean }>(
           `SELECT EXISTS (SELECT FROM information_schema.columns WHERE table_schema = 'auth'
@@ -268,20 +268,22 @@ export function postgresDatabases(
           `SELECT count(DISTINCT user_id) FILTER (WHERE updated_at > now() - interval '1 day')::int AS day,
                   count(DISTINCT user_id) FILTER (WHERE updated_at > now() - interval '7 days')::int AS week,
                   count(DISTINCT user_id)::int AS month
-           FROM auth.sessions WHERE host = ANY($1) AND updated_at > now() - interval '30 days'`,
+           FROM auth.sessions WHERE ($1::text[] IS NULL OR host = ANY($1))
+             AND updated_at > now() - interval '30 days'`,
           [hosts],
         )
         const fresh = await db.query<{ day: Date; count: number }>(
           `SELECT date_trunc('day', first, 'UTC') AS day, count(*)::int AS count
-           FROM (SELECT min(created_at) AS first FROM auth.sessions WHERE host = ANY($1)
-                 GROUP BY user_id) firsts
+           FROM (SELECT min(created_at) AS first FROM auth.sessions
+                 WHERE $1::text[] IS NULL OR host = ANY($1) GROUP BY user_id) firsts
            WHERE first > now() - interval '30 days'
            GROUP BY 1 ORDER BY 1`,
           [hosts],
         )
         const clients = await db.query<{ client: string; active: number }>(
           `SELECT client, count(DISTINCT user_id)::int AS active FROM auth.sessions
-           WHERE host = ANY($1) AND client IS NOT NULL AND updated_at > now() - interval '30 days'
+           WHERE ($1::text[] IS NULL OR host = ANY($1)) AND client IS NOT NULL
+             AND updated_at > now() - interval '30 days'
            GROUP BY client ORDER BY 2 DESC, 1 LIMIT 20`,
           [hosts],
         )
@@ -294,7 +296,7 @@ export function postgresDatabases(
           clients: clients.rows,
         }
       }),
-    listUsers: ({ limit, cursor }) =>
+    listUsers: ({ limit, cursor, hosts = null }) =>
       inPool(async (db) => {
         const found = await db.query<{ ok: boolean }>(
           `SELECT to_regclass('auth.users') IS NOT NULL
@@ -302,6 +304,21 @@ export function postgresDatabases(
              AND has_table_privilege('auth.sessions', 'SELECT') AS ok`,
         )
         if (!found.rows[0]?.ok) return { available: false, total: 0, guests: 0, users: [] }
+        // For one app: the users with a session on its hosts, which the pool records from
+        // migration 0004 on. Before that, there's no one to list for an app.
+        if (hosts) {
+          const recorded = await db.query<{ ok: boolean }>(
+            `SELECT EXISTS (SELECT FROM information_schema.columns WHERE table_schema = 'auth'
+               AND table_name = 'sessions' AND column_name = 'host') AS ok`,
+          )
+          if (!recorded.rows[0]?.ok) return { available: true, total: 0, guests: 0, users: [] }
+        }
+        // Only with hosts does the SQL name `host`: a pool from before 0004 has no such column,
+        // and Postgres refuses a query that names one, whether or not it would be used.
+        const onHosts = (p: string) =>
+          hosts
+            ? `EXISTS (SELECT FROM auth.sessions h WHERE h.user_id = u.id AND h.host = ANY(${p}))`
+            : 'true'
         const after = cursor ? decodeCursor(cursor) : null
         const { rows } = await db.query<{
           id: string
@@ -310,15 +327,20 @@ export function postgresDatabases(
           last_seen: Date | null
         }>(
           `SELECT u.id, u.is_anonymous, u.created_at, max(s.updated_at) AS last_seen
-           FROM auth.users u LEFT JOIN auth.sessions s ON s.user_id = u.id
-           WHERE $1::timestamptz IS NULL OR (u.created_at, u.id) < ($1::timestamptz, $2::uuid)
+           FROM auth.users u
+           -- For one app, last seen there: only its hosts' sessions.
+           LEFT JOIN auth.sessions s ON s.user_id = u.id${hosts ? ' AND s.host = ANY($4)' : ''}
+           WHERE ($1::timestamptz IS NULL OR (u.created_at, u.id) < ($1::timestamptz, $2::uuid))
+             AND ${onHosts('$4')}
            GROUP BY u.id
            ORDER BY u.created_at DESC, u.id DESC
            LIMIT $3`,
-          [after?.[0] ?? null, after?.[1] ?? null, limit + 1],
+          [after?.[0] ?? null, after?.[1] ?? null, limit + 1, ...(hosts ? [hosts] : [])],
         )
         const counts = await db.query<{ total: number; guests: number }>(
-          'SELECT count(*)::int AS total, count(*) FILTER (WHERE is_anonymous)::int AS guests FROM auth.users',
+          `SELECT count(*)::int AS total, count(*) FILTER (WHERE is_anonymous)::int AS guests
+           FROM auth.users u WHERE ${onHosts('$1')}`,
+          hosts ? [hosts] : [],
         )
         const page = rows.slice(0, limit)
         const users: PoolUser[] = page.map((row) => ({
