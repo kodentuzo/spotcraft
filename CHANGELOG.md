@@ -27,7 +27,8 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
   country, device and browser, operating system, custom event (`umami.track`) and app
   version. The agent asks Umami for each; one Umami can't give stays empty.
 - **Agent:** records each app's last deploy (time, tag, and the error if it failed) in
-  `deploy.json`, and returns it as `lastDeploy` with the app. Apps show it after their next
+  `deploy.json`, and returns it as `lastDeploy` with the app
+  ([ADR 0039](docs/decisions/0039-app-status-at-a-glance.md)). Apps show it after their next
   deploy.
 
 ## [0.7.0] - 2026-11-19

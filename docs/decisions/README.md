@@ -42,3 +42,4 @@ that supersedes the old one; old records are never rewritten.
 | 0036 | [The kit becomes spotkit, outside this repository](0036-spotkit.md)                            | accepted                                     |
 | 0037 | [Each repository gets its own local stack](0037-local-stack-per-repo.md)                       | accepted                                     |
 | 0038 | [Every app gets usage numbers, collected by the platform with Umami](0038-analytics.md)        | accepted                                     |
+| 0039 | [Deploys are recorded, and the dashboard fetches app icons](0039-app-status-at-a-glance.md)    | accepted                                     |
