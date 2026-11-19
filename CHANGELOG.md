@@ -10,6 +10,14 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
 
 ## [Unreleased]
 
+### Fixed
+
+- **The contract's advice for Drizzle** ([docs/contracts.md](docs/contracts.md#database)).
+  Drizzle's `migrate()` and `drizzle-kit migrate` run `CREATE SCHEMA IF NOT EXISTS` first, which
+  Postgres refuses to an app's role even when its schema exists, so setting `migrationsSchema`
+  wasn't enough. The contract now shows a few lines that apply drizzle-kit's files in Drizzle's
+  own journal table.
+
 ## [0.6.0] - 2026-11-19
 
 ### Added
