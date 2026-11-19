@@ -20,7 +20,9 @@ dashboard.
   [the contract](../contracts.md#database). Reference `auth.users` from a file drizzle-kit
   doesn't read.
 - **Start the migrations again** from one that creates today's tables in the schema. The old
-  ones stay with the old database. Keep the migrator's table in the schema too.
+  ones stay with the old database. With Drizzle, apply them as
+  [the contract](../contracts.md#database) shows: Drizzle's own migrator can't run in an app's
+  schema.
 - **Let the server run them:** add a `dev.spotcraft.migrate` label to the image, and drop
   anything that migrates at startup.
 - **Answer `GET /health`**, or keep the image's `HEALTHCHECK`.
