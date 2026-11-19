@@ -15,7 +15,10 @@ export interface AppSpec {
   cpus: number
   /** Read-only root filesystem (with a small writable /tmp). */
   readOnly: boolean
-  /** Its own Postgres role and database on the server, given to it as DATABASE_URL. */
+  /**
+   * A schema of its own in the instance database (ADR 0034). Every app has one on a server with
+   * Postgres; the field is kept so older specs and the dashboard read the same.
+   */
   database: boolean
   /** Behind Cloudflare Access: visitors sign in as one of the owners first (ADR 0021). */
   protected?: boolean
@@ -61,7 +64,40 @@ export const RESERVED_NAMES = new Set([
   'cadvisor',
   'www',
   'fallback',
+  // The user pool: its container, and `auth.<APPS_DOMAIN>`, its address for bearer clients.
+  'auth',
 ])
+
+/**
+ * Env every container app gets from Spotcraft (ADR 0034), which its own env can't set. SMTP's
+ * come with instance SMTP; they are reserved already.
+ */
+export const PLATFORM_ENV = [
+  'PORT',
+  'PUBLIC_URL',
+  'APP_NAME',
+  'APP_RELEASE',
+  'APP_SECRET',
+  'DATABASE_URL',
+  'DATABASE_SCHEMA',
+  'AUTH_URL',
+  'AUTH_ISSUER',
+  'AUTH_JWKS_URL',
+  'SMTP_URL',
+  'MAIL_FROM',
+] as const
+
+/** Where the pool answers on every app's domain (ADR 0035). */
+export const POOL_PATH = '/_spotcraft/auth'
+
+/** The user pool's own host for bearer clients, `auth.<APPS_DOMAIN>`, serving `/main`. */
+export const poolHost = (appsDomain: string) => `auth.${appsDomain}`
+
+/** The app's public address: its custom domain, else its default host. */
+export function publicUrl(app: Pick<AppSpec, 'name' | 'domain'>, appsDomain?: string) {
+  const host = app.domain ?? (appsDomain ? defaultHost(app.name, appsDomain) : undefined)
+  return host ? `https://${host}` : undefined
+}
 
 /**
  * An app runs in one of two slots, which take turns: a deploy starts the other slot next to
@@ -145,6 +181,8 @@ export interface AgentSettings {
   dashboardDomain?: string
   /** Apps are backed up every night to a bucket (ADR 0030). */
   backups?: boolean
+  /** The user pool's `iss`; with it, apps get the AUTH_* env (ADR 0035). */
+  authIssuer?: string
 }
 
 /** The custom-domain hosts the agent sets up: the domain, and `www.` for a root domain. */

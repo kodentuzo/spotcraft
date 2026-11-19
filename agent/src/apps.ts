@@ -7,7 +7,9 @@ import {
   type DomainStatus,
   defaultHost,
   hostnames,
+  POOL_PATH,
   projectName,
+  publicUrl,
   servedHosts,
   slotService,
 } from './app-spec.ts'
@@ -16,7 +18,58 @@ import { CloudflareError } from './cloudflare.ts'
 import { DomainConflict, type Domains } from './domains.ts'
 import type { Runner, RunResult } from './runner.ts'
 import type { AppFiles, Store } from './store.ts'
-import { composeService, renderCompose, renderSite } from './templates.ts'
+import {
+  composeService,
+  renderCompose,
+  renderPoolSite,
+  renderSite,
+  upstreamAlias,
+} from './templates.ts'
+
+/** The image label naming the command that migrates the app before it starts (ADR 0034). */
+export const MIGRATE_LABEL = 'dev.spotcraft.migrate'
+
+/** How long migrations may run, and how long an app without a HEALTHCHECK has to answer. */
+const MIGRATE_SECONDS = 300
+const PROBE_SECONDS = 120
+
+/** The user pool's site file, `sites/_auth.caddy`; app names can't start with `_`. */
+const POOL_SITE = '_auth'
+
+/**
+ * What the agent needs from an image: the migrate command from its label, and whether it has
+ * a HEALTHCHECK. Unknown (an inspect that failed) counts as having one, as before.
+ */
+export function readImageConfig(inspected: string): { migrate?: string[]; healthcheck: boolean } {
+  let config: { Labels?: Record<string, string> | null; Healthcheck?: { Test?: string[] } | null }
+  try {
+    config = JSON.parse(inspected)
+  } catch {
+    return { healthcheck: true }
+  }
+  const test = config?.Healthcheck?.Test
+  const healthcheck = Boolean(test && test.length > 0 && test[0] !== 'NONE')
+  const label = config?.Labels?.[MIGRATE_LABEL]
+  if (label === undefined) return { healthcheck }
+  let migrate: unknown
+  try {
+    migrate = JSON.parse(label)
+  } catch {
+    throw new AgentError(`The image's ${MIGRATE_LABEL} label isn't JSON`, 400)
+  }
+  if (
+    !Array.isArray(migrate) ||
+    migrate.length === 0 ||
+    migrate.length > 32 ||
+    !migrate.every((part) => typeof part === 'string' && part.length > 0 && part.length <= 1024)
+  ) {
+    throw new AgentError(
+      `The image's ${MIGRATE_LABEL} label must be a JSON array of the command and its arguments`,
+      400,
+    )
+  }
+  return { migrate: migrate as string[], healthcheck }
+}
 
 /** Where the user pool's backups go in the bucket, and its key in `backupAll`'s result. */
 export const POOL_BACKUP = '_auth'
@@ -144,6 +197,13 @@ export class Apps {
   readonly #store: Store
   readonly #run: Runner
   readonly #caddyContainer: string
+  /** Whether apps get a schema: the server has Postgres (ADR 0034). */
+  get hasDatabases(): boolean {
+    return Boolean(this.#databases)
+  }
+
+  /** How an image without a HEALTHCHECK is waited for; tests shorten it. */
+  probe = { intervalMs: 2000, seconds: PROBE_SECONDS }
   readonly #databases: Databases | undefined
   readonly settings: AgentSettings
   readonly #domains: Domains | undefined
@@ -520,21 +580,47 @@ export class Apps {
    * new slot is healthy, so an agent that stops mid-deploy restarts with the live slot's files
    * (`recover`).
    */
-  async #rollOut(spec: AppSpec): Promise<AppStatus> {
-    const databaseEnv = spec.database ? await this.#provision(spec.name) : undefined
+  async #rollOut(requested: AppSpec): Promise<AppStatus> {
+    // Every app has a schema on a server with Postgres, including one released by its hook
+    // from a spec stored before ADR 0034.
+    const spec = { ...requested, database: this.hasDatabases }
+    const env = await this.#platformEnv(spec)
     const previous = await this.#store.read(spec.name)
     const live = previous ? composeService(previous.compose) : undefined
     const slot = live === slotService(spec.name, 'blue') ? 'green' : 'blue'
     const service = slotService(spec.name, slot)
     await this.#store.stage(spec.name, {
       spec: `${JSON.stringify(spec, null, 2)}\n`,
-      compose: renderCompose(spec, service, databaseEnv),
+      compose: renderCompose(spec, service, env),
     })
 
     const pull = await this.#compose(spec.name, ['pull', '--quiet'], { staged: true })
     if (pull.code !== 0) {
       await this.#abandon(spec.name, service, previous)
       throw new AgentError(`Could not pull ${spec.image}:${spec.tag}`, 502, tail(pull))
+    }
+    let image: { migrate?: string[]; healthcheck: boolean }
+    try {
+      const inspected = await this.#run('docker', [
+        'image',
+        'inspect',
+        '--format',
+        '{{json .Config}}',
+        `${spec.image}:${spec.tag}`,
+      ])
+      image = readImageConfig(inspected.code === 0 ? inspected.stdout : '')
+    } catch (error) {
+      await this.#abandon(spec.name, service, previous)
+      throw error
+    }
+    // Migrations first, in a container of the new image, while the live slot still serves
+    // (they only add, ADR 0028). If they fail, nothing has changed for visitors.
+    if (image.migrate) {
+      const migrated = await this.#migrate(spec, service, image.migrate)
+      if (migrated.code !== 0) {
+        await this.#abandon(spec.name, service, previous)
+        throw new AgentError(`The migrations of ${spec.name} failed`, 502, tail(migrated))
+      }
     }
     // Only the new slot's service, and no --remove-orphans: the live slot's container isn't in
     // this compose file, and must keep running.
@@ -545,7 +631,9 @@ export class Apps {
         staged: true,
       },
     )
-    if (up.code !== 0) {
+    // An image without a HEALTHCHECK is only "running" now: wait until it answers.
+    const ready = up.code === 0 && !image.healthcheck ? await this.#probe(spec, service) : up
+    if (ready.code !== 0) {
       const logs = await this.#compose(spec.name, ['logs', '--tail', '50', '--no-color'], {
         staged: true,
       })
@@ -553,7 +641,7 @@ export class Apps {
       throw new AgentError(
         `${spec.name} did not start or become healthy`,
         502,
-        `${tail(up)}\n${tail(logs)}`,
+        `${tail(ready)}\n${tail(logs)}`,
       )
     }
     // The new slot is healthy: point the site at it, then commit. A restart before the commit
@@ -674,7 +762,11 @@ export class Apps {
       const site = renderSite(spec, this.settings, service)
       if (files.site !== site) pending.push({ spec, files, site })
     }
-    if (pending.length === 0) return []
+    // The user pool's own host follows the apps domain and the edge, like the apps' sites.
+    const poolSite = renderPoolSite(this.settings)
+    const previousPoolSite = await this.#store.readSite(POOL_SITE)
+    const poolChanged = previousPoolSite !== poolSite
+    if (pending.length === 0 && !poolChanged) return []
     // Protected apps' new hosts go behind Access before Caddy serves them, next to the old
     // ones: whatever fails from here on (another app's Access update, Caddy's reload), every
     // host that might be served stays protected. It narrows to the new hosts at the end.
@@ -689,11 +781,13 @@ export class Apps {
     }
     for (const { spec, files, site } of pending)
       await this.#store.write(spec.name, { ...files, site })
+    if (poolChanged) await this.#store.writeSite(POOL_SITE, poolSite)
     const reload = await this.#reloadCaddy()
     if (reload.code !== 0) {
       // Put the previous sites back, so Caddy keeps a configuration it accepts; the next
       // attempt rewrites them again.
       for (const { spec, files } of pending) await this.#store.write(spec.name, files)
+      if (poolChanged) await this.#store.writeSite(POOL_SITE, previousPoolSite ?? '')
       await this.#reloadCaddy()
       throw new AgentError('Caddy rejected the rewritten sites', 500, tail(reload))
     }
@@ -706,7 +800,109 @@ export class Apps {
           .catch(() => {})
       }
     }
-    return pending.map((p) => p.spec.name)
+    return [...pending.map((p) => p.spec.name), ...(poolChanged ? [POOL_SITE] : [])]
+  }
+
+  /**
+   * The env Spotcraft gives the app (ADR 0034), which wins over its own: its port, name,
+   * release, secret and address; the user pool's (with an issuer and an address); its schema
+   * (on a server with Postgres).
+   */
+  async #platformEnv(spec: AppSpec): Promise<Record<string, string>> {
+    // The schema first: if it can't be prepared, nothing about the app is written yet.
+    const database = this.#databases ? await this.#provision(spec.name) : {}
+    const env: Record<string, string> = {
+      PORT: String(spec.port),
+      APP_NAME: spec.name,
+      APP_RELEASE: spec.tag,
+      APP_SECRET: await this.#appSecret(spec.name),
+    }
+    const url = publicUrl(spec, this.settings.appsDomain)
+    if (url) env.PUBLIC_URL = url
+    if (url && this.settings.authIssuer) {
+      env.AUTH_URL = `${url}${POOL_PATH}`
+      env.AUTH_ISSUER = this.settings.authIssuer
+      env.AUTH_JWKS_URL = `${url}${POOL_PATH}/jwks`
+    }
+    return { ...env, ...database }
+  }
+
+  /** The app's APP_SECRET: 32 random bytes, made on its first deploy and kept in secrets.json. */
+  async #appSecret(name: string): Promise<string> {
+    const stored = (await this.#store.readSecrets(name)).appSecret
+    if (stored) return stored
+    return this.#withSecrets(async () => {
+      const current = await this.#store.readSecrets(name)
+      if (current.appSecret) return current.appSecret
+      const appSecret = randomBytes(32).toString('base64url')
+      await this.#store.writeSecrets(name, { ...current, appSecret })
+      return appSecret
+    })
+  }
+
+  /**
+   * Runs the image's migrate command once, in a container of the new slot's service: the app's
+   * env, network and limits, the command in place of the image's entrypoint. It has
+   * MIGRATE_SECONDS; the container is removed either way.
+   */
+  async #migrate(spec: AppSpec, service: string, command: string[]): Promise<RunResult> {
+    const container = `${projectName(spec.name)}-migrate`
+    await this.#run('docker', ['rm', '--force', container])
+    const [entrypoint, ...args] = command
+    const result = await this.#run(
+      'docker',
+      [
+        'compose',
+        '-p',
+        projectName(spec.name),
+        '-f',
+        this.#store.stagedComposePath(spec.name),
+        'run',
+        '--rm',
+        '--no-deps',
+        '-T',
+        '--name',
+        container,
+        '--entrypoint',
+        entrypoint,
+        service,
+        ...args,
+      ],
+      (MIGRATE_SECONDS + 15) * 1000,
+    )
+    if (result.code !== 0) await this.#run('docker', ['rm', '--force', container])
+    return result
+  }
+
+  /**
+   * For an image without a HEALTHCHECK: asks the new slot for `GET /health` from Caddy's
+   * container (which shares its network) until it answers. 2xx is healthy; 404 means the app
+   * has no such route but answers on its port, which is enough. Anything else, or no answer,
+   * is tried again for PROBE_SECONDS.
+   */
+  async #probe(spec: AppSpec, service: string): Promise<RunResult> {
+    const url = `http://${upstreamAlias(service)}:${spec.port}/health`
+    const deadline = Date.now() + this.probe.seconds * 1000
+    let last: RunResult = { code: 1, stdout: '', stderr: 'not tried' }
+    while (Date.now() < deadline) {
+      last = await this.#run('docker', [
+        'exec',
+        this.#caddyContainer,
+        'wget',
+        '-q',
+        '-O',
+        '/dev/null',
+        '-T',
+        '3',
+        url,
+      ])
+      if (last.code === 0 || /\b404\b/.test(last.stderr)) return { ...last, code: 0 }
+      await new Promise((resolve) => setTimeout(resolve, this.probe.intervalMs))
+    }
+    return {
+      ...last,
+      stderr: `No answer from ${url} within ${this.probe.seconds} s: ${last.stderr}`,
+    }
   }
 
   /** Prepares the app's database with its stored password (generated the first time). */

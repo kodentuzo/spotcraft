@@ -15,7 +15,6 @@
     memory: string
     cpus: string
     readOnly: boolean
-    database: boolean
     protected: boolean
     env: string
     takeOver: boolean
@@ -157,7 +156,8 @@
       <Label for="env">Environment variables</Label>
       <Textarea id="env" name="env" value={values.env} rows={6} class="font-mono" placeholder={'LOG_LEVEL=info\nTRUST_PROXY=1'} spellcheck={false} aria-invalid={errors.env ? true : undefined} />
       <p class={['text-xs', errors.env ? 'text-destructive' : 'text-muted-foreground']}>
-        {errors.env ?? 'One KEY=value per line. Lines starting with # are ignored.'}
+        {errors.env ??
+          'One KEY=value per line. Lines starting with # are ignored. Spotcraft sets PORT, PUBLIC_URL, APP_*, DATABASE_* and AUTH_* itself.'}
       </p>
     </div>
 
@@ -166,16 +166,6 @@
       <span class="text-sm">
         Read-only filesystem
         <span class="block text-xs text-muted-foreground">Recommended. The app can still write to a small /tmp.</span>
-      </span>
-    </label>
-
-    <label class="flex items-start gap-3 sm:col-span-2">
-      <input type="checkbox" name="database" checked={values.database} class="mt-1 size-4 accent-foreground" />
-      <span class="text-sm">
-        Database
-        <span class="block text-xs text-muted-foreground">
-          Its own schema in the server's Postgres, given to the app as DATABASE_URL and DATABASE_SCHEMA. Turning this off later keeps the data.
-        </span>
       </span>
     </label>
 

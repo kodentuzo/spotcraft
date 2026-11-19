@@ -94,9 +94,12 @@ The server runs them, before the new version starts:
 
 ```dockerfile
 LABEL dev.spotcraft.migrate='["node", "dist/migrate.js"]'
+# in a distroless image, where node isn't on the PATH:
+LABEL dev.spotcraft.migrate='["/nodejs/bin/node", "dist/migrate.js"]'
 ```
 
-- The label is a JSON array: the command and its arguments, run without a shell.
+- The label is a JSON array: the command and its arguments, run without a shell. It replaces
+  the image's entrypoint and command.
 - It runs once per deploy, in a container from the new image, with the app's env and limits.
   Exit 0 to go on; anything else fails the deploy, and the running version keeps serving. It has
   5 minutes.
@@ -136,6 +139,7 @@ Users come from the instance's pool. Today they are all guests.
 
 ## What the app does
 
-- **Health:** a `HEALTHCHECK` in the image, or `GET /health` answering 200 when ready.
+- **Health:** a `HEALTHCHECK` in the image. Without one, Spotcraft asks for `GET /health` until
+  it answers 2xx; a 404 counts too (the app answers, without that route). It waits 120 seconds.
 - **Stop:** finish within 30 seconds of SIGTERM.
 - **Logs:** to stdout, ideally JSON lines with `level`, `msg` and `time`.

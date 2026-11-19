@@ -110,6 +110,8 @@ services:
       APPS_DOMAIN: ${APPS_DOMAIN:-}
       # Served by the same Caddy: no app may take this host (ADR 0026).
       DASHBOARD_DOMAIN: ${DASHBOARD_DOMAIN}
+      # The user pool's `iss`, the same as the auth service's: apps get it as AUTH_ISSUER.
+      AUTH_ISSUER: https://${DASHBOARD_DOMAIN}/pools/main
       # cloudflare: site blocks are plain HTTP, the tunnel brings requests to Caddy (ADR 0021).
       EDGE: ${EDGE:-direct}
       # Optional, all four together: custom domains' DNS through the Cloudflare API.

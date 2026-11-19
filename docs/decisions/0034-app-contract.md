@@ -6,7 +6,7 @@ implementation: planned
 date: 2026-11-19
 supersedes: [15, 30]
 superseded_by: []
-notes: "Supersedes ADR 0015 (a database per app, opt-in) and the per-database dumps of ADR 0030. Wave 1 builds the instance database with a schema per app, the reserved env vars, migrations run by the server, and /_spotcraft/auth. Static apps, analytics, SMTP and the other defaults come in wave 2. To check while building: drizzle-kit with the app's schema on the search path."
+notes: "Supersedes ADR 0015 (a database per app, opt-in) and the per-database dumps of ADR 0030. Built: the apps database with a schema per app (every app on a server with Postgres; `database` in a PUT is ignored), the reserved env vars (refused in an app's env, with APP_SECRET kept in secrets.json), migrations from the image label run with docker compose run in place of the entrypoint, the /health probe from Caddy's container for images without a HEALTHCHECK, /_spotcraft/auth on every site and the pool's own site at auth.<APPS_DOMAIN>/main. Static apps, analytics, SMTP and the other defaults come in wave 2. To check while building: drizzle-kit with the app's schema on the search path."
 ---
 
 # Every app gets the same small contract, with no switches

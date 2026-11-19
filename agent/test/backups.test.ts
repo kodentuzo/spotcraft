@@ -158,12 +158,14 @@ describe('backups', () => {
     await rm(dir, { recursive: true, force: true })
   })
 
-  it('backs up each app: its dump if it has a database, its settings either way', async () => {
+  it('backs up each app: its schema dump and its settings', async () => {
     const results = await apps.backupAll()
     assert.deepEqual(Object.keys(results).sort(), ['site', 'sokobanko'])
-    assert.deepEqual(dumped, ['sokobanko'])
+    // Every app has a schema on a server with Postgres (ADR 0034).
+    assert.deepEqual(dumped.sort(), ['site', 'sokobanko'])
     assert.deepEqual([...bucket.objects.keys()].sort(), [
       'site/20261114T030000Z/app.json',
+      'site/20261114T030000Z/database.dump',
       'site/20261114T030000Z/secrets.json',
       'sokobanko/20261114T030000Z/app.json',
       'sokobanko/20261114T030000Z/database.dump',
