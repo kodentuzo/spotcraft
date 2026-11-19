@@ -12,6 +12,11 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
 
 ### Changed
 
+- **Dashboard home:** an overview (apps running, server memory and disk, backups when set up)
+  above a list with a row per app: its icon (from its site) or initial, status, last deploy,
+  24 hourly uptime bars, memory against its limit, and visitors (or requests without
+  analytics). A failed backup, deploy or custom domain shows only when there is one. Apps
+  that need a look come first.
 - **Agent:** records each app's last deploy (time, tag, and the error if it failed) in
   `deploy.json`, and returns it as `lastDeploy` with the app. Apps show it after their next
   deploy.
