@@ -54,8 +54,7 @@
   <nav aria-label="Main" class="min-h-0 flex-1 overflow-y-auto p-2">
     {#await data.settings then settings}
       {#each SECTIONS as group, i (i)}
-        {#if i > 0}<hr class="my-2 border-sidebar-border" />{/if}
-        <ul class="space-y-0.5">
+        <ul class="space-y-0.5 {i > 0 ? 'mt-0.5' : ''}">
           {#each group as item (item.id)}
             {#if item.id !== 'backups' || settings?.backups}
               {@const current = scope.section === item.id}
