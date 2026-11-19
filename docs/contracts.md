@@ -163,12 +163,15 @@ LABEL dev.spotcraft.migrate='["/nodejs/bin/node", "dist/migrate.js"]'
 
 `/_spotcraft/*` on every app domain belongs to the platform:
 
-| Path                 | What                               |
-| -------------------- | ---------------------------------- |
-| `/_spotcraft/auth/*` | The user pool (Better Auth's API). |
+| Path                      | What                                                                  |
+| ------------------------- | --------------------------------------------------------------------- |
+| `/_spotcraft/auth/*`      | The user pool (Better Auth's API).                                    |
+| `/_spotcraft/s.js`        | The analytics script (Umami's tracker).                               |
+| `/_spotcraft/e`           | Where analytics events go (Umami's collect endpoint).                 |
+| `/_spotcraft/config.json` | The app's analytics settings, for clients that send their own events. |
+| `/_spotcraft/privacy`     | What Spotcraft counts for the app, and how to opt out.                |
 
-Analytics will add `/_spotcraft/s.js` and `/_spotcraft/e`. `/_spotcraft/webhook` is kept for
-calls from the platform to the app.
+`/_spotcraft/webhook` is kept for calls from the platform to the app.
 
 ## Users
 
@@ -188,6 +191,38 @@ Users come from the instance's pool. Today they are all guests.
   bearer token it is sent.
 - **App data** points at the user with a foreign key, `on delete cascade` or `on delete set
   null`. Deleting a user deletes their rows in every app. A key that blocks the delete is a bug.
+
+## Analytics
+
+Spotcraft counts how each app is used, with Umami on the instance
+([ADR 0038](decisions/0038-analytics.md)). Nothing goes to an outside service, and nothing
+collected holds an id, personal data or a cookie.
+
+**What needs no change to the app:**
+
+- **Page views:** Caddy adds
+  `<script defer src="/_spotcraft/s.js" data-website-id="…"></script>` before `</head>` in
+  `text/html` responses. A CSP of `script-src 'self'` allows it.
+- **Requests:** requests, errors and latency per app, from Caddy.
+- **Accounts:** new and active pool accounts per app, from the host each session was made or
+  renewed on.
+
+**Clients that can't be injected** (Expo, Electron) use `@kodentuzo/spotkit/client`, or do the
+same by hand:
+
+- `GET <app URL>/_spotcraft/config.json` answers
+  `{ "analytics": { "websiteId": "<uuid>", "enabled": true } }`. With `enabled: false`, send
+  nothing.
+- Screens and events go to `POST <app URL>/_spotcraft/e` as Umami event payloads, with a
+  User-Agent that names the platform. Event data must not hold ids or personal data.
+- Requests to the pool may carry `Spotcraft-Client: <platform>/<version>`, such as `ios/1.4.0`:
+  lowercase letters and dashes, a slash, then up to 32 characters of letters, digits and `.+-`.
+  The pool keeps it on the session to count platforms and versions; anything else is ignored.
+- A native app shows an opt-out, and sends nothing once it's off.
+
+**Analytics on or off** is a setting per app, on by default. Off removes the script and makes
+`config.json` say `enabled: false`. Use it for an app with a nonce-only CSP, or one that mustn't
+count.
 
 ## What the app does
 
