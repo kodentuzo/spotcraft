@@ -63,14 +63,15 @@ services:
       edge:
         gw_priority: 1
       web: {}
-    # The admin API only answers once the config has loaded.
+    # The admin API only answers once the config has loaded. node:http, not fetch: fetch sends
+    # `Sec-Fetch-Mode: cors`, and the admin API refuses that without an allowed Origin (403).
     healthcheck:
       test:
         [
           "CMD",
           "/nodejs/bin/node",
           "-e",
-          "fetch('http://127.0.0.1:2019/config/').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))",
+          "require('node:http').get('http://127.0.0.1:2019/config/', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))",
         ]
       interval: 30s
       timeout: 5s
