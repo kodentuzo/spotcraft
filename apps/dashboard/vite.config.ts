@@ -21,7 +21,8 @@ export default defineConfig({
           'default-src': ['self'],
           'script-src': ['self'],
           'style-src': ['self', 'unsafe-inline'],
-          'img-src': ['self', 'data:'],
+          // Gravatar for the signed-in account's picture (by a hash of the email, no referrer).
+          'img-src': ['self', 'data:', 'https://gravatar.com'],
           'font-src': ['self'],
           'connect-src': ['self'],
           // Log out through Cloudflare Access redirects on to the team domain, and form-action

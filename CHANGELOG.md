@@ -17,6 +17,8 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
   a phone the sidebar is a drawer. Each section (Overview, Usage, Logs, Server, Domains,
   Backups, Users, Settings) shows every app, or the app picked in the switcher, app first:
   `/<app>` and `/<app>/usage`. Adding an app is `/new`. Old `/apps/<app>` links redirect.
+  Above Log out, who is signed in: the Access email with its Gravatar, or "Admin" for the
+  password.
 - **App names** (breaking, unlikely to matter): the dashboard's pages are now reserved names,
   since an app's pages are `/<app>/…`: `new`, `apps`, `api`, `hooks`, `login`, `logout`,
   `usage`, `logs`, `server`, `domains`, `backups`, `users`, `settings`. To upgrade, rename an

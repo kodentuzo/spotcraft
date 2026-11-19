@@ -26,6 +26,11 @@
     const box = switcherButton.getBoundingClientRect()
     switcherAt = { top: box.bottom + 4, left: box.left }
   }
+  let avatarFailed = $state(false)
+  // A picture that failed before the page hydrated fired its error event too early: check it.
+  const checkAvatar = (img: HTMLImageElement) => {
+    if (img.complete && img.naturalWidth === 0) avatarFailed = true
+  }
   const closeAll = () => {
     drawer?.hidePopover()
     switcher?.hidePopover()
@@ -70,12 +75,24 @@
     {/await}
   </nav>
 
-  <form method="POST" action="/logout" class="border-t border-sidebar-border p-2">
+  <!-- Who is signed in: the Access email and its Gravatar, or the password. -->
+  <div class="flex min-h-11 items-center gap-3 border-t border-sidebar-border px-4 pt-2" title={data.accessEmail ?? 'Signed in with the dashboard password'}>
+    <span class="relative flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-sidebar-accent text-caption-1 font-medium uppercase">
+      {(data.accessEmail ?? 'Admin').charAt(0)}
+      {#if data.avatar && !avatarFailed}
+        <img src={data.avatar} alt="" width="28" height="28" class="absolute inset-0 size-full object-cover" referrerpolicy="no-referrer" onerror={() => (avatarFailed = true)} {@attach checkAvatar} />
+      {/if}
+    </span>
+    <span class="min-w-0">
+      <span class="block truncate text-footnote">{data.accessEmail ?? 'Admin'}</span>
+      {#if !data.accessEmail}<span class="block text-caption-1 text-muted-foreground">Signed in with the password</span>{/if}
+    </span>
+  </div>
+  <form method="POST" action="/logout" class="p-2">
     <button type="submit" class="flex min-h-9 w-full items-center gap-3 px-2.5 text-footnote text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground">
       <Icon name="logout" class="size-4" />Log out
     </button>
   </form>
-  {#if data.accessEmail}<p class="truncate px-4 pb-3 text-caption-1 text-muted-foreground" title={data.accessEmail}>{data.accessEmail}</p>{/if}
 {/snippet}
 
 {#if data.authed}

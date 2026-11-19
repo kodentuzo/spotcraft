@@ -6,8 +6,8 @@ VictoriaMetrics. It has no database: the agent's files are the app list.
 
 ## Screens
 
-Signed-in pages share a sidebar (the instance's domain and version, the sections below, and Log
-out) and a header bar (a switcher for the app the page is about, the section's title, Add app).
+Signed-in pages share a sidebar (the instance's domain and version, the sections below, who is
+signed in, and Log out) and a header bar (a switcher for the app the page is about, the section's title, Add app).
 On a phone the sidebar opens as a drawer from the header's menu button.
 
 Every section has two scopes, chosen in the switcher: every app (`/usage`) or one, the app
@@ -102,4 +102,7 @@ docker build .                                     # the spotcraft image, from t
 - Session cookie: `httpOnly`, `SameSite=Strict`, HMAC-signed with an expiry (7 days).
 - Form posts get SvelteKit's origin check; pages send a nonce-based CSP, `X-Frame-Options: DENY`
   and `Cache-Control: no-store`, except app icons (`private, max-age=3600`).
+- The sidebar shows who is signed in: the Access email and its Gravatar, or "Admin" for the
+  password. The CSP allows images from `https://gravatar.com` for that alone; the picture is
+  asked for by the SHA-256 of the email, never the email, with no referrer.
 - App settings are validated with the agent's own rules (`@spotcraft/agent/app-spec`).
