@@ -1,11 +1,11 @@
 ---
 title: The dashboard lists and deletes an app's users
 number: 18
-status: accepted
+status: superseded
 implementation: done
 date: 2026-11-08
 supersedes: []
-superseded_by: []
+superseded_by: [35]
 notes: "Banning, editing and impersonation are left for later."
 ---
 

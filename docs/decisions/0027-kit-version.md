@@ -1,11 +1,11 @@
 ---
 title: The kit has its own version
 number: 27
-status: accepted
+status: superseded
 implementation: done
 date: 2026-11-13
 supersedes: [19]
-superseded_by: []
+superseded_by: [36]
 notes: "Partly supersedes ADR 0019: the kit no longer carries the project's version. The rest of 0019 (one version for everything else, the public API, 0.y.z rules, trusted publishing) stands. Built: kit-v* tags and their CI job, the release check, per-package pinning, the kit's changelog."
 ---
 
