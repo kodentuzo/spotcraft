@@ -5,7 +5,7 @@ status: accepted
 implementation: skeleton
 date: 2026-11-19
 supersedes: []
-superseded_by: []
+superseded_by: [40]
 notes: "Fills in the analytics that ADR 0034 lists among what Spotcraft does. Built: Umami 3.4.1 on the server and in spotcraft dev, with its own database and role and nightly dumps. Found while building: TRACKER_SCRIPT_NAME and COLLECT_API_ENDPOINT serve the tracker and the collect endpoint at /_spotcraft/s.js and /_spotcraft/e, and Umami rewrites its script to send there, so its container is not read-only. It uses about 360 MB once started. Its bot filter drops Android's default User-Agent (okhttp), so native clients send a browser-style one. It starts with the default admin account, which the agent replaces with UMAMI_ADMIN_PASSWORD when it first signs in. Built in step 3: Caddy 2.11.9 with replace-response (pinned commit 80962887e4c6) inside Spotcraft's one image (ADR 0025) rather than a second published image, so the agent's health probe runs with Node there instead of wget; the four routes and the injection per site; a website per app, made on deploy and backfilled after a start, its id in secrets.json; the Analytics switch (`analytics: false`). Built in step 4: the pool's sessions record host and client (migration 0004, Better Auth's session hooks, which see the request in 1.7.25 and run on the daily renewal); GET /apps/:name/usage with Umami's stats and the pool's counts; Caddy's per-host metrics on :2020 for the web network only; the dashboard's Usage section. Caddy counts each request once per host (handler subroute), with the status code on its duration histogram. To build: the client package. Still to check: whether Umami prunes old events."
 ---
 

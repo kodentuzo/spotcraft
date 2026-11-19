@@ -12,6 +12,11 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
 
 ### Changed
 
+- **Users pages:** the pool's Users page and an app's are now the same page: users and guests,
+  accounts active today, in 7 and 30 days, new accounts per day and app versions, then the
+  users with Delete. An app's lists the users with a session on it, last seen there
+  ([ADR 0040](docs/decisions/0040-admin-sees-app-users.md)). The agent's `GET /pool/users`
+  takes `?app=`, and `GET /pool/usage` gives the pool's counts.
 - **Dashboard sidebar:** every signed-in page gets a sidebar (instance domain and version, the
   sections, Log out) and a header bar with an app switcher, the section's title and Add app; on
   a phone the sidebar is a drawer. Each section (Overview, Usage, Logs, Server, Domains,

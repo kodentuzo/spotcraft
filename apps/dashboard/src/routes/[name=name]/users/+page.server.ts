@@ -1,15 +1,15 @@
-import { getUsage } from '#lib/server/agent.ts'
 import { appOr404 } from '#lib/server/app-data.ts'
-import type { PageServerLoad } from './$types'
+import { deleteUserAction, loadUsers } from '#lib/server/users.ts'
+import type { Actions, PageServerLoad } from './$types'
 
-export const load: PageServerLoad = async ({ params }) => {
-  const app = await appOr404(params.name)
-  // The pool is shared; for one app, its accounts are counted from sessions on its hosts.
-  return {
-    app,
-    accounts: getUsage(app.name)
-      .then((usage) => usage.accounts ?? null)
-      .catch(() => null),
-    now: Date.now(),
-  }
+export const load: PageServerLoad = async ({ params, url }) => {
+  const [app, users] = await Promise.all([
+    appOr404(params.name),
+    loadUsers(url.searchParams.get('cursor') ?? undefined, params.name),
+  ])
+  return { app, ...users }
+}
+
+export const actions: Actions = {
+  delete: ({ request }) => deleteUserAction(request),
 }

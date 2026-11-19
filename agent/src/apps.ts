@@ -197,8 +197,11 @@ export interface Databases {
   move(name: string, options: { formerSecret?: string }): Promise<Moved>
   /** Drops the app's schema only, after a move that failed. */
   dropSchema(name: string): Promise<void>
-  /** A page of the user pool's users (ADR 0035), newest first. */
-  listUsers(page: { limit: number; cursor?: string }): Promise<UserPage>
+  /**
+   * A page of the user pool's users (ADR 0035), newest first. With `hosts`, only those with a
+   * session on them (ADR 0040), last seen there.
+   */
+  listUsers(page: { limit: number; cursor?: string; hosts?: string[] | null }): Promise<UserPage>
   /**
    * Deletes a user from the pool; their sessions and every app's rows for them go with them.
    * False if not found.
@@ -206,9 +209,10 @@ export interface Databases {
   deleteUser(id: string): Promise<boolean>
   /**
    * Counts of the pool's accounts that use an app through `hosts` (ADR 0038), from the host each
-   * session was made or renewed on. Undefined until the pool records hosts.
+   * session was made or renewed on; without hosts, the whole pool's. Undefined until the pool
+   * records hosts.
    */
-  accountUsage(hosts: string[]): Promise<AccountUsage | undefined>
+  accountUsage(hosts?: string[] | null): Promise<AccountUsage | undefined>
 }
 
 /** An app's accounts, counted from the pool's sessions on its hosts. Counts only, no ids. */
@@ -1363,9 +1367,22 @@ export class Apps {
     return this.#databases
   }
 
-  /** A page of the user pool's users (ADR 0035). */
-  listUsers(page: { limit: number; cursor?: string }): Promise<UserPage> {
-    return this.#poolDatabase().listUsers(page)
+  /** A page of the user pool's users (ADR 0035); with `app`, its users only (ADR 0040). */
+  async listUsers(page: { limit: number; cursor?: string; app?: string }): Promise<UserPage> {
+    const { app, ...rest } = page
+    if (!app) return this.#poolDatabase().listUsers(rest)
+    const spec = await this.#store.get(app)
+    if (!spec) throw new AgentError('No such app', 404)
+    return this.#poolDatabase().listUsers({
+      ...rest,
+      hosts: hostnames(spec, this.settings.appsDomain),
+    })
+  }
+
+  /** The whole pool's account counts (ADR 0040); undefined until the pool records hosts. */
+  async poolUsage(): Promise<{ accounts?: AccountUsage }> {
+    const accounts = await this.#poolDatabase().accountUsage(null)
+    return accounts ? { accounts } : {}
   }
 
   /** Deletes a pool user; 409 when an app's foreign key keeps their rows (a bug in that app). */
