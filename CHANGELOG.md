@@ -10,6 +10,15 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-11-20
+
+### Fixed
+
+- **Caddy's health check** failed on every server since 0.7.0, so the Deploy workflow ended
+  with "container spotcraft-apps-caddy-1 is unhealthy" although Caddy served normally. It asked
+  the admin API with `fetch`, whose browser-style `Sec-Fetch-Mode` header the admin API refuses
+  (403). It now asks with Node's `http` module. Deploy again to pick it up.
+
 ## [0.8.0] - 2026-11-20
 
 ### Added
@@ -591,7 +600,8 @@ handful of server-rendered apps from Docker Hub images behind HTTPS.
 - Servers: key-only SSH as a `deploy` user with modern algorithms only, root login refused,
   two firewalls, automatic security updates.
 
-[Unreleased]: https://github.com/kodentuzo/spotcraft/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/kodentuzo/spotcraft/compare/v0.8.1...HEAD
+[0.8.1]: https://github.com/kodentuzo/spotcraft/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/kodentuzo/spotcraft/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/kodentuzo/spotcraft/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/kodentuzo/spotcraft/compare/v0.6.0...v0.6.1
