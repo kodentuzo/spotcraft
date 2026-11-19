@@ -17,6 +17,18 @@
 			idle 2m
 		}
 	}
+	# Requests per host, for each app's usage in the dashboard (ADR 0038).
+	metrics {
+		per_host
+	}
+}
+
+# Caddy's metrics, for vmagent on the `web` network. Hosted apps reach Caddy too (on `edge`)
+# and mustn't read other apps' traffic.
+http://:2020 {
+	@notMonitoring not remote_ip 10.255.254.0/27
+	respond @notMonitoring 403
+	metrics
 }
 
 {$DASHBOARD_SCHEME}{$DASHBOARD_DOMAIN} {

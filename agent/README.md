@@ -34,6 +34,7 @@ The files it writes are the only record of which apps exist:
 | GET    | `/backups`               | `{ enabled, apps }`: every app's last backup, or null         |
 | GET    | `/apps/:name/backup`     | the app's last backup, or null                                |
 | POST   | `/apps/:name/backup`     | back it up now; the status (409 without backups)              |
+| GET    | `/apps/:name/usage`      | `{ visits?, accounts? }` over `?days=` (7): counts only       |
 | GET    | `/apps/:name/database`   | `{ layout }`: `schema`, `database` (its own) or `none`        |
 | POST   | `/apps/:name/move`       | `{ tag }`: move it from its own database into its schema      |
 | GET    | `/pool/users`            | the user pool's users, newest first (`?limit=`, `?cursor=`)   |
@@ -200,6 +201,16 @@ and its numbers. It signs in as Umami's `admin`, replacing Umami's default passw
 `UMAMI_ADMIN_PASSWORD` the first time. Umami being down never fails a deploy or a removal: the
 site then counts nothing, and after a start the agent keeps trying in the background
 (`backfillAnalytics`) until every app has a website.
+
+`GET /apps/:name/usage` puts two counts together, each left out when its source can't answer:
+
+- `visits`, from Umami: views, visitors and visits over the last `days`, the same before, and
+  the top pages and operating systems;
+- `accounts`, from the pool's sessions on the app's hosts: accounts active in the last day,
+  7 days and 30 days, new accounts per day (their first session on these hosts), and active
+  accounts per `Spotcraft-Client` value.
+
+The dashboard adds the requests per app from Caddy's metrics.
 
 Caddy passes the visitor's address to the app as `X-Forwarded-For`. With `EDGE=cloudflare`,
 site blocks are plain HTTP (`http://host`): Cloudflare terminates TLS and a tunnel delivers

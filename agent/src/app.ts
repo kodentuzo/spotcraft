@@ -251,6 +251,22 @@ export function buildApp({ token, apps, allowedIps = [], logger = false }: Build
     async (request) => apps.backup(request.params.name),
   )
 
+  // The app's usage (ADR 0038): visits from Umami and accounts from the pool, counts only.
+  app.get<{ Params: NameParams; Querystring: { days: number } }>(
+    '/apps/:name/usage',
+    {
+      schema: {
+        params: nameParamsSchema,
+        querystring: {
+          type: 'object',
+          additionalProperties: false,
+          properties: { days: { type: 'integer', minimum: 1, maximum: 90, default: 7 } },
+        },
+      },
+    },
+    (request) => apps.usage(request.params.name, request.query.days),
+  )
+
   // Where the app's tables are, and moving an app made before ADR 0034 into its schema.
   app.get<{ Params: NameParams }>(
     '/apps/:name/database',

@@ -257,6 +257,43 @@ export function postgresDatabases(
       }
     },
 
+    accountUsage: (hosts) =>
+      inPool(async (db) => {
+        const found = await db.query<{ ok: boolean }>(
+          `SELECT EXISTS (SELECT FROM information_schema.columns WHERE table_schema = 'auth'
+             AND table_name = 'sessions' AND column_name = 'host') AS ok`,
+        )
+        if (!found.rows[0]?.ok) return undefined
+        const active = await db.query<{ day: number; week: number; month: number }>(
+          `SELECT count(DISTINCT user_id) FILTER (WHERE updated_at > now() - interval '1 day')::int AS day,
+                  count(DISTINCT user_id) FILTER (WHERE updated_at > now() - interval '7 days')::int AS week,
+                  count(DISTINCT user_id)::int AS month
+           FROM auth.sessions WHERE host = ANY($1) AND updated_at > now() - interval '30 days'`,
+          [hosts],
+        )
+        const fresh = await db.query<{ day: Date; count: number }>(
+          `SELECT date_trunc('day', first, 'UTC') AS day, count(*)::int AS count
+           FROM (SELECT min(created_at) AS first FROM auth.sessions WHERE host = ANY($1)
+                 GROUP BY user_id) firsts
+           WHERE first > now() - interval '30 days'
+           GROUP BY 1 ORDER BY 1`,
+          [hosts],
+        )
+        const clients = await db.query<{ client: string; active: number }>(
+          `SELECT client, count(DISTINCT user_id)::int AS active FROM auth.sessions
+           WHERE host = ANY($1) AND client IS NOT NULL AND updated_at > now() - interval '30 days'
+           GROUP BY client ORDER BY 2 DESC, 1 LIMIT 20`,
+          [hosts],
+        )
+        return {
+          active: active.rows[0] ?? { day: 0, week: 0, month: 0 },
+          newPerDay: fresh.rows.map((row) => ({
+            day: row.day.toISOString().slice(0, 10),
+            count: row.count,
+          })),
+          clients: clients.rows,
+        }
+      }),
     listUsers: ({ limit, cursor }) =>
       inPool(async (db) => {
         const found = await db.query<{ ok: boolean }>(

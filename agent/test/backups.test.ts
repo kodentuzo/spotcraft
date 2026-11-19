@@ -139,6 +139,9 @@ describe('backups', () => {
         return { users: 0, sessions: 0, tables: {} }
       },
       async dropSchema() {},
+      async accountUsage() {
+        return undefined
+      },
     }
     apps = new Apps(new Store(dir), docker, 'caddy', databases, undefined, undefined, {
       target: bucket.target,

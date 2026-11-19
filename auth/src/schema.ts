@@ -38,8 +38,15 @@ export const sessions = auth.table(
     ipAddress: text('ip_address'),
     userAgent: text('user_agent'),
     ...times,
+    /** The host the session was made or last renewed on (ADR 0038). */
+    host: text('host'),
+    /** The client's `Spotcraft-Client` header at that time, e.g. `ios/1.4.0`. */
+    client: text('client'),
   },
-  (t) => [index('sessions_user_id_idx').on(t.userId)],
+  (t) => [
+    index('sessions_user_id_idx').on(t.userId),
+    index('sessions_host_updated_at_idx').on(t.host, t.updatedAt),
+  ],
 )
 
 export const accounts = auth.table(

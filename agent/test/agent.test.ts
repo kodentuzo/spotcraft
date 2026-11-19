@@ -124,6 +124,14 @@ function fakeDatabases() {
     async dropSchema(name) {
       calls.push(['dropSchema', name])
     },
+    async accountUsage(hosts: string[]) {
+      calls.push(['accountUsage', ...hosts])
+      return {
+        active: { day: 1, week: 2, month: 3 },
+        newPerDay: [{ day: '2026-11-19', count: 1 }],
+        clients: [{ client: 'ios/1.4.0', active: 1 }],
+      }
+    },
     async listUsers({ limit, cursor }) {
       calls.push(['listUsers', String(limit), cursor ?? ''])
       return {
@@ -889,6 +897,14 @@ describe('agent', () => {
     })
     afterEach(() => withDb.close())
 
+    it("counts the app's accounts on its hosts in the pool", async () => {
+      assert.equal((await put(dbSpec)).statusCode, 200)
+      const res = await withDb.inject({ url: '/apps/tagtape/usage', headers: auth })
+      assert.equal(res.statusCode, 200, res.body)
+      assert.deepEqual(res.json().accounts.active, { day: 1, week: 2, month: 3 })
+      assert.deepEqual(db.calls.at(-1), ['accountUsage', 'tagtape.app'])
+    })
+
     it('prepares the database and gives the app DATABASE_URL', async () => {
       const res = await put(dbSpec)
       assert.equal(res.statusCode, 200, res.body)
@@ -1331,6 +1347,18 @@ describe('analytics (ADR 0038)', () => {
           if (down) throw new Error('Umami did not answer')
           deleted.push(id)
         },
+        async summary(_id: string, days: number) {
+          if (down) throw new Error('Umami did not answer')
+          return {
+            days,
+            views: 12,
+            visitors: 5,
+            visits: 7,
+            previous: { views: 10, visitors: 4 },
+            pages: [{ path: '/', views: 9 }],
+            systems: [{ name: 'iOS', visitors: 3 }],
+          }
+        },
       },
     }
   }
@@ -1398,6 +1426,27 @@ describe('analytics (ADR 0038)', () => {
     await apps.deploy({ name: 'tagtape', ...fullSpec })
     fake.down(true)
     assert.equal(await apps.remove('tagtape'), true)
+  })
+
+  it("reports the app's visits, and leaves them out when Umami can't say", async () => {
+    const fake = umami()
+    apps.analytics = fake.analytics
+    await apps.deploy({ name: 'tagtape', ...fullSpec })
+    const app = buildApp({ token: TOKEN, apps })
+    try {
+      const res = await app.inject({ url: '/apps/tagtape/usage?days=30', headers: auth })
+      assert.equal(res.statusCode, 200, res.body)
+      assert.equal(res.json().visits.days, 30)
+      assert.equal(res.json().visits.views, 12)
+      assert.equal(res.json().accounts, undefined, 'no Postgres on this server')
+      fake.down(true)
+      const quiet = await app.inject({ url: '/apps/tagtape/usage', headers: auth })
+      assert.deepEqual(quiet.json(), {})
+      const missing = await app.inject({ url: '/apps/nope/usage', headers: auth })
+      assert.equal(missing.statusCode, 404)
+    } finally {
+      await app.close()
+    }
   })
 
   it('keeps the switch as it was when an update leaves it out', async () => {

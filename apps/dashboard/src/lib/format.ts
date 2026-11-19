@@ -47,3 +47,7 @@ export function ago(iso: string | null, now = Date.now()): string {
   if (hours < 48) return `${hours} h ago`
   return `${Math.floor(hours / 24)} days ago`
 }
+
+/** A count, with thousands separated; a dash when unknown. */
+export const count = (value: number | null | undefined) =>
+  value === null || value === undefined ? '—' : Math.round(value).toLocaleString('en')

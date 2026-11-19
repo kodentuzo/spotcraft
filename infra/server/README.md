@@ -18,7 +18,8 @@ from `/opt/spotcraft` with Docker Compose.
 | `node-exporter`   | `web` network :9100      | host metrics                                                            |
 | `cadvisor`        | `web` network :8080      | per-container metrics                                                   |
 
-Only Caddy is published on host ports. Files: `compose.yaml`, `Caddyfile`, `pg_hba.conf`,
+Only Caddy is published on host ports. Caddy also serves its metrics, with requests per host,
+on port 2020 to the `web` network only (vmagent's `caddy` job); hosted apps get a 403. Files: `compose.yaml`, `Caddyfile`, `pg_hba.conf`,
 `scrape.yaml` (vmagent targets), `blackbox.yml` (probe modules) and `.env.example` (the deploy
 writes `.env`). A fresh server is prepared by [`../cloud-init.yaml`](../cloud-init.yaml).
 

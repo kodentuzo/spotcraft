@@ -329,6 +329,51 @@ describe('the user pool', { skip: !SUPERUSER_URL && 'KIT_TEST_POSTGRES_URL is no
     }
   })
 
+  it('notes on each session the host and client it was made or last renewed with', async () => {
+    const superuser = urlFor('postgres', new URL(su()).password)
+    const session = async (userId: string) =>
+      (
+        await query(superuser, 'SELECT host, client FROM auth.sessions WHERE user_id = $1', [
+          userId,
+        ])
+      ).rows[0]
+    const made = await send('POST', '/_spotcraft/auth/sign-in/anonymous', {
+      host: 'lifts-api.example.test',
+      ip: '203.0.113.21',
+      headers: { 'spotcraft-client': 'ios/1.4.0' },
+      body: {},
+    })
+    const { user } = JSON.parse(made.body)
+    assert.deepEqual(await session(user.id), {
+      host: 'lifts-api.example.test',
+      client: 'ios/1.4.0',
+    })
+
+    // A day later, the session is renewed through another host, by another build of the app.
+    await query(
+      superuser,
+      `UPDATE auth.sessions SET updated_at = now() - interval '2 days',
+         expires_at = now() + interval '363 days' WHERE user_id = $1`,
+      [user.id],
+    )
+    const token = String(made.headers['set-auth-token'])
+    const renewed = await send('GET', '/_spotcraft/auth/get-session', {
+      host: 'auth.example.test',
+      headers: { authorization: `Bearer ${token}`, 'spotcraft-client': 'android/2.0.0' },
+    })
+    assert.equal(renewed.status, 200, renewed.body)
+    assert.deepEqual(await session(user.id), { host: 'auth.example.test', client: 'android/2.0.0' })
+
+    // Anything but `<platform>/<version>` isn't kept.
+    const odd = await send('POST', '/_spotcraft/auth/sign-in/anonymous', {
+      host: 'lifts-api.example.test',
+      ip: '203.0.113.22',
+      headers: { 'spotcraft-client': 'iOS 18; iPhone15,2; id=abc' },
+      body: {},
+    })
+    assert.equal((await session(JSON.parse(odd.body).user.id)).client, null)
+  })
+
   it("keeps the sessions of an app's guests moved in from the kit, signed with its old secret", async () => {
     const agent = urlFor(ADMIN, PASSWORD)
     const kitSecret = 'kit-app-secret-0123456789-0123456789'

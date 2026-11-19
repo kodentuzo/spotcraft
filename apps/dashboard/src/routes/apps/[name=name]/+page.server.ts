@@ -11,6 +11,7 @@ import {
   getBackup,
   getDomainStatus,
   getSettings,
+  getUsage,
   hookEnabled,
   listApps,
   moveApp,
@@ -55,11 +56,27 @@ export const load: PageServerLoad = async ({ params, url }) => {
   if (!app) error(404, 'No such app')
   // The domain's status asks Cloudflare (several calls): streamed, so the page doesn't wait.
   const domain = app.domain ? getDomainStatus(name).catch(() => undefined) : undefined
+  // Usage (ADR 0038) asks Umami and the pool through the agent: streamed too.
+  // An app with no address (no APPS_DOMAIN, no domain of its own) gets no requests.
+  const hosts = app.hostnames
+  const when = <T>(ask: () => Promise<T>, none: T) =>
+    hosts.length > 0 ? ask() : Promise.resolve(none)
+  const usage = Promise.all([
+    getUsage(name).catch(() => ({})),
+    when(() => instant(promql.appRequestsDay(hosts)), null),
+    when(() => instant(promql.appErrorsDay(hosts)), null),
+    when(() => instant(promql.appLatencyP95(hosts)), null),
+    when(() => range(promql.appRequestsPerHour(hosts), 24 * 60, 3600), []),
+  ]).then(([counted, requests, errors, p95, perHour]) => ({
+    ...counted,
+    requests: { day: requests, errors, p95, perHour },
+  }))
   return {
     app,
     metrics: { cpu, memory, response, up, uptimeDay, uptimeWeek },
     logs,
     domain,
+    usage,
     // Always https: behind the tunnel the dashboard itself sees plain HTTP.
     hook: { enabled: hook, url: `https://${url.host}/hooks/deploy/${name}` },
     // Backups (ADR 0030): null when the server has none set up.

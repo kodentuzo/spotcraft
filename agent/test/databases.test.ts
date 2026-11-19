@@ -197,6 +197,57 @@ describe('postgres app databases', {
     assert.equal((await databases.listUsers({ limit: 10 })).total, 2)
     await databases.purge('agent-test')
   })
+
+  it("counts an app's accounts from the hosts of their sessions, and only counts", async () => {
+    const databases = postgresDatabases(adminUrl(), INSTANCE)
+    const pool = new URL(SUPERUSER_URL as string)
+    pool.pathname = `/${INSTANCE.database}`
+    await migrate(pool.toString())
+    await query(
+      pool.toString(),
+      `GRANT USAGE ON SCHEMA auth TO ${ADMIN};
+       GRANT SELECT ON auth.users, auth.sessions TO ${ADMIN};`,
+    )
+    // Before the pool records hosts, there's nothing to count.
+    assert.equal(await databases.accountUsage(['blog.example.test']), undefined)
+    // The auth service's migration 0004, on the kit's tables of the same shape.
+    await query(
+      pool.toString(),
+      `ALTER TABLE auth.sessions ADD COLUMN IF NOT EXISTS host text;
+       ALTER TABLE auth.sessions ADD COLUMN IF NOT EXISTS client text;
+       DELETE FROM auth.users;`,
+    )
+    const { rows: users } = await query(
+      pool.toString(),
+      `INSERT INTO auth.users (email, is_anonymous)
+       SELECT 'u' || n || '@example.test', true FROM generate_series(1, 4) n RETURNING id`,
+    )
+    const [a, b, c, d] = users.map((row) => row.id as string)
+    // a: on the blog today, from iOS; b: a week ago, on its custom domain, Android; c: on the
+    // blog 3 weeks ago; d: only on another app.
+    await query(
+      pool.toString(),
+      `INSERT INTO auth.sessions (user_id, token, expires_at, created_at, updated_at, host, client) VALUES
+         ('${a}', 'a1', now() + interval '1 year', now() - interval '2 days', now() - interval '1 hour', 'blog.example.test', 'ios/1.4.0'),
+         ('${a}', 'a2', now() + interval '1 year', now() - interval '1 hour', now() - interval '1 hour', 'blog.example.test', 'ios/1.4.0'),
+         ('${b}', 'b1', now() + interval '1 year', now() - interval '6 days', now() - interval '5 days', 'blog.test', 'android/1.3.0'),
+         ('${c}', 'c1', now() + interval '1 year', now() - interval '21 days', now() - interval '20 days', 'blog.example.test', null),
+         ('${d}', 'd1', now() + interval '1 year', now() - interval '1 hour', now() - interval '1 hour', 'shop.example.test', 'ios/1.4.0')`,
+    )
+    const usage = await databases.accountUsage(['blog.example.test', 'blog.test'])
+    assert.deepEqual(usage?.active, { day: 1, week: 2, month: 3 })
+    assert.equal(
+      usage?.newPerDay.reduce((sum, day) => sum + day.count, 0),
+      3,
+      'one per account, on its first day',
+    )
+    assert.ok(usage?.newPerDay.every((day) => /^\d{4}-\d{2}-\d{2}$/.test(day.day)))
+    assert.deepEqual(usage?.clients, [
+      { client: 'android/1.3.0', active: 1 },
+      { client: 'ios/1.4.0', active: 1 },
+    ])
+    await query(pool.toString(), 'DELETE FROM auth.users')
+  })
   it("moves a kit app's guests, sessions and rows from its own database into its schema", async () => {
     const su = SUPERUSER_URL as string
     // The app before ADR 0034: its own database, the kit's `auth` in it, its tables in public.
