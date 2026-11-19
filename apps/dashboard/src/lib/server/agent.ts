@@ -107,11 +107,21 @@ export async function getUsage(name: string, { days = 7, brief = false } = {}): 
   return expectJson<AppUsage>(await call(`${appPath(name)}/usage?${query}`))
 }
 
-export async function listUsers(cursor?: string): Promise<UserPage | undefined> {
-  const query = new URLSearchParams({ limit: '50', ...(cursor ? { cursor } : {}) })
+/** A page of the pool's users; with `app`, the users with a session on it (ADR 0040). */
+export async function listUsers(cursor?: string, app?: string): Promise<UserPage | undefined> {
+  const query = new URLSearchParams({
+    limit: '50',
+    ...(cursor ? { cursor } : {}),
+    ...(app ? { app } : {}),
+  })
   const response = await call(`/pool/users?${query}`)
   if (response.status === 409) return undefined
   return expectJson<UserPage>(response)
+}
+
+/** The whole pool's account counts (ADR 0040), as an app's usage counts its own. */
+export async function getPoolUsage(): Promise<AppUsage> {
+  return expectJson<AppUsage>(await call('/pool/usage'))
 }
 
 /**
