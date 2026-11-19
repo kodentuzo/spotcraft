@@ -6,7 +6,8 @@ Spotcraft keeps two kinds of backups ([ADR 0030](../decisions/0030-backups.md)):
   default in `infra/hetzner` (`apps_server_backups`, +20% of the server's price).
 - **The agent's nightly backups, to a bucket.** Every night at 03:00 UTC, each app gets a
   folder `<name>/<time>/` with:
-  - `database.dump`, if the app has a database;
+  - `database.dump`, if the app has a database: a dump of its schema in `apps` (or of its own
+    database, for an app made before [ADR 0034](../decisions/0034-app-contract.md));
   - `app.json`, its settings and env;
   - `secrets.json`, its database password and deploy hook hash.
 
@@ -47,15 +48,14 @@ The bucket holds every app's env and database password. Keep it private. The key
 on the server. It can write new objects, but R2's bucket lock keeps it from deleting or
 overwriting a backup before it expires.
 
-## Restore one app's database
+## Restore one app's data
 
 For example, after a bad migration. You need shell access to the server as `deploy`.
 
-**Never restore as the `postgres` superuser alone.** An app owns its database, so its dump
-can hold functions that run while the dump is restored, with the restoring role's rights. The
-commands below restore each part as the role that owns it: the app's own tables as the app's
-role, and the `auth` schema (guests and sessions), if the database has one, as the agent's
-role, which the app can't write to.
+**Never restore as the `postgres` superuser alone.** An app owns its tables, so its dump can
+hold functions that run while the dump is restored, with the restoring role's rights. The
+commands below restore as the app's own role. The role is `app_` and the app's name, with `-`
+as `_`.
 
 1. In R2, open the app's folder of the backup to restore and download `database.dump`. Restore
    only a backup you trust: the agent's key can add new folders. Copy it to the server, into a
@@ -65,25 +65,39 @@ role, which the app can't write to.
    ssh deploy@<server> 'umask 077 && cat > blog.dump' < database.dump
    ```
 
-2. On the server, restore it over the app's database. `--clean` drops what the dump has
-   before recreating it, so the database ends up as it was. The role is `app_` and the app's
-   name, with `-` as `_`:
+2. On the server, empty the app's schema in the `apps` database, then restore into it:
 
    ```bash
    cd /opt/spotcraft
+   docker compose exec -T postgres psql -U postgres -d apps -v ON_ERROR_STOP=1 \
+     -c 'DROP SCHEMA app_blog CASCADE' -c 'CREATE SCHEMA app_blog AUTHORIZATION app_blog'
    docker compose exec -T postgres pg_restore -U postgres --role=app_blog --no-owner --no-privileges \
-     --exclude-schema=auth --clean --if-exists -d app_blog < ~/blog.dump
-   docker compose exec -T postgres pg_restore -U postgres --role=spotcraft_agent --no-owner --no-privileges \
-     --schema=auth --clean --if-exists -d app_blog < ~/blog.dump
+     -d apps < ~/blog.dump
    rm ~/blog.dump
    ```
 
-   The first command ends with two errors, `must be owner of schema auth` and `schema "auth"
-   already exists`. That is the app's role being refused the agent's schema, as it should be;
-   the second command restores it. Any other error needs a look.
+   The restore ends with one error, `permission denied for database apps` on
+   `CREATE SCHEMA app_blog`. That is the app's role being refused a new schema, as it should be;
+   the schema is already there. Any other error needs a look.
 
-3. In the dashboard, choose **Redeploy** on the app. That gives the app its rights on `auth`
-   again, and starts it against the restored data.
+3. In the dashboard, choose **Redeploy** on the app, which starts it against the restored data.
+
+### An app that still has its own database
+
+Apps made before [ADR 0034](../decisions/0034-app-contract.md) keep their own database, with the
+kit's `auth` schema owned by the agent. Restore its tables as the app and `auth` as the agent:
+
+```bash
+cd /opt/spotcraft
+docker compose exec -T postgres pg_restore -U postgres --role=app_blog --no-owner --no-privileges \
+  --exclude-schema=auth --clean --if-exists -d app_blog < ~/blog.dump
+docker compose exec -T postgres pg_restore -U postgres --role=spotcraft_agent --no-owner --no-privileges \
+  --schema=auth --clean --if-exists -d app_blog < ~/blog.dump
+rm ~/blog.dump
+```
+
+The first command ends with two errors, `must be owner of schema auth` and `schema "auth"
+already exists`; the second command restores it. Then redeploy.
 
 ## Restore after losing the server
 
@@ -94,8 +108,12 @@ role, which the app can't write to.
 3. For each app, open its latest folder in R2:
    1. In the dashboard, add the app again with the same name and settings, from `app.json`.
       Copy every env variable, `AUTH_SECRET` above all, which signs its guests' sessions.
-   2. Tick **Database** if it had one, and deploy. That creates an empty database.
-   3. Restore `database.dump` into it with the two commands above, then redeploy.
+   2. Tick **Database** if it had one, and deploy. That creates an empty schema.
+   3. Restore `database.dump` into it with the commands above, then redeploy.
 
-The new database gets a new password. The app gets it as `DATABASE_URL` when it deploys, so
+The app's role gets a new password. The app gets it as `DATABASE_URL` when it deploys, so
 `secrets.json` is only needed if you want the old one.
+
+An app that had its own database comes back with a schema instead. Its dump holds `public` and
+`auth`, not a schema of its own, so restoring it means moving it, as
+[ADR 0035](../decisions/0035-auth-pool.md) describes for those apps.

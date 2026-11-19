@@ -1,38 +1,44 @@
 # spotcraft
 
 The `spotcraft` command. For now it has one job: `spotcraft dev` runs, on your machine, the same
-Postgres and app database setup an app gets on a Spotcraft server
+Postgres and app schema setup an app gets on a Spotcraft server
 ([ADR 0017](https://github.com/kodentuzo/spotcraft/blob/main/docs/decisions/0017-local-stack.md)). It needs Docker.
 
 ```bash
 npm install --save-dev spotcraft   # same version as the Spotcraft you deploy to
-npx spotcraft dev start            # start the local Postgres and set up this app's database
-npx spotcraft dev env --write      # add DATABASE_URL and AUTH_SECRET to .env (only if missing)
+npx spotcraft dev start            # start the local Postgres and set up this app's schema
+npx spotcraft dev env --write      # add DATABASE_URL, DATABASE_SCHEMA, AUTH_SECRET to .env (if missing)
 ```
 
-| Command             | What                                                                                  |
-| ------------------- | ------------------------------------------------------------------------------------- |
-| `dev start`         | starts the local Postgres if needed, sets up this app's database, prints its settings |
-| `dev stop`          | stops the local Postgres; the data stays                                              |
-| `dev status`        | whether it runs, and whether this app's database exists                               |
-| `dev env [--write]` | prints `DATABASE_URL` and `AUTH_SECRET`; `--write` adds missing ones to `.env`        |
-| `dev reset [--yes]` | deletes this app's database and creates it empty again (asks first)                   |
-| `dev migrate`       | brings this app's role settings up to date after upgrading the CLI                    |
+| Command             | What                                                                                |
+| ------------------- | ----------------------------------------------------------------------------------- |
+| `dev start`         | starts the local Postgres if needed, sets up this app's schema, prints its settings |
+| `dev stop`          | stops the local Postgres; the data stays                                            |
+| `dev status`        | whether it runs, and whether this app's schema exists                               |
+| `dev env [--write]` | prints the variables below; `--write` adds missing ones to `.env`                   |
+| `dev reset [--yes]` | deletes this app's schema and creates it empty again (asks first)                   |
+| `dev migrate`       | brings this app's role settings up to date after upgrading the CLI                  |
 
-The database is empty: no `auth` schema
-([ADR 0035](https://github.com/kodentuzo/spotcraft/blob/main/docs/decisions/0035-auth-pool.md)).
-The app creates its own tables. Apps that still use `@spotcraft/kit` need its `auth` schema, so
-they stay on `spotcraft` 0.5 until they move to the instance's user pool.
+Apps share one database, `apps`, as on the server
+([ADR 0034](https://github.com/kodentuzo/spotcraft/blob/main/docs/decisions/0034-app-contract.md)).
+Each gets its own schema and role, `app_<name>` with dashes as underscores, and these variables:
+`DATABASE_URL` (the `apps` database, as the app's role), `DATABASE_SCHEMA` and `AUTH_SECRET`.
+The schema starts empty, and the app creates its own tables.
+
+An app set up by an older CLI keeps its own database, `app_<name>`, and gets only
+`DATABASE_URL` to it; `dev reset` moves it to a schema. Apps on `@spotcraft/kit` need the kit's
+`auth` schema, which a schema can't hold, so they stay on `spotcraft` 0.5 until they move to the
+instance's user pool ([ADR 0035](https://github.com/kodentuzo/spotcraft/blob/main/docs/decisions/0035-auth-pool.md)).
 
 The app name comes from `--name`, or from the `name` in `package.json` made into an app name
-(`@acme/Blog_API` → `blog-api`). Its database is `app_<name>`, with dashes as underscores.
+(`@acme/Blog_API` → `blog-api`).
 
 ## Same as the server
 
 - **One Postgres for every app on the machine.** It's a Compose project, `spotcraft-dev`, with
-  the data in the `spotcraft-dev_data` volume. Each app gets its own role and database,
-  created by `spotcraft/provision`, the same code the agent uses. So one app can't open
-  another's database here either.
+  the data in the `spotcraft-dev_data` volume. Each app gets its own role and schema in `apps`,
+  created by `spotcraft/provision`, the same code the agent uses. So one app can't read
+  another's tables here either.
 - **The same image and login rules** as the server: the pinned Postgres image, and the
   superuser only over the container's socket. **The same admin role**: `spotcraft_agent`, set up
   with the deploy script's SQL. Tests fail if the CLI's copies of the image, the rules or that

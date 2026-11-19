@@ -78,7 +78,7 @@ changes are listed in the [changelog](CHANGELOG.md).
 | `agent`                  | the agent (Fastify): deploys the apps              |
 | `apps/dashboard`         | the dashboard (SvelteKit)                          |
 | `apps/site`              | the website (Astro, on GitHub Pages)               |
-| `packages/cli`           | `spotcraft dev`, and app database provisioning     |
+| `packages/cli`           | `spotcraft dev`, and app schema provisioning       |
 | `packages/kit`           | guest accounts for apps (moving to spotkit)        |
 | `packages/ui`            | shared components and theme (shadcn-svelte)        |
 | `infra/cloud-init.yaml`  | first-boot setup for the server                    |

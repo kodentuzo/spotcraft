@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { appDatabaseName } from './provision.ts'
+import { appRoleName, INSTANCE } from './provision.ts'
 
 /**
  * The local stack: one Postgres for every app repository on this machine, set up like the
@@ -45,10 +45,12 @@ export const appPassword = (name: string) => `local-${name}-password`
 export const adminUrl = () =>
   `postgres://spotcraft_agent:${ADMIN_PASSWORD}@127.0.0.1:${PORT}/postgres`
 
-/** What the app gets, as on the server but on localhost. */
-export function databaseUrl(name: string): string {
-  const db = appDatabaseName(name)
-  return `postgres://${db}:${appPassword(name)}@127.0.0.1:${PORT}/${db}`
+/**
+ * What the app gets, as on the server but on localhost: the instance database, or the app's own
+ * one if it still has it (from before ADR 0034).
+ */
+export function databaseUrl(name: string, database = INSTANCE.database): string {
+  return `postgres://${appRoleName(name)}:${appPassword(name)}@127.0.0.1:${PORT}/${database}`
 }
 
 /** The Compose file, as JSON (valid YAML), passed to Docker on stdin. */

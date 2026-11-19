@@ -1,9 +1,8 @@
 #!/usr/bin/env node
 import { createInterface } from 'node:readline/promises'
 import { parseArgs } from 'node:util'
-import pg from 'pg'
 import { appName, localEnv, writeMissing } from './project.ts'
-import { appDatabaseName, provision, purge } from './provision.ts'
+import { appLayout, appRoleName, provision, purge } from './provision.ts'
 import {
   adminUrl,
   appPassword,
@@ -17,15 +16,15 @@ import {
 
 const HELP = `Usage: spotcraft dev <command> [--name <app>]
 
-Runs the same Postgres and app database setup as a Spotcraft server, on this machine.
+Runs the same Postgres and app schema setup as a Spotcraft server, on this machine.
 
 Commands:
-  start         start the local Postgres and set up this app's database
+  start         start the local Postgres and set up this app's schema
   stop          stop the local Postgres (the data stays)
-  status        show whether it runs and this app's database
-  env [--write] print DATABASE_URL and AUTH_SECRET; --write adds missing ones to .env
-  reset [--yes] delete this app's database and start it empty
-  migrate       bring this app's database settings up to date after upgrading
+  status        show whether it runs and this app's schema
+  env [--write] print DATABASE_URL, DATABASE_SCHEMA and AUTH_SECRET; --write adds missing ones to .env
+  reset [--yes] delete this app's schema and start it empty
+  migrate       bring this app's role settings up to date after upgrading
 
 The app name comes from --name or package.json. Needs Docker.
 `
@@ -37,18 +36,11 @@ async function ensureRunning() {
     throw new StackError('The local Postgres is not running; run `spotcraft dev start`')
 }
 
-/** Whether the app's database exists on the local Postgres. */
-async function hasAppDatabase(name: string): Promise<boolean> {
-  const admin = new pg.Client({ connectionString: adminUrl() })
-  await admin.connect()
-  try {
-    const found = await admin.query('SELECT 1 FROM pg_database WHERE datname = $1', [
-      appDatabaseName(name),
-    ])
-    return Boolean(found.rowCount)
-  } finally {
-    await admin.end()
-  }
+/** The app's env: its own database if it still has one (ADR 0034), else its schema. */
+async function appEnv(cwd: string, name: string, ownDatabase: boolean) {
+  return ownDatabase
+    ? localEnv(cwd, databaseUrl(name, appRoleName(name)))
+    : localEnv(cwd, databaseUrl(name), appRoleName(name))
 }
 
 async function confirm(question: string): Promise<boolean> {
@@ -82,10 +74,15 @@ export async function main(argv: string[]): Promise<number> {
     case 'start': {
       const name = await appName(cwd, values.name)
       await up()
-      await provision(adminUrl(), { name, password: appPassword(name) })
-      print(`Local Postgres on 127.0.0.1:${PORT}; database ${appDatabaseName(name)} is ready.`)
+      const { database } = await provision(adminUrl(), { name, password: appPassword(name) })
+      const ownDatabase = database === appRoleName(name)
+      print(
+        ownDatabase
+          ? `Local Postgres on 127.0.0.1:${PORT}; ${appRoleName(name)} still has its own database.`
+          : `Local Postgres on 127.0.0.1:${PORT}; schema ${appRoleName(name)} in ${database} is ready.`,
+      )
       print()
-      for (const [key, value] of await localEnv(cwd, databaseUrl(name))) print(`${key}=${value}`)
+      for (const [key, value] of await appEnv(cwd, name, ownDatabase)) print(`${key}=${value}`)
       print()
       print('Add these to .env with: spotcraft dev env --write')
       return 0
@@ -100,15 +97,21 @@ export async function main(argv: string[]): Promise<number> {
         print('Local Postgres: stopped (spotcraft dev start)')
         return 0
       }
-      // Running but never set up (e.g. started by hand) reads as "no database yet".
-      const ready = await hasAppDatabase(name).catch(() => false)
+      // Running but never set up (e.g. started by hand) reads as "not set up yet".
+      const layout = await appLayout(adminUrl(), name).catch(() => 'none' as const)
       print(`Local Postgres: running on 127.0.0.1:${PORT}`)
-      print(`${appDatabaseName(name)}: ${ready ? 'ready' : 'none yet (spotcraft dev start)'}`)
+      const state = {
+        schema: 'ready',
+        database: 'ready, in its own database (spotcraft dev reset moves it to a schema)',
+        none: 'not set up yet (spotcraft dev start)',
+      }[layout]
+      print(`${appRoleName(name)}: ${state}`)
       return 0
     }
     case 'env': {
       const name = await appName(cwd, values.name)
-      const env = await localEnv(cwd, databaseUrl(name))
+      const layout = (await isRunning()) ? await appLayout(adminUrl(), name) : 'none'
+      const env = await appEnv(cwd, name, layout === 'database')
       if (!values.write) {
         for (const [key, value] of env) print(`${key}=${value}`)
         return 0
@@ -121,10 +124,10 @@ export async function main(argv: string[]): Promise<number> {
     case 'reset': {
       const name = await appName(cwd, values.name)
       await ensureRunning()
-      const db = appDatabaseName(name)
+      const db = appRoleName(name)
       if (
         !values.yes &&
-        !(await confirm(`Delete every row in the local ${db} and start it empty?`))
+        !(await confirm(`Delete everything in the local ${db} and start it empty?`))
       ) {
         print('Nothing changed.')
         return 1
@@ -138,7 +141,7 @@ export async function main(argv: string[]): Promise<number> {
       const name = await appName(cwd, values.name)
       await ensureRunning()
       await provision(adminUrl(), { name, password: appPassword(name) })
-      print(`${appDatabaseName(name)}: up to date.`)
+      print(`${appRoleName(name)}: up to date.`)
       return 0
     }
     default:

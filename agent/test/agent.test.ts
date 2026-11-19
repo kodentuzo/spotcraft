@@ -85,7 +85,10 @@ function fakeDatabases() {
     async provision(name, password) {
       calls.push(['provision', name, password])
       if (failing) throw new Error('connection refused')
-      return `postgres://app_${name}:${password}@postgres:5432/app_${name}`
+      return {
+        DATABASE_URL: `postgres://app_${name}:${password}@postgres:5432/apps`,
+        DATABASE_SCHEMA: `app_${name}`,
+      }
     },
     async purge(name) {
       calls.push(['purge', name])
@@ -841,10 +844,12 @@ describe('agent', () => {
       assert.match(password, /^[0-9a-f]{48}$/)
 
       const compose = JSON.parse(await readFile(join(dir, 'apps/tagtape/compose.yaml'), 'utf8'))
+      const { environment } = compose.services['tagtape-blue']
       assert.equal(
-        compose.services['tagtape-blue'].environment.DATABASE_URL,
-        `postgres://app_tagtape:${password}@postgres:5432/app_tagtape`,
+        environment.DATABASE_URL,
+        `postgres://app_tagtape:${password}@postgres:5432/apps`,
       )
+      assert.equal(environment.DATABASE_SCHEMA, 'app_tagtape')
       assert.equal(compose.services['tagtape-blue'].environment.TRUST_PROXY, '1')
     })
 

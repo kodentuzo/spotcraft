@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { appDatabaseName } from 'spotcraft/provision'
+import { appRoleName } from 'spotcraft/provision'
 import { NAME } from '../src/app-spec.ts'
 
 // The agent and provisioning (in the CLI package) each check app names. They must agree:
@@ -10,7 +10,7 @@ describe('app names', () => {
     const agent = new RegExp(NAME)
     const kitAccepts = (name: string) => {
       try {
-        appDatabaseName(name)
+        appRoleName(name)
         return true
       } catch {
         return false

@@ -11,6 +11,9 @@ import {
 } from './app-spec.ts'
 import { AgentError, type Apps } from './apps.ts'
 
+/** Env an app with a database gets from Spotcraft, and so can't set itself. */
+const DATABASE_ENV = ['DATABASE_URL', 'DATABASE_SCHEMA']
+
 export interface BuildOptions {
   token: string
   apps: Apps
@@ -107,10 +110,11 @@ export function buildApp({ token, apps, allowedIps = [], logger = false }: Build
       // (an older dashboard) never takes an app's database away by updating it.
       const current = await apps.get(name)
       const database = request.body.database ?? current?.database ?? false
-      if (database && 'DATABASE_URL' in request.body.env) {
-        return reply
-          .code(400)
-          .send({ error: 'DATABASE_URL is set by Spotcraft when the app has a database' })
+      if (database && DATABASE_ENV.some((key) => key in request.body.env)) {
+        return reply.code(400).send({
+          error:
+            'DATABASE_URL and DATABASE_SCHEMA are set by Spotcraft when the app has a database',
+        })
       }
       const { appsDomain } = apps.settings
       // Left out, `protected` keeps its current value, like `database`.

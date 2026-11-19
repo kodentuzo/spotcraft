@@ -98,8 +98,9 @@ export function parseAppForm(
     }
     env[key] = line.slice(equals + 1)
   }
-  if (!errors.env && values.database && 'DATABASE_URL' in env) {
-    errors.env = 'Remove DATABASE_URL: Spotcraft sets it when the app has a database.'
+  const reserved = ['DATABASE_URL', 'DATABASE_SCHEMA'].filter((key) => key in env)
+  if (!errors.env && values.database && reserved.length > 0) {
+    errors.env = `Remove ${reserved.join(' and ')}: Spotcraft sets ${reserved.length > 1 ? 'them' : 'it'} when the app has a database.`
   }
 
   if (Object.keys(errors).length > 0) return { values, errors }

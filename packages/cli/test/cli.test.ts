@@ -81,9 +81,14 @@ describe('app name', () => {
     await assert.rejects(appName(dir), /pass the app name with --name/)
   })
 
-  it('gives each app its own database URL on localhost', () => {
+  it("gives each app its role's URL to the instance database on localhost", () => {
     assert.equal(
       databaseUrl('blog-api'),
+      'postgres://app_blog_api:local-blog-api-password@127.0.0.1:54340/apps',
+    )
+    // An app that still has its own database (from before ADR 0034).
+    assert.equal(
+      databaseUrl('blog-api', 'app_blog_api'),
       'postgres://app_blog_api:local-blog-api-password@127.0.0.1:54340/app_blog_api',
     )
   })

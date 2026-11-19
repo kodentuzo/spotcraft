@@ -3,14 +3,16 @@
 import assert from 'node:assert/strict'
 import { after, before, describe, it } from 'node:test'
 import pg from 'pg'
-import { appDatabaseName, provision, purge } from '../src/provision.ts'
+import { appLayout, appRoleName, type Instance, provision, purge } from '../src/provision.ts'
 
 const SUPERUSER_URL = process.env.KIT_TEST_POSTGRES_URL
 if (!SUPERUSER_URL && process.env.CI) throw new Error('KIT_TEST_POSTGRES_URL is not set')
 
 const ADMIN = 'cli_test_admin'
 const ADMIN_PASSWORD = 'admin-password-0123456789'
-const APPS = ['cli-a', 'cli-b']
+// Its own instance database and group, so other packages' tests on the same server can't clash.
+const INSTANCE: Instance = { database: 'cli_test_apps', group: 'cli_test_app' }
+const APPS = ['cli-a', 'cli-b', 'cli-old']
 const pw = (name: string, n = 1) => `${name}-password-${n}-0123456789`
 
 /** The URL of the same server with another user and database. */
@@ -22,8 +24,9 @@ function urlFor(user: string, password: string, database = 'postgres') {
   return url.toString()
 }
 const adminUrl = () => urlFor(ADMIN, ADMIN_PASSWORD)
-const appUrl = (name: string, password = pw(name), database = appDatabaseName(name)) =>
-  urlFor(appDatabaseName(name), password, database)
+const appUrl = (name: string, password = pw(name)) =>
+  urlFor(appRoleName(name), password, INSTANCE.database)
+const options = (name: string, n = 1) => ({ name, password: pw(name, n), instance: INSTANCE })
 
 async function query<T extends pg.QueryResultRow>(url: string, sql: string) {
   const client = new pg.Client({ connectionString: url })
@@ -46,56 +49,96 @@ async function failure(url: string, sql: string): Promise<string | undefined> {
 }
 
 describe('provisioning', { skip: !SUPERUSER_URL && 'KIT_TEST_POSTGRES_URL is not set' }, () => {
+  const su = () => SUPERUSER_URL as string
+  /** The instance database as the superuser, standing in for the user pool. */
+  const pool = () => {
+    const url = new URL(su())
+    url.pathname = `/${INSTANCE.database}`
+    return url.toString()
+  }
+
+  async function cleanUp() {
+    for (const name of APPS) {
+      await query(su(), `DROP DATABASE IF EXISTS ${appRoleName(name)} WITH (FORCE)`)
+    }
+    await query(su(), `DROP DATABASE IF EXISTS ${INSTANCE.database} WITH (FORCE)`)
+    for (const name of APPS) await query(su(), `DROP ROLE IF EXISTS ${appRoleName(name)}`)
+    await query(su(), `DROP ROLE IF EXISTS ${INSTANCE.group}`)
+    await query(su(), `DROP ROLE IF EXISTS ${ADMIN}`)
+  }
+
   before(async () => {
-    const su = SUPERUSER_URL as string
-    for (const name of APPS)
-      await query(su, `DROP DATABASE IF EXISTS ${appDatabaseName(name)} WITH (FORCE)`)
-    for (const name of APPS) await query(su, `DROP ROLE IF EXISTS ${appDatabaseName(name)}`)
-    await query(su, `DROP ROLE IF EXISTS ${ADMIN}`)
+    await cleanUp()
     // Like the server's spotcraft_agent, but without its createrole_self_grant setting:
     // provision must not depend on it.
-    await query(su, `CREATE ROLE ${ADMIN} LOGIN CREATEDB CREATEROLE PASSWORD '${ADMIN_PASSWORD}'`)
+    await query(su(), `CREATE ROLE ${ADMIN} LOGIN CREATEDB CREATEROLE PASSWORD '${ADMIN_PASSWORD}'`)
   })
 
   after(async () => {
-    if (!SUPERUSER_URL) return
-    for (const name of APPS) await purge(adminUrl(), name)
-    await query(SUPERUSER_URL, `DROP ROLE IF EXISTS ${ADMIN}`)
+    if (SUPERUSER_URL) await cleanUp()
   })
 
-  it('provisions an empty database, and running it again changes nothing', async () => {
-    for (const name of APPS) await provision(adminUrl(), { name, password: pw(name) })
-    await provision(adminUrl(), { name: 'cli-a', password: pw('cli-a') })
-    const schemas = await query<{ name: string }>(
+  it('provisions a schema the app owns, and running it again changes nothing', async () => {
+    for (const name of ['cli-a', 'cli-b']) {
+      assert.deepEqual(await provision(adminUrl(), options(name)), {
+        database: INSTANCE.database,
+      })
+    }
+    await provision(adminUrl(), options('cli-a'))
+    assert.equal(await appLayout(adminUrl(), 'cli-a', INSTANCE), 'schema')
+    const where = await query<{ db: string; schema: string }>(
       appUrl('cli-a'),
-      `SELECT nspname AS name FROM pg_namespace
-       WHERE nspname NOT LIKE 'pg\\_%' AND nspname <> 'information_schema' ORDER BY 1`,
+      'SELECT current_database() AS db, current_schema() AS schema',
     )
-    assert.deepEqual(
-      schemas.rows.map((row) => row.name),
-      ['public'],
+    assert.deepEqual(where.rows[0], { db: INSTANCE.database, schema: 'app_cli_a' })
+
+    // The pool's tables, as the auth service will make them: apps may read and reference users.
+    await query(
+      pool(),
+      `CREATE SCHEMA auth;
+       CREATE TABLE auth.users (id uuid PRIMARY KEY DEFAULT gen_random_uuid());
+       CREATE TABLE auth.sessions (id uuid PRIMARY KEY, user_id uuid REFERENCES auth.users);
+       GRANT USAGE ON SCHEMA auth TO ${INSTANCE.group};
+       GRANT SELECT, REFERENCES ON auth.users TO ${INSTANCE.group};`,
     )
   })
 
-  it('lets the app own its database and create its tables', async () => {
+  it('puts unqualified tables in the app schema, which may point at auth.users', async () => {
     const url = appUrl('cli-a')
-    await query(url, 'CREATE TABLE public.notes (id serial PRIMARY KEY, body text)')
-    await query(url, 'CREATE SCHEMA game')
-    const owner = await query<{ owner: string }>(
+    await query(
       url,
-      `SELECT pg_get_userbyid(datdba) AS owner FROM pg_database WHERE datname = current_database()`,
+      `CREATE TABLE notes (
+         id serial PRIMARY KEY,
+         user_id uuid NOT NULL REFERENCES auth.users (id) ON DELETE CASCADE,
+         body text NOT NULL)`,
     )
-    assert.equal(owner.rows[0].owner, 'app_cli_a')
+    const table = await query<{ schema: string }>(
+      url,
+      `SELECT schemaname AS schema FROM pg_tables WHERE tablename = 'notes'`,
+    )
+    assert.equal(table.rows[0].schema, 'app_cli_a')
+
+    // The pool deletes a user; the app's rows go with them, though the pool has no rights on them.
+    const user = await query<{ id: string }>(
+      pool(),
+      'INSERT INTO auth.users DEFAULT VALUES RETURNING id',
+    )
+    await query(url, `INSERT INTO notes (user_id, body) VALUES ('${user.rows[0].id}', 'hi')`)
+    await query(pool(), `DELETE FROM auth.users WHERE id = '${user.rows[0].id}'`)
+    assert.equal((await query(url, 'SELECT 1 FROM notes')).rowCount, 0)
   })
 
-  it('lets an app into its own database only', async () => {
+  it('keeps the app out of auth beyond users, other schemas and new schemas', async () => {
+    const a = appUrl('cli-a')
+    assert.equal(await failure(a, 'SELECT count(*) FROM auth.users'), undefined)
+    assert.match((await failure(a, 'SELECT * FROM auth.sessions')) ?? '', /permission denied/)
+    assert.match((await failure(a, 'DELETE FROM auth.users')) ?? '', /permission denied/)
+    assert.match((await failure(a, 'CREATE TABLE auth.extra (id int)')) ?? '', /permission denied/)
+    assert.match((await failure(a, 'CREATE SCHEMA drizzle')) ?? '', /permission denied/)
+    assert.match((await failure(a, 'CREATE TABLE public.x (id int)')) ?? '', /permission denied/)
     assert.match(
-      (await failure(appUrl('cli-a', pw('cli-a'), 'app_cli_b'), 'SELECT 1')) ?? '',
-      /permission denied for database/,
-    )
-    assert.match(
-      (await failure(appUrl('cli-b', pw('cli-b'), 'app_cli_a'), 'SELECT 1')) ?? '',
-      /permission denied for database/,
+      (await failure(appUrl('cli-b'), 'SELECT * FROM app_cli_a.notes')) ?? '',
+      /permission denied for schema/,
     )
   })
 
@@ -128,7 +171,7 @@ describe('provisioning', { skip: !SUPERUSER_URL && 'KIT_TEST_POSTGRES_URL is not
   })
 
   it("updates the app's password when it changes", async () => {
-    await provision(adminUrl(), { name: 'cli-b', password: pw('cli-b', 2) })
+    await provision(adminUrl(), options('cli-b', 2))
     assert.match(
       (await failure(appUrl('cli-b', pw('cli-b', 1)), 'SELECT 1')) ?? '',
       /password authentication failed/,
@@ -136,18 +179,44 @@ describe('provisioning', { skip: !SUPERUSER_URL && 'KIT_TEST_POSTGRES_URL is not
     assert.equal(await failure(appUrl('cli-b', pw('cli-b', 2)), 'SELECT 1'), undefined)
   })
 
-  it('purges an app, and purging again does nothing', async () => {
-    await purge(adminUrl(), 'cli-b')
-    await purge(adminUrl(), 'cli-b')
+  it('purges an app with its schema, and purging again does nothing', async () => {
+    await purge(adminUrl(), 'cli-a', INSTANCE)
+    await purge(adminUrl(), 'cli-a', INSTANCE)
+    const left = await query(
+      urlFor(ADMIN, ADMIN_PASSWORD, INSTANCE.database),
+      `SELECT 1 FROM pg_namespace WHERE nspname = 'app_cli_a' UNION ALL SELECT 1 FROM pg_roles WHERE rolname = 'app_cli_a'`,
+    )
+    assert.equal(left.rowCount, 0)
+    assert.equal(await appLayout(adminUrl(), 'cli-a', INSTANCE), 'none')
+  })
+
+  it('keeps an app that has its own database there, until it is purged', async () => {
+    // An app made before ADR 0034: its own role and database, made by the admin.
+    await query(adminUrl(), `CREATE ROLE app_cli_old LOGIN PASSWORD '${pw('cli-old')}'`)
+    await query(adminUrl(), `GRANT app_cli_old TO ${ADMIN} WITH INHERIT FALSE, SET TRUE`)
+    await query(adminUrl(), 'CREATE DATABASE app_cli_old OWNER app_cli_old')
+    const own = urlFor('app_cli_old', pw('cli-old'), 'app_cli_old')
+    await query(own, 'CREATE TABLE kept (id int)')
+
+    assert.deepEqual(await provision(adminUrl(), options('cli-old')), { database: 'app_cli_old' })
+    assert.equal(await appLayout(adminUrl(), 'cli-old', INSTANCE), 'database')
+    assert.equal(await failure(own, 'SELECT * FROM kept'), undefined, 'search_path unchanged')
+    const schema = await query(
+      urlFor(ADMIN, ADMIN_PASSWORD, INSTANCE.database),
+      `SELECT 1 FROM pg_namespace WHERE nspname = 'app_cli_old'`,
+    )
+    assert.equal(schema.rowCount, 0, 'no schema in the instance database')
+
+    await purge(adminUrl(), 'cli-old', INSTANCE)
     const left = await query(
       adminUrl(),
-      `SELECT 1 FROM pg_database WHERE datname = 'app_cli_b' UNION ALL SELECT 1 FROM pg_roles WHERE rolname = 'app_cli_b'`,
+      `SELECT 1 FROM pg_database WHERE datname = 'app_cli_old' UNION ALL SELECT 1 FROM pg_roles WHERE rolname = 'app_cli_old'`,
     )
     assert.equal(left.rowCount, 0)
   })
 
   it('refuses names that are not app names', () => {
-    assert.equal(appDatabaseName('blog-api'), 'app_blog_api')
+    assert.equal(appRoleName('blog-api'), 'app_blog_api')
     for (const bad of [
       'Blog',
       'blog_api',
@@ -156,6 +225,6 @@ describe('provisioning', { skip: !SUPERUSER_URL && 'KIT_TEST_POSTGRES_URL is not
       `x${'y'.repeat(32)}`,
       'a"; drop role x; --',
     ])
-      assert.throws(() => appDatabaseName(bad), /Not a valid app name/)
+      assert.throws(() => appRoleName(bad), /Not a valid app name/)
   })
 })

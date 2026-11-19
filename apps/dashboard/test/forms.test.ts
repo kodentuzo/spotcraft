@@ -30,6 +30,10 @@ describe('app form', () => {
       parse({ database: 'on', env: 'DATABASE_URL=x' }).errors.env ?? '',
       /Spotcraft sets it/,
     )
+    assert.match(
+      parse({ database: 'on', env: 'DATABASE_URL=x\nDATABASE_SCHEMA=y' }).errors.env ?? '',
+      /Remove DATABASE_URL and DATABASE_SCHEMA: Spotcraft sets them/,
+    )
   })
 
   it('needs a domain only without an apps domain', () => {

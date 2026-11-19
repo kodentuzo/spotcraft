@@ -123,7 +123,7 @@ describe('backups', () => {
     dumped.length = 0
     const databases = {
       async provision(name: string, password: string) {
-        return `postgres://app_${name}:${password}@postgres:5432/app_${name}`
+        return { DATABASE_URL: `postgres://app_${name}:${password}@postgres:5432/apps` }
       },
       async purge() {},
       async listUsers() {

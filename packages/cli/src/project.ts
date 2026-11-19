@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { appDatabaseName } from './provision.ts'
+import { appRoleName } from './provision.ts'
 
 /**
  * The app's name: `--name`, or else the `name` in package.json, made into a Spotcraft app
@@ -26,7 +26,7 @@ export async function appName(dir: string, flag?: string): Promise<string> {
       .replace(/-+$/, '')
   }
   try {
-    appDatabaseName(candidate)
+    appRoleName(candidate)
   } catch {
     throw new Error(
       `"${candidate}" is not a Spotcraft app name (lower-case letters, digits and dashes, 2–32 characters); pass --name`,
@@ -54,11 +54,19 @@ async function readEnvFile(path: string): Promise<string> {
   }
 }
 
-/** The local settings an app needs; AUTH_SECRET is kept if .env already has one. */
-export async function localEnv(dir: string, databaseUrl: string): Promise<Map<string, string>> {
+/**
+ * The local settings an app needs: its database URL, its schema (unless it still has its own
+ * database), and AUTH_SECRET, kept if .env already has one.
+ */
+export async function localEnv(
+  dir: string,
+  databaseUrl: string,
+  schema?: string,
+): Promise<Map<string, string>> {
   const existing = parseEnv(await readEnvFile(join(dir, '.env')))
   return new Map([
     ['DATABASE_URL', databaseUrl],
+    ...(schema ? [['DATABASE_SCHEMA', schema] as [string, string]] : []),
     ['AUTH_SECRET', existing.get('AUTH_SECRET') || randomBytes(32).toString('hex')],
   ])
 }

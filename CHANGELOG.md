@@ -24,16 +24,19 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
 
 ### Changed
 
-- **New app databases are empty** (breaking for apps on `@spotcraft/kit`). The agent and
-  `spotcraft dev` create the app's role and database only, without the kit's `auth` schema
-  ([ADR 0036](docs/decisions/0036-spotkit.md)); apps get users from the instance's pool once it
-  exists ([ADR 0035](docs/decisions/0035-auth-pool.md)). Databases that already have the
-  `auth` schema keep it and their data, but the agent no longer migrates it. `dev status` no
-  longer shows an `auth` schema version.
+- **A new app with a database gets a schema, not a database** (breaking for apps on
+  `@spotcraft/kit`). Apps share one database, `apps`, like a Supabase project: each has its own
+  schema and role, `app_<name>`, with the schema as its `search_path`
+  ([ADR 0034](docs/decisions/0034-app-contract.md)). It gets `DATABASE_URL` and the new
+  `DATABASE_SCHEMA`, and can't create schemas or see other apps'. There is no `auth` schema in
+  it: users will come from the instance's pool ([ADR 0035](docs/decisions/0035-auth-pool.md)).
+  Backups dump the app's schema, and the backups guide restores it as the app's role. The same
+  holds locally with `spotcraft dev`; `dev status` no longer shows an `auth` schema version.
 
-  **Migrating:** apps already deployed need nothing. A new app that uses `@spotcraft/kit` calls
-  the kit's `migrate(DATABASE_URL)` at start, before `backend.check()`, as apps hosted elsewhere
-  do; the `auth` schema is then the app's own. The same works locally.
+  **Migrating:** apps that already have their own database keep it, with their `auth` schema
+  and data, until they move to the pool; nothing migrates `auth` any more. A new app that uses
+  `@spotcraft/kit` can't get a database on this version, since the kit needs an `auth` schema it
+  can't create. Locally, keep such an app on `spotcraft` 0.5 until it moves.
 - **The theme comes from [spotstrap](https://spotstrap.dev)** (`@kodentuzo/spotstrap`), the
   owner's UI library, through `@spotcraft/ui`
   ([ADR 0033](docs/decisions/0033-theme-from-spotstrap.md)). The colors, corners and font stay

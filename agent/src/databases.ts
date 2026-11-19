@@ -1,5 +1,13 @@
 import pg from 'pg'
-import { appDatabaseName, provision, purge } from 'spotcraft/provision'
+import {
+  appLayout,
+  appRoleName,
+  hasOwnDatabase,
+  INSTANCE,
+  type Instance,
+  provision,
+  purge,
+} from 'spotcraft/provision'
 import { AgentError, type AppUser, type Databases } from './apps.ts'
 
 /** Keyset cursor for user pages: the last row's creation time and id. */
@@ -14,30 +22,51 @@ function decodeCursor(cursor: string): [string, string] {
   return [createdAt, id]
 }
 
+/** Where `pg_dump` finds one app: a schema of the instance database, or its own database. */
+export interface DumpTarget {
+  database: string
+  schema?: string
+}
+
 /**
- * App databases on the server's Postgres, managed as the agent's role (`adminUrl`, e.g.
+ * App schemas on the server's Postgres, managed as the agent's role (`adminUrl`, e.g.
  * `postgres://spotcraft_agent:…@postgres:5432/postgres`). Apps reach the same server by the
- * same host name, on the network they share with it.
+ * same host name, on the network they share with it. Apps made before ADR 0034 keep their own
+ * database until they move.
  */
-export function postgresDatabases(adminUrl: string): Databases {
-  const appUrl = (name: string, user?: { name: string; password: string }) => {
+export function postgresDatabases(
+  adminUrl: string,
+  /** Where apps live; another one only keeps tests apart. */
+  instance: Instance = INSTANCE,
+): Databases & {
+  dumpTarget(name: string): Promise<DumpTarget>
+} {
+  const urlFor = (database: string, user?: { name: string; password: string }) => {
     const url = new URL(adminUrl)
     if (user) {
       url.username = user.name
       url.password = user.password
     }
-    url.pathname = `/${appDatabaseName(name)}`
+    url.pathname = `/${database}`
     url.search = ''
     return url.toString()
   }
 
-  /** Runs `fn` connected to the app's database as the agent, which owns `auth`. */
-  async function inAppDatabase<T>(name: string, fn: (client: pg.Client) => Promise<T>) {
+  /**
+   * Runs `fn` connected as the agent to the app's own database, where the kit's `auth` tables
+   * are. Apps in a schema have none (their users are the instance's), so it returns `missing`.
+   */
+  async function inAppDatabase<T>(
+    name: string,
+    missing: T,
+    fn: (client: pg.Client) => Promise<T>,
+  ): Promise<T> {
+    if (!(await hasOwnDatabase(adminUrl, name))) return missing
     // The app owns its database and could create schemas; every query here is qualified, and a
     // fixed search_path keeps anything the app made from shadowing what they resolve to. Set as a
     // startup option, so there is no extra query that could fail after connecting.
     const client = new pg.Client({
-      connectionString: appUrl(name),
+      connectionString: urlFor(appRoleName(name)),
       options: '-c search_path=pg_catalog,auth',
     })
     await client.connect()
@@ -50,14 +79,26 @@ export function postgresDatabases(adminUrl: string): Databases {
 
   return {
     async provision(name, password) {
-      await provision(adminUrl, { name, password })
-      return appUrl(name, { name: appDatabaseName(name), password })
+      const { database } = await provision(adminUrl, { name, password, instance })
+      const role = appRoleName(name)
+      const env: Record<string, string> = {
+        DATABASE_URL: urlFor(database, { name: role, password }),
+      }
+      if (database === instance.database) env.DATABASE_SCHEMA = role
+      return env
     },
 
-    purge: (name) => purge(adminUrl, name),
+    async dumpTarget(name) {
+      const role = appRoleName(name)
+      return (await appLayout(adminUrl, name, instance)) === 'database'
+        ? { database: role }
+        : { database: instance.database, schema: role }
+    },
+
+    purge: (name) => purge(adminUrl, name, instance),
 
     listUsers: (name, { limit, cursor }) =>
-      inAppDatabase(name, async (db) => {
+      inAppDatabase(name, { available: false, total: 0, users: [] }, async (db) => {
         const found = await db.query<{ ok: boolean }>(
           `SELECT to_regclass('auth.users') IS NOT NULL AS ok`,
         )
@@ -95,7 +136,7 @@ export function postgresDatabases(adminUrl: string): Databases {
       }),
 
     deleteUser: (name, id) =>
-      inAppDatabase(name, async (db) => {
+      inAppDatabase(name, false, async (db) => {
         // Sessions, accounts and the app's own rows go through their foreign-key cascades.
         const deleted = await db.query('DELETE FROM auth.users WHERE id = $1', [id])
         return (deleted.rowCount ?? 0) > 0
