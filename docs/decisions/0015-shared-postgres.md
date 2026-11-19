@@ -5,7 +5,7 @@ status: accepted
 implementation: done
 date: 2026-11-08
 supersedes: []
-superseded_by: []
+superseded_by: [34]
 notes: "First stateful service for hosted apps; backups were decided in ADR 0030. As built, the app's database password is kept in apps/<name>/secrets.json (mode 600) rather than app.json, so the agent's API never returns it."
 ---
 

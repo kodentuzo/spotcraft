@@ -21,6 +21,7 @@ const sources = new Map(
 const pageFiles = new Map<string, string>([
   ['getting-started', 'docs/getting-started.md'],
   ['security', 'docs/security.md'],
+  ['contracts', 'docs/contracts.md'],
   ['guides/backend-kit', 'docs/guides/backend-kit.md'],
   ['guides/kit-nuxt', 'docs/guides/kit-nuxt.md'],
   ['guides/kit-tanstack-start', 'docs/guides/kit-tanstack-start.md'],
@@ -54,6 +55,7 @@ export const NAV = [
   { slug: 'guides/kit-tanstack-start', label: 'Kit in TanStack Start' },
   { slug: 'guides/deploy-from-ci', label: 'Deploy from CI' },
   { slug: 'guides/backups', label: 'Backups and restoring' },
+  { slug: 'contracts', label: 'App contract (planned)' },
   { slug: 'security', label: 'Security model' },
   { slug: 'decisions', label: 'Decisions' },
   { slug: 'changelog', label: 'Changelog' },

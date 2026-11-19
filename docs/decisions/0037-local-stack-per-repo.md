@@ -1,0 +1,44 @@
+---
+title: Each repository gets its own local stack
+number: 37
+status: accepted
+implementation: planned
+date: 2026-11-19
+supersedes: [17]
+superseded_by: []
+notes: "Wave 1: Postgres, the auth service and Mailpit per repository, spotcraft dev as the one first-run command, spotcraft.json. Umami joins the stack with analytics."
+---
+
+# Each repository gets its own local stack
+
+## Context
+
+ADR 0017 runs one local Postgres for every app on a machine, so they share data and a reset of
+one can affect another. Apps now also need the user pool ([ADR 0035](0035-auth-pool.md)) and,
+later, email, so a database alone no longer matches what an app gets on the server.
+
+## Decision
+
+- **One stack per repository:** a Compose project `spotcraft-dev-<repo slug>` with Postgres (the
+  version pinned for the server), the auth service with a `main` pool, and Mailpit to catch email.
+  It has its own volume. Free ports are picked on first start and kept in `.spotcraft/dev.json`,
+  which is not committed. All deployables in a monorepo share the stack.
+- **Same as the server:** database and role names (`app_<slug>`) and limits, the provisioning
+  code, the reserved env var names, JWT claims, JWKS and webhook format
+  ([docs/contracts.md](../contracts.md)).
+- **Commands:**
+  - `spotcraft dev` starts the stack if needed, creates the app's database, writes the missing
+    reserved variables to `.env` (overwriting nothing), and runs the `migrate` command from
+    `spotcraft.json`.
+  - `spotcraft dev env` prints the variables.
+  - `spotcraft dev db reset` recreates the app's database after asking, then runs `migrate`.
+  - `spotcraft dev status`, `stop` and `ls` (every stack on the machine).
+- **CI uses the same command** before tests, instead of its own Postgres service.
+- Still no Studio and no copying production data down.
+
+## Consequences
+
+- Repositories don't share local data, and CI runs what developers run.
+- Several stacks running at once use more memory.
+- The local pool only knows the repository's own users and only sends webhooks to its apps.
+  Testing one account across apps from different repositories needs a staging instance.

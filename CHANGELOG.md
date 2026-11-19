@@ -10,6 +10,17 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
 
 ## [Unreleased]
 
+### Added
+
+- **The planned app contract** ([docs/contracts.md](docs/contracts.md)): what every app gets and
+  what it must do. Decided in four records, none built yet:
+  - every app gets the same env vars and a database, with no switches
+    ([ADR 0034](docs/decisions/0034-app-contract.md));
+  - one user pool per instance, starting with guests ([ADR 0035](docs/decisions/0035-auth-pool.md));
+  - the kit becomes `@kodentuzo/spotkit` in its own repository, and the CLI becomes
+    `@kodentuzo/spotcraft` ([ADR 0036](docs/decisions/0036-spotkit.md));
+  - each repository gets its own local stack ([ADR 0037](docs/decisions/0037-local-stack-per-repo.md)).
+
 ### Changed
 
 - **The theme comes from [spotstrap](https://spotstrap.dev)** (`@kodentuzo/spotstrap`), the
