@@ -8,6 +8,7 @@ import { readFileSync, writeFileSync } from 'node:fs'
 const files = [
   'package.json',
   'agent/package.json',
+  'auth/package.json',
   'apps/dashboard/package.json',
   'apps/site/package.json',
   'packages/cli/package.json',

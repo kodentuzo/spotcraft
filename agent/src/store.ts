@@ -14,6 +14,8 @@ export interface AppFiles {
 export interface AppSecrets {
   /** Password of the app's Postgres role. */
   databasePassword?: string
+  /** APP_SECRET, the app's own signing key (ADR 0034); made on its first deploy and kept. */
+  appSecret?: string
   /** SHA-256 (hex) of the app's deploy hook token; the token itself is never stored (ADR 0029). */
   hookTokenHash?: string
 }
@@ -82,6 +84,16 @@ export class Store {
       await chmod(path, 0o600)
     }
     await this.writeSite(name, files.site)
+  }
+
+  /** A site file's content, e.g. the user pool's (`_auth`); undefined if there is none. */
+  async readSite(name: string): Promise<string | undefined> {
+    try {
+      return await readFile(this.sitePath(name), 'utf8')
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
+      throw error
+    }
   }
 
   /** Only the Caddy site, e.g. once a new slot is healthy and traffic can move to it. */

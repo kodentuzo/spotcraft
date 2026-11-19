@@ -2,6 +2,8 @@
   import { Alert, AlertDescription, AlertTitle } from '@spotcraft/ui/components/alert'
   import * as AlertDialog from '@spotcraft/ui/components/alert-dialog'
   import { Button, buttonVariants } from '@spotcraft/ui/components/button'
+  import { Input } from '@spotcraft/ui/components/input'
+  import { Label } from '@spotcraft/ui/components/label'
   import { backupHealth } from '#lib/backup.ts'
   import Sparkline from '#lib/components/Sparkline.svelte'
   import Stat from '#lib/components/Stat.svelte'
@@ -21,6 +23,7 @@
   const modeLabel = { zone: 'DNS by Spotcraft', saas: 'Cloudflare custom hostname', manual: 'DNS set by hand' }
   let purge = $state(false)
   let backingUp = $state(false)
+  let moving = $state(false)
 
   // A GitHub Actions step for the app's workflow, after its image is pushed (ADR 0029).
   const hookStep = $derived(`- name: Deploy to Spotcraft
@@ -68,7 +71,6 @@
     </p>
   </div>
   <div class="flex gap-2">
-    {#if app.database}<Button href="/apps/{app.name}/users" variant="outline">Users</Button>{/if}
     <Button href="/apps/{app.name}/edit" variant="outline">Edit</Button>
     <form
       method="POST"
@@ -158,6 +160,44 @@
     </dl>
   </div>
 </div>
+
+{#if data.ownDatabase || (form && 'moved' in form)}
+  <section class="mt-8">
+    <h2 class="mb-2 font-heading text-lg font-semibold">Own database</h2>
+    <div class="space-y-3 border p-4 text-sm">
+      {#if form && 'moved' in form && form.moved}
+        {@const tables = Object.entries(form.moved.tables)}
+        <p>
+          Moved: {form.moved.users} guests and {form.moved.sessions} sessions into the user pool{#if tables.length}, and {tables.map(([table, rows]) => `${rows} rows of ${table}`).join(', ')}{/if}.
+          The old database stays, unused: drop it once you're sure.
+        </p>
+      {:else}
+        <p class="text-muted-foreground">
+          This app was made before apps shared the instance database, and keeps its guests itself. Moving it deploys a new version made for its schema and the user pool, then copies its guests, their sessions and its rows over. Guests keep their cookies. A backup comes first; if anything fails, the current version keeps running as it is.
+        </p>
+        {#if form && 'moveError' in form}<p class="text-destructive">{form.moveError}</p>{/if}
+        <form
+          method="POST"
+          action="?/move"
+          class="flex flex-wrap items-end gap-2"
+          use:enhance={() => {
+            moving = true
+            return async ({ update }) => {
+              await update({ reset: false })
+              moving = false
+            }
+          }}
+        >
+          <div class="grid gap-1">
+            <Label for="move-tag">New version's tag</Label>
+            <Input id="move-tag" name="tag" required class="w-56 font-mono" placeholder={app.tag} value={form && 'tag' in form ? form.tag : ''} />
+          </div>
+          <Button type="submit" variant="outline" disabled={moving}>{moving ? 'Moving…' : 'Move'}</Button>
+        </form>
+      {/if}
+    </div>
+  </section>
+{/if}
 
 {#if data.backup}
   {@const known = form && 'backedUp' in form ? form.backedUp : data.backup.last}

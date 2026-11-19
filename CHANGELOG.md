@@ -10,6 +10,112 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-19
+
+### Added
+
+- **Moving an app into the user pool** ([guide](docs/guides/move-into-the-pool.md)): an app
+  made before ADR 0034, with its own database and the kit's guests, moves into its schema with
+  one form on its dashboard page (`POST /apps/:name/move` with the new version's tag). The agent
+  backs it up, deploys the new version, and between its migrations and its start copies the
+  guests and live sessions into the pool with the same tokens, and the rows of the tables the
+  new version made. The pool re-signs cookies signed with the app's old `AUTH_SECRET`, so
+  guests stay signed in. If anything fails, the old version keeps running. The old database is
+  kept until you drop it. `GET /apps/:name/database` says where an app's tables are.
+
+- **`spotcraft dev` runs a stack per repository** ([ADR 0037](docs/decisions/0037-local-stack-per-repo.md)):
+  Postgres set up as on the server, the user pool, and Mailpit, on free ports kept in
+  `.spotcraft/dev.json`. One command starts it, sets up the app's schema, adds the server's
+  setting names to `.env` and runs `migrate` from the new `spotcraft.json`. Also `dev env`,
+  `dev db reset`, `dev migrate`, `dev status`, `dev stop` and `dev ls`.
+
+- **The dashboard's Users page** (`/users`) lists the user pool's users, shared by every app,
+  with how many are guests, and deletes one with what every app kept for them
+  ([ADR 0035](docs/decisions/0035-auth-pool.md)). If an app's foreign key keeps a user's rows,
+  the page says which table. The agent's routes are `GET /pool/users` and
+  `DELETE /pool/users/:id`.
+
+- **Apps get the user pool and Spotcraft's env** ([ADR 0034](docs/decisions/0034-app-contract.md),
+  [ADR 0035](docs/decisions/0035-auth-pool.md)):
+  - every site sends `/_spotcraft/auth/*` to the user pool, with the visitor's address set by
+    Caddy, and `auth.<APPS_DOMAIN>/main/*` reaches it for clients without an app domain;
+  - every app gets `PORT`, `PUBLIC_URL`, `APP_NAME`, `APP_RELEASE`, `APP_SECRET` (made once and
+    kept), `AUTH_URL`, `AUTH_ISSUER`, `AUTH_JWKS_URL`, and on a server with Postgres
+    `DATABASE_URL` and `DATABASE_SCHEMA`;
+  - **migrations run on the server**: an image's `dev.spotcraft.migrate` label (a JSON array)
+    runs once per deploy, before the new version starts; if it fails, the old one keeps serving;
+  - an image without a `HEALTHCHECK` must answer `GET /health` (or at least its port) before
+    traffic moves to it.
+
+- **The user pool** (`auth`, [ADR 0035](docs/decisions/0035-auth-pool.md)): a new service from
+  the Spotcraft image, Better Auth over the `auth` schema of the shared `apps` database. For now
+  it makes guests, with a first-party cookie on whichever app domain asked, a bearer token for
+  clients elsewhere, and 15-minute EdDSA JWTs that apps check against its JWKS. Apps may read
+  and reference `auth.users`. Guests unused for 180 days are deleted, and the nightly backup
+  dumps `auth` to `_auth/` in the bucket. Nothing routes to it yet; Caddy's route on app
+  domains comes next.
+
+  **Upgrading:** nothing to set. The deploy now starts Postgres first and creates the `apps`
+  database, the `spotcraft_app` group and the pool's role and schema, and generates
+  `POSTGRES_AUTH_PASSWORD` and `AUTH_SECRET` into `.env`. Optional: the GitHub variable
+  `AUTH_TRUSTED_ORIGINS` for bearer clients on other sites. The server needs about 192 MB more.
+
+- **The planned app contract** ([docs/contracts.md](docs/contracts.md)): what every app gets and
+  what it must do. Decided in four records, none built yet:
+  - every app gets the same env vars and its own schema in one instance database, like a
+    Supabase project, and the server runs its migrations
+    ([ADR 0034](docs/decisions/0034-app-contract.md));
+  - one user pool per instance, starting with guests ([ADR 0035](docs/decisions/0035-auth-pool.md));
+  - the kit becomes `@kodentuzo/spotkit` in its own repository, and the CLI becomes
+    `@kodentuzo/spotcraft` ([ADR 0036](docs/decisions/0036-spotkit.md));
+  - each repository gets its own local stack ([ADR 0037](docs/decisions/0037-local-stack-per-repo.md)).
+
+### Changed
+
+- **The CLI is now `@kodentuzo/spotcraft`** on npm (the command is still `spotcraft`), with a
+  new local stack (breaking). **Migrating:** `npm install --save-dev @kodentuzo/spotcraft` and
+  run `npx spotcraft dev`. Apps on `@spotcraft/kit` keep `spotcraft@0.5`. The old shared stack
+  (`spotcraft-dev`) is left as it is; remove it with
+  `docker compose -p spotcraft-dev down -v` when nothing needs it.
+
+- **The per-app Users page and the agent's `/apps/:name/users` routes are gone** (breaking for
+  API callers). Guests of apps made before ADR 0034 stay in their own database until those apps
+  move to the pool, and aren't listed meanwhile.
+
+- **Every app has a database on a server with Postgres** (breaking). The dashboard's Database
+  checkbox is gone and `database` in the agent's API is ignored; an app without one gets its
+  schema on its next deploy.
+- **An app's env can't set Spotcraft's names** (breaking): `PORT`, `PUBLIC_URL`, `APP_*`,
+  `DATABASE_*`, `AUTH_URL`, `AUTH_ISSUER`, `AUTH_JWKS_URL`, `SMTP_URL`, `MAIL_FROM`. Saving such
+  an app answers 400. `auth` is a reserved app name.
+
+  **Migrating:** before you next edit an app in the dashboard, remove these names from its env
+  (`PUBLIC_URL` is the usual one; Spotcraft now sets it to the custom domain, else the default
+  host). Deploys through the hook keep working until then, with Spotcraft's values winning.
+
+- **A new app with a database gets a schema, not a database** (breaking for apps on
+  `@spotcraft/kit`). Apps share one database, `apps`, like a Supabase project: each has its own
+  schema and role, `app_<name>`, with the schema as its `search_path`
+  ([ADR 0034](docs/decisions/0034-app-contract.md)). It gets `DATABASE_URL` and the new
+  `DATABASE_SCHEMA`, and can't create schemas or see other apps'. There is no `auth` schema in
+  it: users will come from the instance's pool ([ADR 0035](docs/decisions/0035-auth-pool.md)).
+  Backups dump the app's schema, and the backups guide restores it as the app's role. The same
+  holds locally with `spotcraft dev`; `dev status` no longer shows an `auth` schema version.
+
+  **Migrating:** apps that already have their own database keep it, with their `auth` schema
+  and data, until they move to the pool; nothing migrates `auth` any more. A new app that uses
+  `@spotcraft/kit` can't get a database on this version, since the kit needs an `auth` schema it
+  can't create. Locally, keep such an app on `spotcraft` 0.5 until it moves.
+- **The theme comes from [spotstrap](https://spotstrap.dev)** (`@kodentuzo/spotstrap`), the
+  owner's UI library, through `@spotcraft/ui`
+  ([ADR 0033](docs/decisions/0033-theme-from-spotstrap.md)). The colors, corners and font stay
+  the same. Body text is 17px instead of 16px, muted text is slightly darker, and the website's
+  buttons are 44px tall.
+- **The dashboard's buttons, fields and dialogs use spotstrap's classes.** Buttons and fields
+  are 44px tall (were 36px), with 17px text. The users table's Delete is 36px with a 44px hit
+  area. Destructive buttons are solid red. On a phone, the confirmation dialog opens as a sheet at
+  the bottom of the screen, its buttons full width, over a darker backdrop.
+
 ## [0.5.2] - 2026-11-18
 
 The repository moved to the kodentuzo organization, with updated server images.
@@ -350,7 +456,8 @@ handful of server-rendered apps from Docker Hub images behind HTTPS.
 - Servers: key-only SSH as a `deploy` user with modern algorithms only, root login refused,
   two firewalls, automatic security updates.
 
-[Unreleased]: https://github.com/kodentuzo/spotcraft/compare/v0.5.2...HEAD
+[Unreleased]: https://github.com/kodentuzo/spotcraft/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/kodentuzo/spotcraft/compare/v0.5.2...v0.6.0
 [0.5.2]: https://github.com/kodentuzo/spotcraft/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/kodentuzo/spotcraft/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/kodentuzo/spotcraft/compare/v0.4.1...v0.5.0

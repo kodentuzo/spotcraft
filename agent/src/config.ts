@@ -18,6 +18,8 @@ export interface Config {
   appsDomain: string | undefined
   /** The dashboard's host on the same Caddy; apps can't use it (ADR 0026). */
   dashboardDomain: string | undefined
+  /** The user pool's `iss` (ADR 0035); with it, apps get the AUTH_* env. */
+  authIssuer: string | undefined
   /** `cloudflare` when a Cloudflare Tunnel delivers the traffic and Caddy serves plain HTTP. */
   edge: Edge
   /** Set together: the agent then manages custom domains' DNS through Cloudflare (ADR 0021). */
@@ -131,6 +133,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   if (dashboardDomain && !new RegExp(DOMAIN).test(dashboardDomain)) {
     throw new Error('DASHBOARD_DOMAIN must be a domain like dash.example.com, without https://')
   }
+  const authIssuer = env.AUTH_ISSUER?.trim() || undefined
+  if (authIssuer && !URL.canParse(authIssuer)) throw new Error('AUTH_ISSUER must be a URL')
   const notices: string[] = []
   const edge = env.EDGE || 'direct'
   if (edge !== 'direct' && edge !== 'cloudflare') {
@@ -150,6 +154,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     postgresUrl,
     appsDomain,
     dashboardDomain,
+    authIssuer,
     edge,
     cloudflare: loadCloudflare(env, edge, appsDomain, notices),
     backup: loadBackup(env),

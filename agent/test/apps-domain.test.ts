@@ -62,6 +62,11 @@ describe('apps domain (ADR 0021)', () => {
     assert.match(text, /^tagtape\.spotcraft\.dev, tagtape\.app \{$/m)
     assert.match(text, /^www\.tagtape\.app \{$/m)
     assert.match(text, /header_up X-Forwarded-For \{client_ip\}/)
+    // The user pool on the app's own domain, told the visitor's address by Caddy (ADR 0035).
+    assert.match(
+      text,
+      /handle \/_spotcraft\/auth\/\* \{\n\t\treverse_proxy auth:3000 \{\n\t\t\theader_up X-Spotcraft-Client-IP \{client_ip\}/,
+    )
   })
 
   it('serves plain HTTP behind Cloudflare', async () => {
@@ -85,7 +90,12 @@ describe('apps domain (ADR 0021)', () => {
       appsDomain: 'spotcraft.dev',
       edge: 'cloudflare',
     })
-    assert.deepEqual(await behindTunnel.refreshSites(), ['blog', 'tagtape'])
+    assert.deepEqual(await behindTunnel.refreshSites(), ['blog', 'tagtape', '_auth'])
+    assert.match(
+      await site('_auth'),
+      /^http:\/\/auth\.spotcraft\.dev \{$/m,
+      "the user pool's own host",
+    )
     assert.match(
       await site('tagtape'),
       /^http:\/\/tagtape\.spotcraft\.dev, http:\/\/tagtape\.app \{$/m,
@@ -126,7 +136,7 @@ describe('apps domain (ADR 0021)', () => {
     await assert.rejects(apps.refreshSites())
     assert.equal(await site('tagtape'), before, 'Caddy keeps a configuration it accepts')
     caddyUp = true
-    assert.deepEqual(await apps.refreshSites(), ['tagtape'])
+    assert.deepEqual(await apps.refreshSites(), ['tagtape', '_auth'])
     assert.match(await site('tagtape'), /^http:\/\/tagtape\.spotcraft\.dev \{$/m)
   })
 
@@ -134,7 +144,8 @@ describe('apps domain (ADR 0021)', () => {
     start({ appsDomain: 'spotcraft.dev', edge: 'direct' })
     await put('blog', spec)
     const apps = new Apps(new Store(dir), run, 'caddy', undefined, { edge: 'direct' })
-    assert.deepEqual(await apps.refreshSites(), ['blog'])
+    assert.deepEqual(await apps.refreshSites(), ['blog', '_auth'])
+    assert.doesNotMatch(await site('_auth'), /\{/, 'no host for the user pool either')
     const text = await site('blog')
     assert.doesNotMatch(text, /\{/, 'no block, so Caddy accepts the configuration')
     assert.match(text, /has no address/)

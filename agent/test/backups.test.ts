@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, it } from 'node:test'
 import { buildApp } from '../src/app.ts'
-import { Apps } from '../src/apps.ts'
+import { Apps, POOL_BACKUP } from '../src/apps.ts'
 import { type BackupTarget, backupStamp, untilNext } from '../src/backups.ts'
 import type { Runner } from '../src/runner.ts'
 import { amzDate, S3, signV4 } from '../src/s3.ts'
@@ -123,15 +123,22 @@ describe('backups', () => {
     dumped.length = 0
     const databases = {
       async provision(name: string, password: string) {
-        return `postgres://app_${name}:${password}@postgres:5432/app_${name}`
+        return { DATABASE_URL: `postgres://app_${name}:${password}@postgres:5432/apps` }
       },
       async purge() {},
       async listUsers() {
-        return { available: true, total: 0, users: [] }
+        return { available: true, total: 0, guests: 0, users: [] }
       },
       async deleteUser() {
         return false
       },
+      async layout() {
+        return 'schema' as const
+      },
+      async move() {
+        return { users: 0, sessions: 0, tables: {} }
+      },
+      async dropSchema() {},
     }
     apps = new Apps(new Store(dir), docker, 'caddy', databases, undefined, undefined, {
       target: bucket.target,
@@ -158,12 +165,14 @@ describe('backups', () => {
     await rm(dir, { recursive: true, force: true })
   })
 
-  it('backs up each app: its dump if it has a database, its settings either way', async () => {
+  it('backs up each app: its schema dump and its settings', async () => {
     const results = await apps.backupAll()
     assert.deepEqual(Object.keys(results).sort(), ['site', 'sokobanko'])
-    assert.deepEqual(dumped, ['sokobanko'])
+    // Every app has a schema on a server with Postgres (ADR 0034).
+    assert.deepEqual(dumped.sort(), ['site', 'sokobanko'])
     assert.deepEqual([...bucket.objects.keys()].sort(), [
       'site/20261114T030000Z/app.json',
+      'site/20261114T030000Z/database.dump',
       'site/20261114T030000Z/secrets.json',
       'sokobanko/20261114T030000Z/app.json',
       'sokobanko/20261114T030000Z/database.dump',
@@ -198,6 +207,22 @@ describe('backups', () => {
     assert.match(results.sokobanko?.error ?? '', /403/)
     assert.equal(results.sokobanko?.lastOkAt, '2026-11-14T03:00:00.000Z')
     clock = new Date('2026-11-14T03:00:00Z')
+  })
+
+  it("backs up the user pool's schema after the apps, when it can be dumped", async () => {
+    const pooled = new Apps(new Store(dir), docker, 'caddy', undefined, undefined, undefined, {
+      target: bucket.target,
+      dump: async (name) => Buffer.from(`dump of ${name}`),
+      dumpPool: async () => Buffer.from('dump of auth'),
+      now: () => clock,
+    })
+    const results = await pooled.backupAll()
+    assert.deepEqual(Object.keys(results).sort(), [POOL_BACKUP, 'site', 'sokobanko'])
+    assert.equal(bucket.objects.get('_auth/20261114T030000Z/auth.dump')?.toString(), 'dump of auth')
+    bucket.fail()
+    const failed = await pooled.backupAll()
+    assert.equal(failed[POOL_BACKUP]?.ok, false)
+    assert.match(failed[POOL_BACKUP]?.error ?? '', /403/)
   })
 
   it('carries on past a status file cut short, and writes it whole', async () => {

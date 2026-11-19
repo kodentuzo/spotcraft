@@ -202,9 +202,9 @@ importers:
 
   agent:
     dependencies:
-      '@spotcraft/kit':
+      '@kodentuzo/spotcraft':
         specifier: workspace:*
-        version: link:../packages/kit
+        version: link:../packages/cli
       fastify:
         specifier: ^5.12.8
         version: 5.12.8
@@ -212,6 +212,9 @@ importers:
         specifier: ^8.23.1
         version: 8.23.1
     devDependencies:
+      '@spotcraft/kit':
+        specifier: workspace:*
+        version: link:../packages/kit
       '@types/node':
         specifier: 'catalog:'
         version: 26.6.6
@@ -291,11 +294,33 @@ importers:
         specifier: 'catalog:'
         version: 6.0.3
 
+  auth:
+    dependencies:
+      better-auth:
+        specifier: ^1.7.25
+        version: 1.7.25(@sveltejs/kit@3.3.0(@sveltejs/vite-plugin-svelte@7.3.1(svelte@5.57.3)(vite@8.3.8(@types/node@26.6.6)(jiti@2.7.0)))(svelte@5.57.3)(typescript@6.0.3)(vite@8.3.8(@types/node@26.6.6)(jiti@2.7.0)))(@tanstack/react-start@1.169.5(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(rolldown@1.2.19)(supports-color@7.2.0)(vite@8.3.8(@types/node@26.6.6)(jiti@2.7.0)))(drizzle-orm@0.45.4(@types/pg@8.23.1)(kysely@0.29.8)(pg@8.23.1))(pg@8.23.1)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(svelte@5.57.3)
+      drizzle-orm:
+        specifier: ^0.45.4
+        version: 0.45.4(@types/pg@8.23.1)(kysely@0.29.8)(pg@8.23.1)
+      pg:
+        specifier: ^8.23.1
+        version: 8.23.1
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 26.6.6
+      '@types/pg':
+        specifier: ^8.23.1
+        version: 8.23.1
+      jose:
+        specifier: ^6.2.17
+        version: 6.2.17
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+
   packages/cli:
     dependencies:
-      '@spotcraft/kit':
-        specifier: workspace:*
-        version: link:../kit
       pg:
         specifier: ^8.23.1
         version: 8.23.1
@@ -349,6 +374,9 @@ importers:
       '@fontsource-variable/space-grotesk':
         specifier: ^5.3.0
         version: 5.3.0
+      '@kodentuzo/spotstrap':
+        specifier: ^0.1.4
+        version: 0.1.4(tailwindcss@4.3.5)
       bits-ui:
         specifier: ^2.21.0
         version: 2.21.0(@internationalized/date@3.12.4)(svelte@5.57.3)
@@ -1100,6 +1128,15 @@ packages:
 
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
+
+  '@kodentuzo/spotstrap@0.1.4':
+    resolution: {integrity: sha512-K91+bOftCMO7AetipBCUKx0yHiV5KG7yuHZEV6ZNIYcHHxWXR6lSOF1nVkbVc8YkYsDCUwyPfxvsiMfCPI8y9w==}
+    engines: {node: '>=24'}
+    peerDependencies:
+      tailwindcss: ^4.3.0
+    peerDependenciesMeta:
+      tailwindcss:
+        optional: true
 
   '@napi-rs/wasm-runtime@1.2.4':
     resolution: {integrity: sha512-AJxoUD2/15ESHbvpcyjU274nsAPLuOtPHCk0vKJM5pj//Fg/B1FXNWjPnXTT9PymCYYiHo4zPj0ZomXBKhoy7g==}
@@ -4216,6 +4253,10 @@ snapshots:
     dependencies:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.6.0
+
+  '@kodentuzo/spotstrap@0.1.4(tailwindcss@4.3.5)':
+    optionalDependencies:
+      tailwindcss: 4.3.5
 
   '@napi-rs/wasm-runtime@1.2.4(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)':
     dependencies:

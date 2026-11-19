@@ -25,7 +25,7 @@ export interface BackupTarget {
   put(key: string, body: Uint8Array, contentType?: string): Promise<void>
 }
 
-/** Dumps one app's database, in pg_dump's custom format. */
+/** Dumps one app's schema (or its own database, from before ADR 0034), in pg_dump's custom format. */
 export type Dump = (app: string) => Promise<Buffer>
 
 /**
@@ -45,12 +45,13 @@ const DUMP_SECONDS = 300
  */
 export function dockerDump(
   postgresContainer: string,
-  /** The app's database (the kit's `appDatabaseName`), passed in so this module needs no kit. */
-  databaseName: (app: string) => string,
+  /** Where the app's tables are: a schema of the instance database, or its own database. */
+  target: (app: string) => Promise<{ database: string; schema?: string }>,
   timeoutMs = (DUMP_SECONDS + 15) * 1000,
 ): Dump {
-  return (app) => {
-    const database = databaseName(app)
+  return async (app) => {
+    const { database, schema } = await target(app)
+    const what = schema ? `${database}.${schema}` : database
     return new Promise((resolve, reject) => {
       const child = spawn(
         'docker',
@@ -64,6 +65,7 @@ export function dockerDump(
           'postgres',
           '--format=custom',
           '--lock-wait-timeout=30s',
+          ...(schema ? [`--schema=${schema}`] : []),
           database,
         ],
         { stdio: ['ignore', 'pipe', 'pipe'] },
@@ -73,14 +75,14 @@ export function dockerDump(
       let stderr = ''
       let failure: Error | undefined
       const timer = setTimeout(() => {
-        failure = new Error(`pg_dump of ${database} took longer than ${timeoutMs / 1000} s`)
+        failure = new Error(`pg_dump of ${what} took longer than ${timeoutMs / 1000} s`)
         child.kill()
       }, timeoutMs)
       child.stdout.on('data', (chunk: Buffer) => {
         size += chunk.length
         if (size > MAX_DUMP_BYTES) {
           failure ??= new Error(
-            `The dump of ${database} is larger than ${MAX_DUMP_BYTES / 1024 / 1024} MB, which the agent holds in memory`,
+            `The dump of ${what} is larger than ${MAX_DUMP_BYTES / 1024 / 1024} MB, which the agent holds in memory`,
           )
           child.kill()
           return
@@ -97,7 +99,7 @@ export function dockerDump(
       child.on('close', (code) => {
         clearTimeout(timer)
         if (failure) reject(failure)
-        else if (code !== 0) reject(new Error(`pg_dump of ${database} failed: ${stderr.trim()}`))
+        else if (code !== 0) reject(new Error(`pg_dump of ${what} failed: ${stderr.trim()}`))
         else resolve(Buffer.concat(chunks))
       })
     })

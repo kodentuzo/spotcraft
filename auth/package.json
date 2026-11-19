@@ -1,0 +1,24 @@
+{
+  "name": "@spotcraft/auth",
+  "version": "0.6.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node --conditions=spotcraft-source --watch src/index.ts",
+    "start": "node src/index.ts",
+    "typecheck": "tsc",
+    "test": "node --conditions=spotcraft-source --test 'test/**/*.test.ts'"
+  },
+  "dependencies": {
+    "better-auth": "^1.7.25",
+    "drizzle-orm": "^0.45.4",
+    "pg": "^8.23.1"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@types/pg": "^8.23.1",
+    "jose": "^6.2.17",
+    "typescript": "catalog:"
+  }
+}

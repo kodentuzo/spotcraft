@@ -53,12 +53,24 @@ function fakeDocker() {
       return { code: 0, stdout: `${rows.join('\n')}\n`, stderr: '' }
     }
     if (args.includes('logs')) return { code: 0, stdout: 'line 1\nline 2\n', stderr: '' }
+    // `docker image inspect --format {{json .Config}}`: what `image()` set, else nothing known.
+    if (args[0] === 'image' && args[1] === 'inspect') {
+      return { code: imageConfig ? 0 : 1, stdout: imageConfig ?? '', stderr: '' }
+    }
     return { code: 0, stdout: '', stderr: '' }
   }
+  let imageConfig: string | undefined
   return {
     run,
     calls,
     running,
+    /** The pulled image's config: its labels and whether it has a HEALTHCHECK. */
+    image: (config: { labels?: Record<string, string>; healthcheck?: boolean }) => {
+      imageConfig = JSON.stringify({
+        Labels: config.labels ?? null,
+        Healthcheck: config.healthcheck ? { Test: ['CMD', 'true'] } : null,
+      })
+    },
     failWhen: (match: (args: string[]) => boolean) => {
       fail = match
     },
@@ -76,37 +88,69 @@ function fakeDocker() {
 }
 
 const GUEST_ID = '8a22a41f-636c-4249-99b7-95aafff1346e'
+/** A user an app's foreign key won't let go of. */
+const BLOCKED_ID = '5b0d4c2e-1f4a-4b8e-9c1d-2e3f4a5b6c7d'
 
-/** Records database calls; `failing` makes provision throw. */
+/** Records database calls; `failing` makes provision throw, `moving` a move. */
 function fakeDatabases() {
   const calls: string[][] = []
   let failing = false
+  let moveFails = false
+  const layouts = new Map<string, 'schema' | 'database' | 'none'>()
   const databases: Databases = {
-    async provision(name, password) {
-      calls.push(['provision', name, password])
+    async provision(name, password, options) {
+      calls.push(['provision', name, password, ...(options?.move ? ['move'] : [])])
       if (failing) throw new Error('connection refused')
-      return `postgres://app_${name}:${password}@postgres:5432/app_${name}`
+      return {
+        DATABASE_URL: `postgres://app_${name}:${password}@postgres:5432/apps`,
+        DATABASE_SCHEMA: `app_${name}`,
+      }
     },
     async purge(name) {
       calls.push(['purge', name])
     },
-    async listUsers(name, { limit, cursor }) {
-      calls.push(['listUsers', name, String(limit), cursor ?? ''])
+    async layout(name) {
+      return layouts.get(name) ?? 'schema'
+    },
+    async move(name, { formerSecret }) {
+      calls.push(['move', name, formerSecret ?? ''])
+      if (moveFails) throw new Error('duplicate key')
+      layouts.set(name, 'schema')
+      return { users: 2, sessions: 3, tables: { progress: 5 } }
+    },
+    async dropSchema(name) {
+      calls.push(['dropSchema', name])
+    },
+    async listUsers({ limit, cursor }) {
+      calls.push(['listUsers', String(limit), cursor ?? ''])
       return {
         available: true,
         total: 1,
+        guests: 1,
         users: [
           { id: GUEST_ID, guest: true, createdAt: '2026-11-08T00:00:00.000Z', lastSeen: null },
         ],
         next: 'b2xkZXI',
       }
     },
-    async deleteUser(name, id) {
-      calls.push(['deleteUser', name, id])
+    async deleteUser(id) {
+      calls.push(['deleteUser', id])
+      if (id === BLOCKED_ID) {
+        throw Object.assign(new Error('violates foreign key constraint'), {
+          code: '23503',
+          table: 'workouts',
+        })
+      }
       return id === GUEST_ID
     },
   }
-  return { databases, calls, fail: () => (failing = true) }
+  return {
+    databases,
+    calls,
+    fail: () => (failing = true),
+    ownDatabase: (name: string) => layouts.set(name, 'database'),
+    failMove: () => (moveFails = true),
+  }
 }
 
 const spec = {
@@ -841,11 +885,70 @@ describe('agent', () => {
       assert.match(password, /^[0-9a-f]{48}$/)
 
       const compose = JSON.parse(await readFile(join(dir, 'apps/tagtape/compose.yaml'), 'utf8'))
+      const { environment } = compose.services['tagtape-blue']
       assert.equal(
-        compose.services['tagtape-blue'].environment.DATABASE_URL,
-        `postgres://app_tagtape:${password}@postgres:5432/app_tagtape`,
+        environment.DATABASE_URL,
+        `postgres://app_tagtape:${password}@postgres:5432/apps`,
       )
+      assert.equal(environment.DATABASE_SCHEMA, 'app_tagtape')
       assert.equal(compose.services['tagtape-blue'].environment.TRUST_PROXY, '1')
+    })
+
+    it('moves an app from its own database into its schema, with a new version', async () => {
+      docker.image({ healthcheck: true })
+      const old = { ...dbSpec, env: { ...dbSpec.env, AUTH_SECRET: 'the-kit-secret' } }
+      assert.equal((await put(old)).statusCode, 200)
+      db.ownDatabase('tagtape')
+      const layout = await withDb.inject({ url: '/apps/tagtape/database', headers: auth })
+      assert.deepEqual(layout.json(), { layout: 'database' })
+
+      db.calls.length = 0
+      const res = await withDb.inject({
+        method: 'POST',
+        url: '/apps/tagtape/move',
+        headers: auth,
+        payload: { tag: '3.0.0' },
+      })
+      assert.equal(res.statusCode, 200, res.body)
+      assert.deepEqual(res.json().moved, { users: 2, sessions: 3, tables: { progress: 5 } })
+      assert.equal(res.json().status.tag, '3.0.0')
+      assert.deepEqual(
+        db.calls.map(([step, , , flag]) => [step, flag]),
+        [
+          ['provision', 'move'],
+          ['move', undefined],
+        ],
+      )
+      assert.equal(db.calls[1][2], 'the-kit-secret', 'the old AUTH_SECRET goes to the pool')
+      assert.ok(docker.running.has('spotcraft-app-tagtape/tagtape-green'), 'the new version runs')
+
+      const again = await withDb.inject({
+        method: 'POST',
+        url: '/apps/tagtape/move',
+        headers: auth,
+        payload: { tag: '3.0.0' },
+      })
+      assert.equal(again.statusCode, 409, 'already in its schema')
+    })
+
+    it('drops the schema and keeps the old version when the copy fails', async () => {
+      docker.image({ healthcheck: true })
+      assert.equal((await put(dbSpec)).statusCode, 200)
+      db.ownDatabase('tagtape')
+      db.failMove()
+      const res = await withDb.inject({
+        method: 'POST',
+        url: '/apps/tagtape/move',
+        headers: auth,
+        payload: { tag: '3.0.0' },
+      })
+      assert.equal(res.statusCode, 502)
+      assert.match(res.json().error, /Could not copy tagtape/)
+      assert.equal(db.calls.at(-1)?.[0], 'dropSchema')
+      assert.ok(docker.running.has('spotcraft-app-tagtape/tagtape-blue'), 'the old version runs')
+      assert.ok(!docker.running.has('spotcraft-app-tagtape/tagtape-green'))
+      const stored = await withDb.inject({ url: '/apps/tagtape', headers: auth })
+      assert.equal(stored.json().tag, dbSpec.tag)
     })
 
     it('keeps the password to itself and reuses it on the next deploy', async () => {
@@ -870,32 +973,26 @@ describe('agent', () => {
       assert.equal(docker.calls.length, 0, 'nothing reaches docker')
     })
 
-    it('refuses a database on a server without Postgres, and DATABASE_URL in env', async () => {
-      assert.equal((await put(dbSpec, app)).statusCode, 409)
-      const own = await put({ ...dbSpec, env: { DATABASE_URL: 'postgres://elsewhere/db' } })
-      assert.equal(own.statusCode, 400)
-      // Without a Spotcraft database, an app may point DATABASE_URL anywhere.
-      const external = await put({ ...spec, env: { DATABASE_URL: 'postgres://elsewhere/db' } })
-      assert.equal(external.statusCode, 200)
-      assert.equal(db.calls.length, 0)
+    it("refuses Spotcraft's env names in an app's own env", async () => {
+      for (const key of ['DATABASE_URL', 'PORT', 'PUBLIC_URL', 'AUTH_URL', 'APP_SECRET']) {
+        const res = await put({ ...spec, env: { [key]: 'mine' } })
+        assert.equal(res.statusCode, 400, key)
+        assert.match(res.json().error, new RegExp(`${key}: Spotcraft sets these`))
+      }
+      assert.equal((await put({ ...spec, env: { AUTH_SECRET: 'the app own' } })).statusCode, 200)
     })
 
-    it('keeps the database setting when an update leaves it out', async () => {
-      await put(dbSpec)
+    it('gives every app a schema on a server with Postgres, whatever the body says', async () => {
       const { database: _, ...withoutField } = dbSpec
-      const res = await put({ ...withoutField, tag: '2.0.1' })
-      assert.equal(res.json().database, true)
+      assert.equal((await put(withoutField)).json().database, true)
+      assert.equal((await put({ ...spec, tag: '2.0.1', database: false })).json().database, true)
       const compose = JSON.parse(await readFile(join(dir, 'apps/tagtape/compose.yaml'), 'utf8'))
       // The update went into the other slot.
       assert.ok(compose.services['tagtape-green'].environment.DATABASE_URL)
-      // A new app without the field gets no database.
-      const fresh = await withDb.inject({
-        method: 'PUT',
-        url: '/apps/fresh',
-        headers: auth,
-        payload: { ...withoutField, domain: 'fresh.app' },
-      })
-      assert.equal(fresh.json().database, false)
+      // Without Postgres, no app has one, and asking for one changes nothing.
+      const plain = await put(dbSpec, app)
+      assert.equal(plain.statusCode, 200, plain.body)
+      assert.equal(plain.json().database, false)
     })
 
     it('keeps the database when an app is removed, unless asked to purge it', async () => {
@@ -929,61 +1026,238 @@ describe('agent', () => {
       })
       const apps = new Apps(new Store(dir), docker.run, 'caddy-test', db.databases)
       db.calls.length = 0
-      assert.deepEqual(await apps.upgradeDatabases(), { upgraded: ['tagtape'], failed: [] })
+      assert.deepEqual(await apps.upgradeDatabases(), {
+        upgraded: ['plain', 'tagtape'],
+        failed: [],
+      })
       assert.deepEqual(
         db.calls.map(([step, name]) => [step, name]),
-        [['provision', 'tagtape']],
+        [
+          ['provision', 'plain'],
+          ['provision', 'tagtape'],
+        ],
       )
       db.fail()
       const { failed } = await apps.upgradeDatabases()
-      assert.deepEqual(failed, [{ name: 'tagtape', error: 'connection refused' }])
+      assert.deepEqual(failed, [
+        { name: 'plain', error: 'connection refused' },
+        { name: 'tagtape', error: 'connection refused' },
+      ])
     })
 
-    describe('users', () => {
-      const get = (url: string) => withDb.inject({ url, headers: auth })
+    describe('the user pool', () => {
+      const get = (url: string, target = withDb) => target.inject({ url, headers: auth })
       const del = (url: string) => withDb.inject({ method: 'DELETE', url, headers: auth })
 
-      it("lists an app's users, passing the page through", async () => {
-        await put(dbSpec)
-        const res = await get('/apps/tagtape/users?limit=10&cursor=b2xkZXI')
+      it("lists the pool's users, passing the page through", async () => {
+        const res = await get('/pool/users?limit=10&cursor=b2xkZXI')
         assert.equal(res.statusCode, 200, res.body)
         assert.equal(res.json().users[0].id, GUEST_ID)
+        assert.equal(res.json().guests, 1)
         assert.equal(res.json().next, 'b2xkZXI')
-        assert.deepEqual(db.calls.at(-1), ['listUsers', 'tagtape', '10', 'b2xkZXI'])
-        await get('/apps/tagtape/users')
-        assert.deepEqual(db.calls.at(-1), ['listUsers', 'tagtape', '50', ''], 'default limit')
+        assert.deepEqual(db.calls.at(-1), ['listUsers', '10', 'b2xkZXI'])
+        await get('/pool/users')
+        assert.deepEqual(db.calls.at(-1), ['listUsers', '50', ''], 'default limit')
       })
 
-      it('deletes a user: 204, then 404', async () => {
-        await put(dbSpec)
-        assert.equal((await del(`/apps/tagtape/users/${GUEST_ID}`)).statusCode, 204)
+      it("deletes a user: 204, then 404, and 409 when an app's key holds on", async () => {
+        assert.equal((await del(`/pool/users/${GUEST_ID}`)).statusCode, 204)
         const other = '00000000-0000-4000-8000-000000000000'
-        assert.equal((await del(`/apps/tagtape/users/${other}`)).statusCode, 404)
+        assert.equal((await del(`/pool/users/${other}`)).statusCode, 404)
+        const blocked = await del(`/pool/users/${BLOCKED_ID}`)
+        assert.equal(blocked.statusCode, 409)
+        assert.match(blocked.json().error, /An app keeps rows for this user.*workouts/)
       })
 
-      it('says why when there are no users to show', async () => {
-        assert.equal((await get('/apps/nope/users')).statusCode, 404, 'no such app')
-        await withDb.inject({
-          method: 'PUT',
-          url: '/apps/plain',
-          headers: auth,
-          payload: { ...spec, domain: 'plain.app' },
-        })
-        assert.equal((await get('/apps/plain/users')).statusCode, 409, 'no database')
-        assert.equal(db.calls.filter(([step]) => step === 'listUsers').length, 0)
+      it('answers 409 on a server without Postgres', async () => {
+        assert.equal((await get('/pool/users', app)).statusCode, 409)
       })
 
       it('validates ids, limits and cursors before touching the database', async () => {
-        await put(dbSpec)
         const calls = db.calls.length
-        assert.equal((await del('/apps/tagtape/users/not-a-uuid')).statusCode, 400)
-        assert.equal((await del(`/apps/tagtape/users/${GUEST_ID}';--`)).statusCode, 400)
-        assert.equal((await get('/apps/tagtape/users?limit=0')).statusCode, 400)
-        assert.equal((await get('/apps/tagtape/users?limit=500')).statusCode, 400)
-        assert.equal((await get('/apps/tagtape/users?cursor=a%20b')).statusCode, 400)
-        assert.equal((await get('/apps/tagtape/users?other=1')).statusCode, 400)
+        assert.equal((await del('/pool/users/not-a-uuid')).statusCode, 400)
+        assert.equal((await del(`/pool/users/${GUEST_ID}';--`)).statusCode, 400)
+        assert.equal((await get('/pool/users?limit=0')).statusCode, 400)
+        assert.equal((await get('/pool/users?limit=500')).statusCode, 400)
+        assert.equal((await get('/pool/users?cursor=a%20b')).statusCode, 400)
+        assert.equal((await get('/pool/users?other=1')).statusCode, 400)
+        assert.equal((await get('/apps/tagtape/users')).statusCode, 404, 'the old route is gone')
         assert.equal(db.calls.length, calls, 'nothing reached the database')
       })
     })
+  })
+})
+
+describe('the app contract (ADR 0034)', () => {
+  let dir: string
+  let docker: ReturnType<typeof fakeDocker>
+  let app: ReturnType<typeof buildApp>
+  let apps: Apps
+  const settings = {
+    appsDomain: 'spotcraft.dev',
+    edge: 'direct' as const,
+    authIssuer: 'https://dash.example.com/pools/main',
+  }
+  const put = (payload: object = spec) =>
+    app.inject({ method: 'PUT', url: '/apps/tagtape', headers: auth, payload })
+  const composeEnv = async (service: string) =>
+    JSON.parse(await readFile(join(dir, 'apps/tagtape/compose.yaml'), 'utf8')).services[service]
+      .environment as Record<string, string>
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), 'spotcraft-contract-'))
+    docker = fakeDocker()
+    apps = new Apps(new Store(dir), docker.run, 'caddy-test', undefined, settings)
+    apps.probe = { intervalMs: 1, seconds: 0.05 }
+    app = buildApp({ token: TOKEN, apps })
+  })
+  afterEach(async () => {
+    await app.close()
+    await rm(dir, { recursive: true, force: true })
+  })
+
+  it("gives the app Spotcraft's env, over its own, with a secret kept across deploys", async () => {
+    docker.image({ healthcheck: true })
+    assert.equal((await put()).statusCode, 200)
+    const env = await composeEnv('tagtape-blue')
+    assert.equal(env.PORT, '3000')
+    assert.equal(env.APP_NAME, 'tagtape')
+    assert.equal(env.APP_RELEASE, '2.0.0')
+    assert.equal(env.PUBLIC_URL, 'https://tagtape.app', 'the custom domain over the default host')
+    assert.equal(env.AUTH_URL, 'https://tagtape.app/_spotcraft/auth')
+    assert.equal(env.AUTH_JWKS_URL, 'https://tagtape.app/_spotcraft/auth/jwks')
+    assert.equal(env.AUTH_ISSUER, settings.authIssuer)
+    assert.match(env.APP_SECRET, /^[A-Za-z0-9_-]{43}$/)
+    assert.equal(env.TRUST_PROXY, '1', "the app's own env stays")
+
+    await put({ ...spec, tag: '2.0.1', domain: undefined })
+    const next = await composeEnv('tagtape-green')
+    assert.equal(next.APP_SECRET, env.APP_SECRET, 'the same secret')
+    assert.equal(next.APP_RELEASE, '2.0.1')
+    assert.equal(next.PUBLIC_URL, 'https://tagtape.spotcraft.dev')
+    const shown = await app.inject({ url: '/apps/tagtape', headers: auth })
+    assert.doesNotMatch(shown.body, new RegExp(env.APP_SECRET), 'never returned')
+  })
+
+  it('gives no AUTH_* env on a server without a user pool', async () => {
+    const without = new Apps(new Store(dir), docker.run, 'caddy-test', undefined, {
+      appsDomain: 'spotcraft.dev',
+      edge: 'direct',
+    })
+    docker.image({ healthcheck: true })
+    await without.deploy({ name: 'tagtape', ...fullSpec })
+    const env = await composeEnv('tagtape-blue')
+    assert.equal(env.AUTH_URL, undefined)
+    assert.equal(env.PUBLIC_URL, 'https://tagtape.app')
+  })
+
+  it("runs the image's migrations before the new slot starts", async () => {
+    docker.image({
+      labels: { 'dev.spotcraft.migrate': '["node", "migrate.js", "--up"]' },
+      healthcheck: true,
+    })
+    assert.equal((await put()).statusCode, 200)
+    const run = docker.calls.findIndex((args) => args.includes('run'))
+    const up = docker.calls.findIndex((args) => args.includes('up'))
+    assert.ok(run >= 0 && run < up, 'migrations, then the new slot')
+    assert.deepEqual(docker.calls[run].slice(docker.calls[run].indexOf('run')), [
+      'run',
+      '--rm',
+      '--no-deps',
+      '-T',
+      '--name',
+      'spotcraft-app-tagtape-migrate',
+      '--entrypoint',
+      'node',
+      'tagtape-blue',
+      'migrate.js',
+      '--up',
+    ])
+  })
+
+  it('fails the deploy when the migrations fail, and the live slot keeps serving', async () => {
+    docker.image({ healthcheck: true })
+    assert.equal((await put()).statusCode, 200)
+    docker.image({
+      labels: { 'dev.spotcraft.migrate': '["node", "migrate.js"]' },
+      healthcheck: true,
+    })
+    docker.failWhen((args) => args.includes('run'))
+    const calls = docker.calls.length
+    const res = await put({ ...spec, tag: '2.0.1' })
+    assert.equal(res.statusCode, 502)
+    assert.match(res.json().error, /migrations of tagtape failed/)
+    const after = docker.calls.slice(calls)
+    assert.ok(!after.some((args) => args.includes('up')), 'the new slot never started')
+    assert.ok(after.some((args) => args.join(' ') === 'rm --force spotcraft-app-tagtape-migrate'))
+    assert.ok(docker.running.has('spotcraft-app-tagtape/tagtape-blue'), 'the live slot')
+    const stored = await app.inject({ url: '/apps/tagtape', headers: auth })
+    assert.equal(stored.json().tag, '2.0.0')
+  })
+
+  it('refuses a migrate label that is not a JSON array of the command', async () => {
+    for (const label of ['node migrate.js', '[]', '[1]', '{"cmd": "node"}']) {
+      docker.image({ labels: { 'dev.spotcraft.migrate': label }, healthcheck: true })
+      const res = await put()
+      assert.equal(res.statusCode, 400, label)
+      assert.match(res.json().error, /dev\.spotcraft\.migrate/)
+    }
+  })
+
+  it('waits for an image without a HEALTHCHECK to answer on /health, or on its port', async () => {
+    docker.image({ healthcheck: false })
+    assert.equal((await put()).statusCode, 200)
+    const probe = docker.calls.find((args) => args[0] === 'exec' && args.includes('wget'))
+    assert.deepEqual(probe, [
+      'exec',
+      'caddy-test',
+      'wget',
+      '-q',
+      '-O',
+      '/dev/null',
+      '-T',
+      '3',
+      'http://app-tagtape-blue:3000/health',
+    ])
+
+    // No /health route, but the port answers: that is enough.
+    docker.failWhen((args) => args.includes('wget'))
+    const notFound: Runner = async (file, args) =>
+      args.includes('wget')
+        ? { code: 1, stdout: '', stderr: 'wget: server returned error: HTTP/1.1 404 Not Found' }
+        : docker.run(file, args)
+    const lenient = new Apps(new Store(dir), notFound, 'caddy-test', undefined, settings)
+    lenient.probe = { intervalMs: 1, seconds: 0.05 }
+    await lenient.deploy({ name: 'tagtape', ...fullSpec, tag: '2.0.1' })
+  })
+
+  it('fails the deploy when an image without a HEALTHCHECK never answers', async () => {
+    docker.image({ healthcheck: false })
+    docker.failWhen((args) => args.includes('wget'))
+    const res = await put()
+    assert.equal(res.statusCode, 502)
+    assert.match(res.json().output, /No answer from http:\/\/app-tagtape-blue:3000\/health/)
+    await assert.rejects(stat(join(dir, 'apps/tagtape')), 'a first deploy leaves nothing')
+  })
+
+  it("serves the user pool on every app's domain and on auth.<APPS_DOMAIN>", async () => {
+    docker.image({ healthcheck: true })
+    await put()
+    const site = await readFile(join(dir, 'sites/tagtape.caddy'), 'utf8')
+    assert.match(site, /handle \/_spotcraft\/auth\/\* \{/)
+    assert.match(site, /header_up X-Spotcraft-Client-IP \{client_ip\}/)
+    await apps.refreshSites()
+    const pool = await readFile(join(dir, 'sites/_auth.caddy'), 'utf8')
+    assert.match(pool, /^auth\.spotcraft\.dev \{$/m)
+    assert.match(pool, /handle_path \/main\/\* \{\n\t\trewrite \* \/_spotcraft\/auth\{uri\}/)
+    assert.match(pool, /respond 404/)
+    // No app may take the name, and so the host.
+    const taken = await app.inject({
+      method: 'PUT',
+      url: '/apps/auth',
+      headers: auth,
+      payload: spec,
+    })
+    assert.equal(taken.statusCode, 400)
   })
 })

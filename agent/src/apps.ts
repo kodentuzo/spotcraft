@@ -7,7 +7,9 @@ import {
   type DomainStatus,
   defaultHost,
   hostnames,
+  POOL_PATH,
   projectName,
+  publicUrl,
   servedHosts,
   slotService,
 } from './app-spec.ts'
@@ -16,7 +18,61 @@ import { CloudflareError } from './cloudflare.ts'
 import { DomainConflict, type Domains } from './domains.ts'
 import type { Runner, RunResult } from './runner.ts'
 import type { AppFiles, Store } from './store.ts'
-import { composeService, renderCompose, renderSite } from './templates.ts'
+import {
+  composeService,
+  renderCompose,
+  renderPoolSite,
+  renderSite,
+  upstreamAlias,
+} from './templates.ts'
+
+/** The image label naming the command that migrates the app before it starts (ADR 0034). */
+export const MIGRATE_LABEL = 'dev.spotcraft.migrate'
+
+/** How long migrations may run, and how long an app without a HEALTHCHECK has to answer. */
+const MIGRATE_SECONDS = 300
+const PROBE_SECONDS = 120
+
+/** The user pool's site file, `sites/_auth.caddy`; app names can't start with `_`. */
+const POOL_SITE = '_auth'
+
+/**
+ * What the agent needs from an image: the migrate command from its label, and whether it has
+ * a HEALTHCHECK. Unknown (an inspect that failed) counts as having one, as before.
+ */
+export function readImageConfig(inspected: string): { migrate?: string[]; healthcheck: boolean } {
+  let config: { Labels?: Record<string, string> | null; Healthcheck?: { Test?: string[] } | null }
+  try {
+    config = JSON.parse(inspected)
+  } catch {
+    return { healthcheck: true }
+  }
+  const test = config?.Healthcheck?.Test
+  const healthcheck = Boolean(test && test.length > 0 && test[0] !== 'NONE')
+  const label = config?.Labels?.[MIGRATE_LABEL]
+  if (label === undefined) return { healthcheck }
+  let migrate: unknown
+  try {
+    migrate = JSON.parse(label)
+  } catch {
+    throw new AgentError(`The image's ${MIGRATE_LABEL} label isn't JSON`, 400)
+  }
+  if (
+    !Array.isArray(migrate) ||
+    migrate.length === 0 ||
+    migrate.length > 32 ||
+    !migrate.every((part) => typeof part === 'string' && part.length > 0 && part.length <= 1024)
+  ) {
+    throw new AgentError(
+      `The image's ${MIGRATE_LABEL} label must be a JSON array of the command and its arguments`,
+      400,
+    )
+  }
+  return { migrate: migrate as string[], healthcheck }
+}
+
+/** Where the user pool's backups go in the bucket, and its key in `backupAll`'s result. */
+export const POOL_BACKUP = '_auth'
 
 export type { BackupStatus }
 
@@ -78,18 +134,47 @@ function withStatus(
  * this module (which the dashboard imports for its types) doesn't load the database code.
  */
 export interface Databases {
-  /** Creates or updates the app's role and database; returns the app's DATABASE_URL. */
-  provision(name: string, password: string): Promise<string>
-  /** Drops the app's database and role, if they exist. */
+  /**
+   * Creates or updates the app's role and schema (or its own database, from before ADR 0034);
+   * returns the env that tells the app where it is: DATABASE_URL, and DATABASE_SCHEMA for a
+   * schema.
+   */
+  provision(
+    name: string,
+    password: string,
+    options?: { move?: boolean },
+  ): Promise<Record<string, string>>
+  /** Drops the app's schema or database, and its role, if they exist. */
   purge(name: string): Promise<void>
-  /** A page of the app's users (ADR 0018), newest first. */
-  listUsers(name: string, page: { limit: number; cursor?: string }): Promise<UserPage>
-  /** Deletes a user; their sessions and the app's rows go with them. False if not found. */
-  deleteUser(name: string, id: string): Promise<boolean>
+  /** Where the app's tables are: its schema, its own database (before ADR 0034), or nowhere. */
+  layout(name: string): Promise<'schema' | 'database' | 'none'>
+  /**
+   * Copies an app from its own database into its schema, in one transaction: its kit guests
+   * and live sessions into the pool (same ids and tokens), `formerSecret` (its old
+   * AUTH_SECRET, which signed their cookies) for the pool to accept, and the rows of each
+   * table of `public` that the new version made in the schema and left empty.
+   */
+  move(name: string, options: { formerSecret?: string }): Promise<Moved>
+  /** Drops the app's schema only, after a move that failed. */
+  dropSchema(name: string): Promise<void>
+  /** A page of the user pool's users (ADR 0035), newest first. */
+  listUsers(page: { limit: number; cursor?: string }): Promise<UserPage>
+  /**
+   * Deletes a user from the pool; their sessions and every app's rows for them go with them.
+   * False if not found.
+   */
+  deleteUser(id: string): Promise<boolean>
 }
 
-/** A user of an app, as the dashboard shows it. */
-export interface AppUser {
+/** What a move copied: guests, sessions, and rows per table. */
+export interface Moved {
+  users: number
+  sessions: number
+  tables: Record<string, number>
+}
+
+/** A user of the pool, as the dashboard shows it. */
+export interface PoolUser {
   id: string
   /** A guest (no sign-up) rather than a registered user. */
   guest: boolean
@@ -99,10 +184,12 @@ export interface AppUser {
 }
 
 export interface UserPage {
-  /** False when the app's database has no `auth` schema (it doesn't use the kit). */
+  /** False until the user pool has set up its schema and given the agent access. */
   available: boolean
   total: number
-  users: AppUser[]
+  /** How many of them are guests. */
+  guests: number
+  users: PoolUser[]
   /** Pass back as `cursor` for the next (older) page; absent on the last page. */
   next?: string
 }
@@ -137,11 +224,20 @@ export class Apps {
   readonly #store: Store
   readonly #run: Runner
   readonly #caddyContainer: string
+  /** Whether apps get a schema: the server has Postgres (ADR 0034). */
+  get hasDatabases(): boolean {
+    return Boolean(this.#databases)
+  }
+
+  /** How an image without a HEALTHCHECK is waited for; tests shorten it. */
+  probe = { intervalMs: 2000, seconds: PROBE_SECONDS }
   readonly #databases: Databases | undefined
   readonly settings: AgentSettings
   readonly #domains: Domains | undefined
   readonly #access: AccessApps | undefined
-  readonly #backups: { target: BackupTarget; dump: Dump; now: () => Date } | undefined
+  readonly #backups:
+    | { target: BackupTarget; dump: Dump; dumpPool?: () => Promise<Buffer>; now: () => Date }
+    | undefined
   /** Apps with a backup on request waiting or running. */
   readonly #backingUp = new Set<string>()
   #queue: Promise<unknown> = Promise.resolve()
@@ -167,8 +263,16 @@ export class Apps {
      * protected apps are put behind Cloudflare Access (ADR 0021).
      */
     cloudflare?: { domains: Domains; access?: AccessApps },
-    /** With it, apps are backed up to a bucket (ADR 0030): `backupAll`, nightly. */
-    backups?: { target: BackupTarget; dump: Dump; now?: () => Date },
+    /**
+     * With it, apps are backed up to a bucket (ADR 0030): `backupAll`, nightly. `dumpPool`
+     * dumps the user pool's `auth` schema (ADR 0035), backed up after the apps.
+     */
+    backups?: {
+      target: BackupTarget
+      dump: Dump
+      dumpPool?: () => Promise<Buffer>
+      now?: () => Date
+    },
   ) {
     this.#store = store
     this.#run = run
@@ -313,7 +417,13 @@ export class Apps {
    * With `takeOver: false`, this deploy replaces no foreign DNS records whatever the app's
    * setting, which stays as stored (a hook release, ADR 0029).
    */
-  async #deploy(spec: AppSpec, { takeOver = Boolean(spec.takeOver) } = {}): Promise<AppStatus> {
+  async #deploy(
+    spec: AppSpec,
+    {
+      takeOver = Boolean(spec.takeOver),
+      move,
+    }: { takeOver?: boolean; move?: () => Promise<void> } = {},
+  ): Promise<AppStatus> {
     const previousSpec = await this.#store.get(spec.name)
     const oldHosts = previousSpec ? customHosts(previousSpec) : []
     const newHosts = customHosts(spec)
@@ -337,7 +447,7 @@ export class Apps {
           ),
         )
       }
-      status = await this.#rollOut(spec)
+      status = await this.#rollOut(spec, move)
     } catch (error) {
       // Put DNS back exactly as it was (records a take-over replaced included), and the
       // previous protection (best effort).
@@ -503,21 +613,57 @@ export class Apps {
    * new slot is healthy, so an agent that stops mid-deploy restarts with the live slot's files
    * (`recover`).
    */
-  async #rollOut(spec: AppSpec): Promise<AppStatus> {
-    const databaseUrl = spec.database ? await this.#provision(spec.name) : undefined
+  async #rollOut(requested: AppSpec, move?: () => Promise<void>): Promise<AppStatus> {
+    // Every app has a schema on a server with Postgres, including one released by its hook
+    // from a spec stored before ADR 0034.
+    const spec = { ...requested, database: this.hasDatabases }
+    const env = await this.#platformEnv(spec, { move: Boolean(move) })
     const previous = await this.#store.read(spec.name)
     const live = previous ? composeService(previous.compose) : undefined
     const slot = live === slotService(spec.name, 'blue') ? 'green' : 'blue'
     const service = slotService(spec.name, slot)
     await this.#store.stage(spec.name, {
       spec: `${JSON.stringify(spec, null, 2)}\n`,
-      compose: renderCompose(spec, service, databaseUrl),
+      compose: renderCompose(spec, service, env),
     })
 
     const pull = await this.#compose(spec.name, ['pull', '--quiet'], { staged: true })
     if (pull.code !== 0) {
       await this.#abandon(spec.name, service, previous)
       throw new AgentError(`Could not pull ${spec.image}:${spec.tag}`, 502, tail(pull))
+    }
+    let image: { migrate?: string[]; healthcheck: boolean }
+    try {
+      const inspected = await this.#run('docker', [
+        'image',
+        'inspect',
+        '--format',
+        '{{json .Config}}',
+        `${spec.image}:${spec.tag}`,
+      ])
+      image = readImageConfig(inspected.code === 0 ? inspected.stdout : '')
+    } catch (error) {
+      await this.#abandon(spec.name, service, previous)
+      throw error
+    }
+    // Migrations first, in a container of the new image, while the live slot still serves
+    // (they only add, ADR 0028). If they fail, nothing has changed for visitors.
+    if (image.migrate) {
+      const migrated = await this.#migrate(spec, service, image.migrate)
+      if (migrated.code !== 0) {
+        await this.#abandon(spec.name, service, previous)
+        throw new AgentError(`The migrations of ${spec.name} failed`, 502, tail(migrated))
+      }
+    }
+    // A move fills the new schema now that it has its tables, while the old version still
+    // serves (what it writes from here on stays behind).
+    if (move) {
+      try {
+        await move()
+      } catch (error) {
+        await this.#abandon(spec.name, service, previous)
+        throw error
+      }
     }
     // Only the new slot's service, and no --remove-orphans: the live slot's container isn't in
     // this compose file, and must keep running.
@@ -528,7 +674,9 @@ export class Apps {
         staged: true,
       },
     )
-    if (up.code !== 0) {
+    // An image without a HEALTHCHECK is only "running" now: wait until it answers.
+    const ready = up.code === 0 && !image.healthcheck ? await this.#probe(spec, service) : up
+    if (ready.code !== 0) {
       const logs = await this.#compose(spec.name, ['logs', '--tail', '50', '--no-color'], {
         staged: true,
       })
@@ -536,7 +684,7 @@ export class Apps {
       throw new AgentError(
         `${spec.name} did not start or become healthy`,
         502,
-        `${tail(up)}\n${tail(logs)}`,
+        `${tail(ready)}\n${tail(logs)}`,
       )
     }
     // The new slot is healthy: point the site at it, then commit. A restart before the commit
@@ -657,7 +805,11 @@ export class Apps {
       const site = renderSite(spec, this.settings, service)
       if (files.site !== site) pending.push({ spec, files, site })
     }
-    if (pending.length === 0) return []
+    // The user pool's own host follows the apps domain and the edge, like the apps' sites.
+    const poolSite = renderPoolSite(this.settings)
+    const previousPoolSite = await this.#store.readSite(POOL_SITE)
+    const poolChanged = previousPoolSite !== poolSite
+    if (pending.length === 0 && !poolChanged) return []
     // Protected apps' new hosts go behind Access before Caddy serves them, next to the old
     // ones: whatever fails from here on (another app's Access update, Caddy's reload), every
     // host that might be served stays protected. It narrows to the new hosts at the end.
@@ -672,11 +824,13 @@ export class Apps {
     }
     for (const { spec, files, site } of pending)
       await this.#store.write(spec.name, { ...files, site })
+    if (poolChanged) await this.#store.writeSite(POOL_SITE, poolSite)
     const reload = await this.#reloadCaddy()
     if (reload.code !== 0) {
       // Put the previous sites back, so Caddy keeps a configuration it accepts; the next
       // attempt rewrites them again.
       for (const { spec, files } of pending) await this.#store.write(spec.name, files)
+      if (poolChanged) await this.#store.writeSite(POOL_SITE, previousPoolSite ?? '')
       await this.#reloadCaddy()
       throw new AgentError('Caddy rejected the rewritten sites', 500, tail(reload))
     }
@@ -689,19 +843,121 @@ export class Apps {
           .catch(() => {})
       }
     }
-    return pending.map((p) => p.spec.name)
+    return [...pending.map((p) => p.spec.name), ...(poolChanged ? [POOL_SITE] : [])]
+  }
+
+  /**
+   * The env Spotcraft gives the app (ADR 0034), which wins over its own: its port, name,
+   * release, secret and address; the user pool's (with an issuer and an address); its schema
+   * (on a server with Postgres).
+   */
+  async #platformEnv(spec: AppSpec, { move = false } = {}): Promise<Record<string, string>> {
+    // The schema first: if it can't be prepared, nothing about the app is written yet.
+    const database = this.#databases ? await this.#provision(spec.name, { move }) : {}
+    const env: Record<string, string> = {
+      PORT: String(spec.port),
+      APP_NAME: spec.name,
+      APP_RELEASE: spec.tag,
+      APP_SECRET: await this.#appSecret(spec.name),
+    }
+    const url = publicUrl(spec, this.settings.appsDomain)
+    if (url) env.PUBLIC_URL = url
+    if (url && this.settings.authIssuer) {
+      env.AUTH_URL = `${url}${POOL_PATH}`
+      env.AUTH_ISSUER = this.settings.authIssuer
+      env.AUTH_JWKS_URL = `${url}${POOL_PATH}/jwks`
+    }
+    return { ...env, ...database }
+  }
+
+  /** The app's APP_SECRET: 32 random bytes, made on its first deploy and kept in secrets.json. */
+  async #appSecret(name: string): Promise<string> {
+    const stored = (await this.#store.readSecrets(name)).appSecret
+    if (stored) return stored
+    return this.#withSecrets(async () => {
+      const current = await this.#store.readSecrets(name)
+      if (current.appSecret) return current.appSecret
+      const appSecret = randomBytes(32).toString('base64url')
+      await this.#store.writeSecrets(name, { ...current, appSecret })
+      return appSecret
+    })
+  }
+
+  /**
+   * Runs the image's migrate command once, in a container of the new slot's service: the app's
+   * env, network and limits, the command in place of the image's entrypoint. It has
+   * MIGRATE_SECONDS; the container is removed either way.
+   */
+  async #migrate(spec: AppSpec, service: string, command: string[]): Promise<RunResult> {
+    const container = `${projectName(spec.name)}-migrate`
+    await this.#run('docker', ['rm', '--force', container])
+    const [entrypoint, ...args] = command
+    const result = await this.#run(
+      'docker',
+      [
+        'compose',
+        '-p',
+        projectName(spec.name),
+        '-f',
+        this.#store.stagedComposePath(spec.name),
+        'run',
+        '--rm',
+        '--no-deps',
+        '-T',
+        '--name',
+        container,
+        '--entrypoint',
+        entrypoint,
+        service,
+        ...args,
+      ],
+      (MIGRATE_SECONDS + 15) * 1000,
+    )
+    if (result.code !== 0) await this.#run('docker', ['rm', '--force', container])
+    return result
+  }
+
+  /**
+   * For an image without a HEALTHCHECK: asks the new slot for `GET /health` from Caddy's
+   * container (which shares its network) until it answers. 2xx is healthy; 404 means the app
+   * has no such route but answers on its port, which is enough. Anything else, or no answer,
+   * is tried again for PROBE_SECONDS.
+   */
+  async #probe(spec: AppSpec, service: string): Promise<RunResult> {
+    const url = `http://${upstreamAlias(service)}:${spec.port}/health`
+    const deadline = Date.now() + this.probe.seconds * 1000
+    let last: RunResult = { code: 1, stdout: '', stderr: 'not tried' }
+    while (Date.now() < deadline) {
+      last = await this.#run('docker', [
+        'exec',
+        this.#caddyContainer,
+        'wget',
+        '-q',
+        '-O',
+        '/dev/null',
+        '-T',
+        '3',
+        url,
+      ])
+      if (last.code === 0 || /\b404\b/.test(last.stderr)) return { ...last, code: 0 }
+      await new Promise((resolve) => setTimeout(resolve, this.probe.intervalMs))
+    }
+    return {
+      ...last,
+      stderr: `No answer from ${url} within ${this.probe.seconds} s: ${last.stderr}`,
+    }
   }
 
   /** Prepares the app's database with its stored password (generated the first time). */
-  async #provision(name: string): Promise<string> {
+  async #provision(name: string, { move = false } = {}): Promise<Record<string, string>> {
     if (!this.#databases) {
       throw new AgentError('This server has no Postgres configured for app databases', 409)
     }
     const secrets = await this.#store.readSecrets(name)
     const password = secrets.databasePassword ?? randomBytes(24).toString('hex')
-    let url: string
+    let env: Record<string, string>
     try {
-      url = await this.#databases.provision(name, password)
+      env = await this.#databases.provision(name, password, { move })
     } catch (error) {
       throw new AgentError(`Could not prepare the database for ${name}`, 502, message(error))
     }
@@ -714,11 +970,64 @@ export class Apps {
         }
       })
     }
-    return url
+    return env
+  }
+
+  /** Where the app's tables are; `none` on a server without Postgres. */
+  async databaseLayout(name: string): Promise<'schema' | 'database' | 'none'> {
+    if (!(await this.#store.get(name))) throw new AgentError('No such app', 404)
+    return this.#databases ? this.#databases.layout(name) : 'none'
   }
 
   /**
-   * Brings every app database up to date (role settings, grants, `auth` migrations), e.g.
+   * Moves an app made before ADR 0034 from its own database into its schema, deploying `tag`,
+   * a version made for the schema and the pool (ADR 0035): a backup first (if backups are set
+   * up), then the deploy, which copies the guests, sessions and rows between the new version's
+   * migrations and its start. The old database stays, unused, until someone drops it. If any
+   * of it fails, the schema goes and the old version keeps running on its own database.
+   */
+  move(name: string, tag: string): Promise<{ status: AppStatus; moved: Moved }> {
+    return this.#exclusive(async () => {
+      const databases = this.#databases
+      if (!databases) throw new AgentError('This server has no Postgres, so nothing to move', 409)
+      const spec = await this.#store.get(name)
+      if (!spec) throw new AgentError('No such app', 404)
+      if ((await databases.layout(name)) !== 'database') {
+        throw new AgentError(`${name} has no database of its own to move`, 409)
+      }
+      if (this.#backups) {
+        const backup = await this.#backup(name)
+        if (!backup.ok) throw new AgentError(`Could not back ${name} up first`, 502, backup.error)
+      }
+      let moved: Moved | undefined
+      const formerSecret = spec.env.AUTH_SECRET || undefined
+      try {
+        const status = await this.#deploy(
+          { ...spec, tag },
+          {
+            takeOver: false,
+            move: async () => {
+              try {
+                moved = await databases.move(name, { formerSecret })
+              } catch (error) {
+                throw new AgentError(`Could not copy ${name} into its schema`, 502, message(error))
+              }
+            },
+          },
+        )
+        if (this.#releases.get(name)?.state !== 'deploying') this.#releases.delete(name)
+        return { status, moved: moved as Moved }
+      } catch (error) {
+        await databases.dropSchema(name).catch((dropError: unknown) => {
+          console.warn(`could not drop the schema of ${name}: ${message(dropError)}`)
+        })
+        throw error
+      }
+    })
+  }
+
+  /**
+   * Brings every app database up to date (role settings and grants), e.g.
    * after Spotcraft was upgraded. Each app is tried even if another fails.
    */
   upgradeDatabases(): Promise<{ upgraded: string[]; failed: { name: string; error: string }[] }> {
@@ -765,7 +1074,8 @@ export class Apps {
 
   /**
    * Backs up every app, one at a time, each in its own turn in the queue so deploys can go
-   * between them. A failed app doesn't stop the others; its status says why.
+   * between them, then the user pool (under `POOL_BACKUP`). A failure doesn't stop the others;
+   * its status says why.
    */
   async backupAll(): Promise<Record<string, BackupStatus>> {
     const result: Record<string, BackupStatus> = {}
@@ -776,7 +1086,29 @@ export class Apps {
       )
       if (status) result[spec.name] = status
     }
+    const dumpPool = this.#backups.dumpPool
+    if (dumpPool) result[POOL_BACKUP] = await this.#exclusive(() => this.#backupPool(dumpPool))
     return result
+  }
+
+  /**
+   * The user pool's `auth` schema, as `_auth/<time>/auth.dump` (app names can't start with
+   * `_`). Its secret is in the server's .env, which Hetzner's backups hold.
+   */
+  async #backupPool(dump: () => Promise<Buffer>): Promise<BackupStatus> {
+    const backups = this.#backups
+    if (!backups) throw new AgentError('Backups are not set up on this server', 409)
+    const key = `${POOL_BACKUP}/${backupStamp(backups.now())}/`
+    try {
+      const data = await dump()
+      await backups.target.put(`${key}auth.dump`, data)
+      const at = backups.now().toISOString()
+      return { at, ok: true, key, bytes: data.length, lastOkAt: at }
+    } catch (error) {
+      const status = { at: backups.now().toISOString(), ok: false, error: message(error) }
+      console.warn(`backup of the user pool failed: ${status.error}`)
+      return status
+    }
   }
 
   /**
@@ -817,20 +1149,32 @@ export class Apps {
     return status
   }
 
-  /** The app's database interface, or why its users can't be shown (404 or 409). */
-  async #userDatabase(name: string): Promise<Databases> {
-    const spec = await this.#store.get(name)
-    if (!spec) throw new AgentError('No such app', 404)
-    if (!spec.database || !this.#databases) throw new AgentError(`${name} has no database`, 409)
+  /** The pool's database interface, or 409 on a server without Postgres. */
+  #poolDatabase(): Databases {
+    if (!this.#databases) throw new AgentError('This server has no Postgres, so no user pool', 409)
     return this.#databases
   }
 
-  async listUsers(name: string, page: { limit: number; cursor?: string }): Promise<UserPage> {
-    return (await this.#userDatabase(name)).listUsers(name, page)
+  /** A page of the user pool's users (ADR 0035). */
+  listUsers(page: { limit: number; cursor?: string }): Promise<UserPage> {
+    return this.#poolDatabase().listUsers(page)
   }
 
-  async deleteUser(name: string, id: string): Promise<boolean> {
-    return (await this.#userDatabase(name)).deleteUser(name, id)
+  /** Deletes a pool user; 409 when an app's foreign key keeps their rows (a bug in that app). */
+  async deleteUser(id: string): Promise<boolean> {
+    try {
+      return await this.#poolDatabase().deleteUser(id)
+    } catch (error) {
+      if ((error as { code?: string }).code === '23503') {
+        const detail = (error as { detail?: string; table?: string }).table
+        throw new AgentError(
+          `An app keeps rows for this user that can't be deleted with them${detail ? ` (${detail})` : ''}`,
+          409,
+          message(error),
+        )
+      }
+      throw error
+    }
   }
 
   /**

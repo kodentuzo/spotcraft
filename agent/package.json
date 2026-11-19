@@ -1,6 +1,6 @@
 {
   "name": "@spotcraft/agent",
-  "version": "0.5.2",
+  "version": "0.6.0",
   "private": true,
   "license": "Apache-2.0",
   "type": "module",
@@ -11,11 +11,12 @@
     "test": "node --conditions=spotcraft-source --test 'test/**/*.test.ts'"
   },
   "dependencies": {
-    "@spotcraft/kit": "workspace:*",
+    "@kodentuzo/spotcraft": "workspace:*",
     "fastify": "^5.12.8",
     "pg": "^8.23.1"
   },
   "devDependencies": {
+    "@spotcraft/kit": "workspace:*",
     "@types/node": "catalog:",
     "@types/pg": "^8.23.1",
     "typescript": "catalog:"

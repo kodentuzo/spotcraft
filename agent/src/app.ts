@@ -5,6 +5,7 @@ import {
   appBodySchema,
   isReservedName,
   nameParamsSchema,
+  PLATFORM_ENV,
   RESERVED_NAMES,
   servedHosts,
   TAG,
@@ -103,14 +104,15 @@ export function buildApp({ token, apps, allowedIps = [], logger = false }: Build
       if (isReservedName(name)) {
         return reply.code(400).send({ error: `"${name}" is reserved` })
       }
-      // Left out, `database` keeps its current value, so a client that doesn't know the field
-      // (an older dashboard) never takes an app's database away by updating it.
       const current = await apps.get(name)
-      const database = request.body.database ?? current?.database ?? false
-      if (database && 'DATABASE_URL' in request.body.env) {
+      // Every app has a schema on a server with Postgres (ADR 0034); `database` in the body is
+      // accepted for older dashboards and ignored.
+      const database = apps.hasDatabases
+      const reserved = PLATFORM_ENV.filter((key) => key in request.body.env)
+      if (reserved.length > 0) {
         return reply
           .code(400)
-          .send({ error: 'DATABASE_URL is set by Spotcraft when the app has a database' })
+          .send({ error: `${reserved.join(', ')}: Spotcraft sets these; remove them from env` })
       }
       const { appsDomain } = apps.settings
       // Left out, `protected` keeps its current value, like `database`.
@@ -172,7 +174,6 @@ export function buildApp({ token, apps, allowedIps = [], logger = false }: Build
     },
   )
 
-  // An app's users (ADR 0018), read and deleted in its own database's `auth` tables.
   // Where the app's custom domain stands, and which records its owner still has to create.
   app.get<{ Params: NameParams }>(
     '/apps/:name/domain',
@@ -183,11 +184,11 @@ export function buildApp({ token, apps, allowedIps = [], logger = false }: Build
     },
   )
 
-  app.get<{ Params: NameParams; Querystring: { limit: number; cursor?: string } }>(
-    '/apps/:name/users',
+  // The user pool's users (ADR 0035), read and deleted in the instance database's `auth`.
+  app.get<{ Querystring: { limit: number; cursor?: string } }>(
+    '/pool/users',
     {
       schema: {
-        params: nameParamsSchema,
         querystring: {
           type: 'object',
           additionalProperties: false,
@@ -198,25 +199,22 @@ export function buildApp({ token, apps, allowedIps = [], logger = false }: Build
         },
       },
     },
-    async (request) => apps.listUsers(request.params.name, request.query),
+    async (request) => apps.listUsers(request.query),
   )
 
-  app.delete<{ Params: NameParams & { id: string } }>(
-    '/apps/:name/users/:id',
+  app.delete<{ Params: { id: string } }>(
+    '/pool/users/:id',
     {
       schema: {
         params: {
           type: 'object',
-          required: ['name', 'id'],
-          properties: {
-            ...nameParamsSchema.properties,
-            id: { type: 'string', pattern: UUID },
-          },
+          required: ['id'],
+          properties: { id: { type: 'string', pattern: UUID } },
         },
       },
     },
     async (request, reply) => {
-      const deleted = await apps.deleteUser(request.params.name, request.params.id)
+      const deleted = await apps.deleteUser(request.params.id)
       return deleted ? reply.code(204).send() : reply.code(404).send({ error: 'No such user' })
     },
   )
@@ -242,6 +240,29 @@ export function buildApp({ token, apps, allowedIps = [], logger = false }: Build
     '/apps/:name/backup',
     { schema: { params: nameParamsSchema } },
     async (request) => apps.backup(request.params.name),
+  )
+
+  // Where the app's tables are, and moving an app made before ADR 0034 into its schema.
+  app.get<{ Params: NameParams }>(
+    '/apps/:name/database',
+    { schema: { params: nameParamsSchema } },
+    async (request) => ({ layout: await apps.databaseLayout(request.params.name) }),
+  )
+
+  app.post<{ Params: NameParams; Body: { tag: string } }>(
+    '/apps/:name/move',
+    {
+      schema: {
+        params: nameParamsSchema,
+        body: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['tag'],
+          properties: { tag: { type: 'string', pattern: TAG } },
+        },
+      },
+    },
+    async (request) => apps.move(request.params.name, request.body.tag),
   )
 
   // The app's deploy hook (ADR 0029). The dashboard manages its token: a new one is returned

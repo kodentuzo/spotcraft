@@ -23,13 +23,16 @@ describe('app form', () => {
     assert.equal(input?.readOnly, false, 'an unticked box is off')
   })
 
-  it('refuses bad env lines, reserved names and DATABASE_URL with a database', () => {
+  it("refuses bad env lines, reserved names and Spotcraft's env names", () => {
     assert.match(parse({ env: 'OK=1\nnot a pair' }).errors.env ?? '', /Line 2/)
     assert.match(parse({ name: 'postgres' }).errors.name ?? '', /reserved/)
+    assert.match(parse({ name: 'auth' }).errors.name ?? '', /reserved/)
+    assert.match(parse({ env: 'DATABASE_URL=x' }).errors.env ?? '', /Spotcraft sets it/)
     assert.match(
-      parse({ database: 'on', env: 'DATABASE_URL=x' }).errors.env ?? '',
-      /Spotcraft sets it/,
+      parse({ env: 'PORT=1\nAUTH_URL=y' }).errors.env ?? '',
+      /Remove PORT, AUTH_URL: Spotcraft sets them/,
     )
+    assert.equal(parse({ env: 'AUTH_SECRET=the-app-own' }).errors.env, undefined)
   })
 
   it('needs a domain only without an apps domain', () => {

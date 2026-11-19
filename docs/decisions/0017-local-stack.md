@@ -1,11 +1,11 @@
 ---
 title: A local stack that matches the server
 number: 17
-status: accepted
+status: superseded
 implementation: done
 date: 2026-11-08
 supersedes: []
-superseded_by: []
+superseded_by: [37]
 notes: "Database and auth only; no Studio-style UI yet. As built, Postgres listens on 127.0.0.1:54340, not 54322, which is Supabase's default local database port."
 ---
 

@@ -41,5 +41,5 @@ git tag -s vX.Y.Z 'main^{commit}' -m vX.Y.Z && git push origin vX.Y.Z   # kit fi
 
 CI verifies the tagged commit and publishes the `spotcraft` image (`X.Y.Z`, `X.Y`) and the npm packages.
 Then they run the Deploy workflow with the tag. Afterwards, check the CI run and the published
-versions (`npm view spotcraft version`, `docker manifest inspect`), and tell the user what is
+versions (`npm view @kodentuzo/spotcraft version`, `docker manifest inspect`), and tell the user what is
 live. Tags are signed with the local git setup; never move or delete a pushed tag.

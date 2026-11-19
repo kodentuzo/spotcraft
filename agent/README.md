@@ -15,27 +15,29 @@ The files it writes are the only record of which apps exist:
 
 ## API
 
-| Method | Path                     | What                                                       |
-| ------ | ------------------------ | ---------------------------------------------------------- |
-| GET    | `/health`                | `{ ok: true }`, no token needed                            |
-| GET    | `/settings`              | `{ appsDomain?, edge, dns, access }`: what is set up       |
-| GET    | `/apps`                  | settings plus `state`, `health`, `status`, `hostnames`     |
-| GET    | `/apps/:name`            | one app, or 404                                            |
-| PUT    | `/apps/:name`            | create or update, then deploy; returns the app with status |
-| DELETE | `/apps/:name`            | stop and remove the app and its site; 204, or 404          |
-|        |                          | `?purge=true` also deletes its database and role           |
-| GET    | `/apps/:name/domain`     | custom domain status and records still to create           |
-| GET    | `/apps/:name/logs`       | last `?tail=` lines (default 200, max 5000), plain text    |
-| GET    | `/apps/:name/users`      | the app's users, newest first (`?limit=`, `?cursor=`)      |
-| DELETE | `/apps/:name/users/:id`  | delete a user and what the app kept for them; 204, or 404  |
-| GET    | `/apps/:name/hook-token` | `{ enabled }`: whether the app has a deploy hook           |
-| POST   | `/apps/:name/hook-token` | a new deploy hook token, returned once (201)               |
-| DELETE | `/apps/:name/hook-token` | turn the deploy hook off; 204                              |
-| POST   | `/apps/:name/release`    | `{ tag }` with `X-Hook-Token`: deploy that tag; 202        |
-| GET    | `/apps/:name/release`    | with `X-Hook-Token`: how the last release went             |
-| GET    | `/backups`               | `{ enabled, apps }`: every app's last backup, or null      |
-| GET    | `/apps/:name/backup`     | the app's last backup, or null                             |
-| POST   | `/apps/:name/backup`     | back it up now; the status (409 without backups)           |
+| Method | Path                     | What                                                          |
+| ------ | ------------------------ | ------------------------------------------------------------- |
+| GET    | `/health`                | `{ ok: true }`, no token needed                               |
+| GET    | `/settings`              | `{ appsDomain?, edge, dns, access }`: what is set up          |
+| GET    | `/apps`                  | settings plus `state`, `health`, `status`, `hostnames`        |
+| GET    | `/apps/:name`            | one app, or 404                                               |
+| PUT    | `/apps/:name`            | create or update, then deploy; returns the app with status    |
+| DELETE | `/apps/:name`            | stop and remove the app and its site; 204, or 404             |
+|        |                          | `?purge=true` also deletes its database and role              |
+| GET    | `/apps/:name/domain`     | custom domain status and records still to create              |
+| GET    | `/apps/:name/logs`       | last `?tail=` lines (default 200, max 5000), plain text       |
+| GET    | `/apps/:name/hook-token` | `{ enabled }`: whether the app has a deploy hook              |
+| POST   | `/apps/:name/hook-token` | a new deploy hook token, returned once (201)                  |
+| DELETE | `/apps/:name/hook-token` | turn the deploy hook off; 204                                 |
+| POST   | `/apps/:name/release`    | `{ tag }` with `X-Hook-Token`: deploy that tag; 202           |
+| GET    | `/apps/:name/release`    | with `X-Hook-Token`: how the last release went                |
+| GET    | `/backups`               | `{ enabled, apps }`: every app's last backup, or null         |
+| GET    | `/apps/:name/backup`     | the app's last backup, or null                                |
+| POST   | `/apps/:name/backup`     | back it up now; the status (409 without backups)              |
+| GET    | `/apps/:name/database`   | `{ layout }`: `schema`, `database` (its own) or `none`        |
+| POST   | `/apps/:name/move`       | `{ tag }`: move it from its own database into its schema      |
+| GET    | `/pool/users`            | the user pool's users, newest first (`?limit=`, `?cursor=`)   |
+| DELETE | `/pool/users/:id`        | delete a user and what every app kept for them; 204, 404, 409 |
 
 `PUT` body (unknown fields are rejected):
 
@@ -66,9 +68,8 @@ of the apps domain such as `fallback.<APPS_DOMAIN>` (409). The apex itself may b
 With `APPS_DOMAIN` set, every app is served at `<name>.<APPS_DOMAIN>` (its default host,
 first in `hostnames`) and, if it has one, at its custom domain too (ADR 0021).
 
-Leaving out `database` or `protected` in an update keeps the app's current setting (a new app gets none), so
-an older dashboard never takes a database away. With `database: true`, the app can't set
-`DATABASE_URL` itself; without it, it may point `DATABASE_URL` anywhere.
+Leaving out `protected` or `takeOver` in an update keeps the app's current setting (a new app
+gets none). `database` is accepted and ignored: on a server with Postgres every app has one.
 
 ## Custom domains through Cloudflare
 
@@ -108,7 +109,8 @@ any site that doesn't match them and reloads Caddy (retrying while Caddy starts)
 modes applies to every app at once. A protected app's new hosts go behind Access first, next to its old ones,
 and only once Caddy runs the new sites does Access drop the old hosts. If
 Caddy rejects the rewrite, the previous sites are put back. An app left without any address
-(no `APPS_DOMAIN` and no domain of its own) gets no site until it has one.
+(no `APPS_DOMAIN` and no domain of its own) gets no site until it has one. The user pool's
+own site, `sites/_auth.caddy` for `auth.<APPS_DOMAIN>`, is rewritten the same way.
 
 An app runs in one of two slots, `blue` and `green`: Compose services named `<name>-blue` and
 `<name>-green` in the app's project, `spotcraft-app-<name>`
@@ -117,12 +119,19 @@ live slot. `PUT` deploys into the other slot, next to the live one:
 
 1. It stages the new spec and compose file as `app.next.json` and `compose.next.yaml`, next to
    the live ones.
-2. It runs `docker compose pull`, then `docker compose up -d --wait` for the new slot's service
-   only (up to 120 s for the container to run, and to be healthy if the image has a
-   healthcheck). The live slot keeps serving.
-3. It points the app's Caddy site at the new slot and commits: renaming `compose.next.yaml` to
+2. It runs `docker compose pull` and reads the image's config. If the image has the label
+   `dev.spotcraft.migrate` (a JSON array: the command and its arguments), it runs that once,
+   with `docker compose run --rm --no-deps` on the new slot's service and the command in place
+   of the entrypoint, for up to 5 minutes
+   ([ADR 0034](../docs/decisions/0034-app-contract.md)). A failure ends the deploy here.
+3. It runs `docker compose up -d --wait` for the new slot's service only (up to 120 s for the
+   container to run, and to be healthy if the image has a `HEALTHCHECK`). An image without one
+   is then asked for `GET /health` from Caddy's container every 2 s for up to 120 s: a 2xx, or a
+   404 (it answers on its port, without that route), counts as healthy. The live slot keeps
+   serving.
+4. It points the app's Caddy site at the new slot and commits: renaming `compose.next.yaml` to
    `compose.yaml` makes the new slot the live one. Then it reloads Caddy.
-4. It stops the old slot with `docker stop --time 30`, so it can finish the requests it has, and
+5. It stops the old slot with `docker stop --time 30`, so it can finish the requests it has, and
    removes it.
 
 If a step fails, the new slot and the staged files are removed. The live slot, its files and
@@ -136,8 +145,7 @@ live is removed. It also makes the env- and password-bearing files of every app 
 readable by the agent's user only, complete app or not.
 
 So a deploy has no downtime, but for a few seconds both versions run against the app's
-database: an app's migrations must only add. Its memory briefly doubles. An image without a
-healthcheck counts as ready once it runs, so give images one. An app deployed before slots has
+database: an app's migrations must only add. Its memory briefly doubles. An app deployed before slots has
 one service named after it; its next deploy moves it into `blue`. Names ending in `-blue` or
 `-green` are reserved, as are names starting with `app-`.
 
@@ -163,6 +171,12 @@ An app's own value for one of the defaults wins, so an app can loosen them. The
 - For popups that need `window.opener` (some OAuth flows), it sends its own
   `Cross-Origin-Opener-Policy` (e.g. `same-origin-allow-popups`).
 
+Every site sends `/_spotcraft/auth/*` to the user pool (`auth:3000`,
+[ADR 0035](../docs/decisions/0035-auth-pool.md)) with the visitor's address in
+`X-Spotcraft-Client-IP`, replacing whatever the client sent; every other path goes to the app.
+With `APPS_DOMAIN`, `auth.<APPS_DOMAIN>/main/*` reaches the pool too, for clients without an app
+domain; the name `auth` is reserved.
+
 Caddy passes the visitor's address to the app as `X-Forwarded-For`. With `EDGE=cloudflare`,
 site blocks are plain HTTP (`http://host`): Cloudflare terminates TLS and a tunnel delivers
 requests to Caddy.
@@ -170,7 +184,20 @@ requests to Caddy.
 Every app container gets: no Linux capabilities, `no-new-privileges`, memory/CPU/pids
 limits, rotated logs (3 × 10 MB), and the `spotcraft-edge` network, where Caddy reaches it as
 `app-<name>-<slot>`. Its `app.json` (which holds the env), compose file (which also holds
-`DATABASE_URL`) and `secrets.json` are readable by the agent's user only.
+`DATABASE_URL` and `APP_SECRET`) and `secrets.json` are readable by the agent's user only.
+
+Every app also gets Spotcraft's env ([ADR 0034](../docs/decisions/0034-app-contract.md)), which
+wins over its own; a `PUT` whose env sets one of these names gets a 400:
+
+| Env                                        | Value                                                             |
+| ------------------------------------------ | ----------------------------------------------------------------- |
+| `PORT`, `APP_NAME`, `APP_RELEASE`          | the app's port, name and image tag                                |
+| `APP_SECRET`                               | 32 random bytes (base64url), made once and kept in `secrets.json` |
+| `PUBLIC_URL`                               | `https://` and its custom domain, else its default host           |
+| `AUTH_URL`, `AUTH_JWKS_URL`, `AUTH_ISSUER` | the user pool on its domain, with `AUTH_ISSUER` set               |
+| `DATABASE_URL`, `DATABASE_SCHEMA`          | its schema, on a server with Postgres                             |
+
+`SMTP_URL` and `MAIL_FROM` are reserved too, for instance SMTP.
 
 ## Deploy hook
 
@@ -228,38 +255,77 @@ All four `BACKUP_*` or none; the agent refuses to start with some.
 
 ## App databases
 
-With `database: true`, a deploy first prepares the app's own role and database on the apps
-server's Postgres (`app_<name>`, with dashes as underscores), using
-[`@spotcraft/kit/provision`](../packages/kit/README.md). Only then are the files written, so a
-database that can't be prepared changes nothing (the error and Postgres's message come back
-as a 502). The password is generated on the first deploy and kept in `secrets.json`. The app
-gets `DATABASE_URL=postgres://app_<name>:…@postgres:5432/app_<name>`; it reaches Postgres on
+Apps share one database on the apps server's Postgres, `apps`, like a Supabase project
+([ADR 0034](../docs/decisions/0034-app-contract.md)). On a server with Postgres every app has one (`database` in a `PUT` is ignored); a deploy first
+prepares the app's role and schema there, both `app_<name>` (dashes as underscores), using
+`@kodentuzo/spotcraft/provision` from [the CLI package](../packages/cli/README.md), so a laptop gets the
+same setup. The agent creates `apps` and the `spotcraft_app` group role the first time.
+
+- The role owns its schema and has it as its `search_path`. It may connect to `apps` and
+  nothing else: it can't create schemas or extensions, or see other apps' schemas.
+- Every app role belongs to `spotcraft_app`, which the user pool will let read and reference
+  `auth.users` ([ADR 0035](../docs/decisions/0035-auth-pool.md)).
+- The schema starts empty: apps run their own migrations.
+
+Only then are the files written, so a schema that can't be prepared changes nothing (the error
+and Postgres's message come back as a 502). The password is generated on the first deploy and
+kept in `secrets.json`. The app gets `DATABASE_URL=postgres://app_<name>:…@postgres:5432/apps`
+and `DATABASE_SCHEMA=app_<name>`, which its own env can't set. It reaches Postgres on
 `spotcraft-edge`, and the agent reaches it on the internal `db` network.
 
-Removing an app keeps its database (and the data in it). `DELETE ?purge=true` drops the
-database and its role after the app is removed. To delete the database of an app that was
-already removed, add it again and remove it with `?purge=true`. Turning `database` off keeps the
-database too; the app only stops getting `DATABASE_URL`.
+**Apps made before ADR 0034** keep their own database, `app_<name>`, with the kit's `auth`
+schema, and get only `DATABASE_URL` to it. Nothing migrates `auth` any more. Backups and purges
+handle both.
 
-When the agent starts, it brings every app database up to date: role settings, grants and the
-`auth` migrations of the kit it was built with. Postgres may still be starting, so failures
+`POST /apps/:name/move` with `{ tag }` moves such an app into its schema and its guests into the
+user pool ([guide](../docs/guides/move-into-the-pool.md)). `tag` is a version made for the
+schema and the pool. In the queue, it:
+
+1. backs the app up, if backups are set up, and stops if that fails;
+2. deploys `tag` as usual, with the schema set up although the app has its own database. The
+   role's `search_path` is set in `apps` only, so the running version still finds its tables;
+3. after the new version's migrations, copies in one transaction:
+   - the kit's guests and their live sessions into `auth.users` and `auth.sessions`, with the
+     same ids and tokens;
+   - the app's `AUTH_SECRET` into `auth.former_secrets`, so the pool accepts the guests'
+     cookies (signed with it) and re-signs them;
+   - the rows of each table in the old `public` that the new version made in its schema and
+     left empty, in foreign-key order, by column name; serial columns continue after them.
+     Tables the migrations filled (their journal, say) are left alone;
+4. starts the new version, as any deploy.
+
+It answers `{ status, moved: { users, sessions, tables } }`. What the old version writes after
+the copy stays behind, so pick a quiet moment. If anything fails, the schema is dropped and the
+old version keeps running on its own database. After a move the schema wins: the old database
+stays, unused, until you drop it (`DROP DATABASE app_<name>` as `postgres`).
+
+Removing an app keeps its schema (and the data in it). `DELETE ?purge=true` drops the schema,
+or the old app's database, and its role after the app is removed. To delete the data of an app
+that was already removed, add it again and remove it with `?purge=true`.
+
+When the agent starts, it brings every app's role and grants up to date. Postgres may still be starting, so failures
 are retried every 5 seconds for 3 minutes and logged.
 
 Without `POSTGRES_URL`, the agent runs as before, and asking for a database returns 409.
 
-## App users
+## The user pool's users
 
-For an app with a database, the agent reads and deletes its users directly in the app's
-`auth` tables, which it owns ([ADR 0018](../docs/decisions/0018-user-management.md)). It works
-while the app is down.
+The agent reads and deletes the user pool's users ([ADR 0035](../docs/decisions/0035-auth-pool.md))
+in the `auth` schema of the `apps` database. The pool grants it `SELECT` on `auth.users` and
+`auth.sessions`, `DELETE` on `auth.users`, and `INSERT` on `auth.users`, `auth.sessions` and
+`auth.former_secrets` for moves, and nothing else. It works while the pool is down.
 
-- `GET /apps/:name/users` returns `{ available, total, users, next }`. Each user has `id`,
+- `GET /pool/users` returns `{ available, total, guests, users, next }`. Each user has `id`,
   `guest` (no sign-up), `createdAt` and `lastSeen` (their most recently used session, or
   `null`). Pages hold `?limit=` users (default 50, max 200); pass `next` back as `?cursor=` for
-  the older ones. `available` is false if the database has no `auth` schema.
-- `DELETE /apps/:name/users/:id` (a uuid) deletes the user. Their sessions and the app's own
-  rows go with them through their foreign keys.
-- An app without a database answers 409; an unknown app, 404.
+  the older ones. `available` is false until the pool has set up `auth` and its grants.
+- `DELETE /pool/users/:id` (a uuid) deletes the user. Their sessions, and every app's rows for
+  them, go with them through the foreign keys' cascades. An app's foreign key that blocks the
+  delete answers 409, naming its table.
+- A server without Postgres answers 409.
+
+Apps made before ADR 0034 keep their guests in their own database's `auth` schema until they
+move to the pool (`POST /apps/:name/move`); the dashboard doesn't show those.
 
 ## Settings
 
@@ -273,6 +339,7 @@ while the app is down.
 | `POSTGRES_URL`     | —                        | the agent's Postgres role (optional)    |
 | `APPS_DOMAIN`      | —                        | apps get `<name>.<APPS_DOMAIN>`         |
 | `DASHBOARD_DOMAIN` | —                        | the dashboard's host; apps can't use it |
+| `AUTH_ISSUER`      | —                        | the user pool's `iss`; apps get AUTH_*  |
 | `EDGE`             | `direct`                 | `cloudflare`: sites are plain HTTP      |
 | `CLOUDFLARE_*`     | —                        | custom domains, Access (see below)      |
 | `LOG_LEVEL`        | `info`                   | log level                               |

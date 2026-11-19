@@ -1,6 +1,6 @@
 {
   "name": "@spotcraft/ui",
-  "version": "0.5.2",
+  "version": "0.6.0",
   "private": true,
   "license": "Apache-2.0",
   "type": "module",
@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@fontsource-variable/space-grotesk": "^5.3.0",
+    "@kodentuzo/spotstrap": "^0.1.4",
     "bits-ui": "^2.21.0",
     "cn": "^0.5.2",
     "shadcn-svelte": "^1.8.1",
