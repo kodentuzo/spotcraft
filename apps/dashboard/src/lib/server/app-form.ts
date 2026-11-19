@@ -5,6 +5,7 @@ import {
   isReservedName,
   MEMORY,
   NAME,
+  PLATFORM_ENV,
   TAG,
 } from '@spotcraft/agent/app-spec'
 import type { AppInput } from './agent.ts'
@@ -19,7 +20,6 @@ export interface AppFormValues {
   memory: string
   cpus: string
   readOnly: boolean
-  database: boolean
   /** Behind Cloudflare Access (ADR 0021). */
   protected: boolean
   env: string
@@ -56,7 +56,6 @@ export function parseAppForm(
     memory: text('memory') || '512m',
     cpus: text('cpus') || '1',
     readOnly: data.get('readOnly') === 'on',
-    database: data.get('database') === 'on',
     protected: data.get('protected') === 'on',
     env: String(data.get('env') ?? ''),
     takeOver: data.get('takeOver') === 'on',
@@ -98,9 +97,10 @@ export function parseAppForm(
     }
     env[key] = line.slice(equals + 1)
   }
-  const reserved = ['DATABASE_URL', 'DATABASE_SCHEMA'].filter((key) => key in env)
-  if (!errors.env && values.database && reserved.length > 0) {
-    errors.env = `Remove ${reserved.join(' and ')}: Spotcraft sets ${reserved.length > 1 ? 'them' : 'it'} when the app has a database.`
+  // Spotcraft gives every app these (ADR 0034).
+  const reserved = PLATFORM_ENV.filter((key) => key in env)
+  if (!errors.env && reserved.length > 0) {
+    errors.env = `Remove ${reserved.join(', ')}: Spotcraft sets ${reserved.length > 1 ? 'them' : 'it'}.`
   }
 
   if (Object.keys(errors).length > 0) return { values, errors }
@@ -115,7 +115,6 @@ export function parseAppForm(
       memory: values.memory,
       cpus,
       readOnly: values.readOnly,
-      database: values.database,
       protected: values.protected,
       takeOver: values.takeOver,
       env,

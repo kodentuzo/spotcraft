@@ -5,14 +5,12 @@ import {
   appBodySchema,
   isReservedName,
   nameParamsSchema,
+  PLATFORM_ENV,
   RESERVED_NAMES,
   servedHosts,
   TAG,
 } from './app-spec.ts'
 import { AgentError, type Apps } from './apps.ts'
-
-/** Env an app with a database gets from Spotcraft, and so can't set itself. */
-const DATABASE_ENV = ['DATABASE_URL', 'DATABASE_SCHEMA']
 
 export interface BuildOptions {
   token: string
@@ -106,15 +104,15 @@ export function buildApp({ token, apps, allowedIps = [], logger = false }: Build
       if (isReservedName(name)) {
         return reply.code(400).send({ error: `"${name}" is reserved` })
       }
-      // Left out, `database` keeps its current value, so a client that doesn't know the field
-      // (an older dashboard) never takes an app's database away by updating it.
       const current = await apps.get(name)
-      const database = request.body.database ?? current?.database ?? false
-      if (database && DATABASE_ENV.some((key) => key in request.body.env)) {
-        return reply.code(400).send({
-          error:
-            'DATABASE_URL and DATABASE_SCHEMA are set by Spotcraft when the app has a database',
-        })
+      // Every app has a schema on a server with Postgres (ADR 0034); `database` in the body is
+      // accepted for older dashboards and ignored.
+      const database = apps.hasDatabases
+      const reserved = PLATFORM_ENV.filter((key) => key in request.body.env)
+      if (reserved.length > 0) {
+        return reply
+          .code(400)
+          .send({ error: `${reserved.join(', ')}: Spotcraft sets these; remove them from env` })
       }
       const { appsDomain } = apps.settings
       // Left out, `protected` keeps its current value, like `database`.

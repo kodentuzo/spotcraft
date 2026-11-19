@@ -444,7 +444,7 @@ describe('protected apps behind Cloudflare Access (ADR 0021)', () => {
         access: new AccessApps(api, POLICY),
       },
     )
-    assert.deepEqual(await moved.refreshSites(), ['tagtape'])
+    assert.deepEqual(await moved.refreshSites(), ['tagtape', '_auth'])
     assert.deepEqual(
       accessApps()[0]?.destinations?.map((d) => d.uri),
       ['tagtape.apps.example.com'],
@@ -478,7 +478,7 @@ describe('protected apps behind Cloudflare Access (ADR 0021)', () => {
       'the old site is back, and still behind Access',
     )
     caddyUp = true
-    assert.deepEqual(await moved.refreshSites(), ['tagtape'])
+    assert.deepEqual(await moved.refreshSites(), ['tagtape', '_auth'])
     assert.deepEqual(hosts(), ['tagtape.apps.example.com'], 'narrowed once the new site is live')
   })
 

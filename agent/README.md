@@ -66,9 +66,8 @@ of the apps domain such as `fallback.<APPS_DOMAIN>` (409). The apex itself may b
 With `APPS_DOMAIN` set, every app is served at `<name>.<APPS_DOMAIN>` (its default host,
 first in `hostnames`) and, if it has one, at its custom domain too (ADR 0021).
 
-Leaving out `database` or `protected` in an update keeps the app's current setting (a new app gets none), so
-an older dashboard never takes a database away. With `database: true`, the app can't set
-`DATABASE_URL` itself; without it, it may point `DATABASE_URL` anywhere.
+Leaving out `protected` or `takeOver` in an update keeps the app's current setting (a new app
+gets none). `database` is accepted and ignored: on a server with Postgres every app has one.
 
 ## Custom domains through Cloudflare
 
@@ -108,7 +107,8 @@ any site that doesn't match them and reloads Caddy (retrying while Caddy starts)
 modes applies to every app at once. A protected app's new hosts go behind Access first, next to its old ones,
 and only once Caddy runs the new sites does Access drop the old hosts. If
 Caddy rejects the rewrite, the previous sites are put back. An app left without any address
-(no `APPS_DOMAIN` and no domain of its own) gets no site until it has one.
+(no `APPS_DOMAIN` and no domain of its own) gets no site until it has one. The user pool's
+own site, `sites/_auth.caddy` for `auth.<APPS_DOMAIN>`, is rewritten the same way.
 
 An app runs in one of two slots, `blue` and `green`: Compose services named `<name>-blue` and
 `<name>-green` in the app's project, `spotcraft-app-<name>`
@@ -117,12 +117,19 @@ live slot. `PUT` deploys into the other slot, next to the live one:
 
 1. It stages the new spec and compose file as `app.next.json` and `compose.next.yaml`, next to
    the live ones.
-2. It runs `docker compose pull`, then `docker compose up -d --wait` for the new slot's service
-   only (up to 120 s for the container to run, and to be healthy if the image has a
-   healthcheck). The live slot keeps serving.
-3. It points the app's Caddy site at the new slot and commits: renaming `compose.next.yaml` to
+2. It runs `docker compose pull` and reads the image's config. If the image has the label
+   `dev.spotcraft.migrate` (a JSON array: the command and its arguments), it runs that once,
+   with `docker compose run --rm --no-deps` on the new slot's service and the command in place
+   of the entrypoint, for up to 5 minutes
+   ([ADR 0034](../docs/decisions/0034-app-contract.md)). A failure ends the deploy here.
+3. It runs `docker compose up -d --wait` for the new slot's service only (up to 120 s for the
+   container to run, and to be healthy if the image has a `HEALTHCHECK`). An image without one
+   is then asked for `GET /health` from Caddy's container every 2 s for up to 120 s: a 2xx, or a
+   404 (it answers on its port, without that route), counts as healthy. The live slot keeps
+   serving.
+4. It points the app's Caddy site at the new slot and commits: renaming `compose.next.yaml` to
    `compose.yaml` makes the new slot the live one. Then it reloads Caddy.
-4. It stops the old slot with `docker stop --time 30`, so it can finish the requests it has, and
+5. It stops the old slot with `docker stop --time 30`, so it can finish the requests it has, and
    removes it.
 
 If a step fails, the new slot and the staged files are removed. The live slot, its files and
@@ -136,8 +143,7 @@ live is removed. It also makes the env- and password-bearing files of every app 
 readable by the agent's user only, complete app or not.
 
 So a deploy has no downtime, but for a few seconds both versions run against the app's
-database: an app's migrations must only add. Its memory briefly doubles. An image without a
-healthcheck counts as ready once it runs, so give images one. An app deployed before slots has
+database: an app's migrations must only add. Its memory briefly doubles. An app deployed before slots has
 one service named after it; its next deploy moves it into `blue`. Names ending in `-blue` or
 `-green` are reserved, as are names starting with `app-`.
 
@@ -163,6 +169,12 @@ An app's own value for one of the defaults wins, so an app can loosen them. The
 - For popups that need `window.opener` (some OAuth flows), it sends its own
   `Cross-Origin-Opener-Policy` (e.g. `same-origin-allow-popups`).
 
+Every site sends `/_spotcraft/auth/*` to the user pool (`auth:3000`,
+[ADR 0035](../docs/decisions/0035-auth-pool.md)) with the visitor's address in
+`X-Spotcraft-Client-IP`, replacing whatever the client sent; every other path goes to the app.
+With `APPS_DOMAIN`, `auth.<APPS_DOMAIN>/main/*` reaches the pool too, for clients without an app
+domain; the name `auth` is reserved.
+
 Caddy passes the visitor's address to the app as `X-Forwarded-For`. With `EDGE=cloudflare`,
 site blocks are plain HTTP (`http://host`): Cloudflare terminates TLS and a tunnel delivers
 requests to Caddy.
@@ -170,7 +182,20 @@ requests to Caddy.
 Every app container gets: no Linux capabilities, `no-new-privileges`, memory/CPU/pids
 limits, rotated logs (3 × 10 MB), and the `spotcraft-edge` network, where Caddy reaches it as
 `app-<name>-<slot>`. Its `app.json` (which holds the env), compose file (which also holds
-`DATABASE_URL`) and `secrets.json` are readable by the agent's user only.
+`DATABASE_URL` and `APP_SECRET`) and `secrets.json` are readable by the agent's user only.
+
+Every app also gets Spotcraft's env ([ADR 0034](../docs/decisions/0034-app-contract.md)), which
+wins over its own; a `PUT` whose env sets one of these names gets a 400:
+
+| Env                                        | Value                                                             |
+| ------------------------------------------ | ----------------------------------------------------------------- |
+| `PORT`, `APP_NAME`, `APP_RELEASE`          | the app's port, name and image tag                                |
+| `APP_SECRET`                               | 32 random bytes (base64url), made once and kept in `secrets.json` |
+| `PUBLIC_URL`                               | `https://` and its custom domain, else its default host           |
+| `AUTH_URL`, `AUTH_JWKS_URL`, `AUTH_ISSUER` | the user pool on its domain, with `AUTH_ISSUER` set               |
+| `DATABASE_URL`, `DATABASE_SCHEMA`          | its schema, on a server with Postgres                             |
+
+`SMTP_URL` and `MAIL_FROM` are reserved too, for instance SMTP.
 
 ## Deploy hook
 
@@ -229,7 +254,7 @@ All four `BACKUP_*` or none; the agent refuses to start with some.
 ## App databases
 
 Apps share one database on the apps server's Postgres, `apps`, like a Supabase project
-([ADR 0034](../docs/decisions/0034-app-contract.md)). With `database: true`, a deploy first
+([ADR 0034](../docs/decisions/0034-app-contract.md)). On a server with Postgres every app has one (`database` in a `PUT` is ignored); a deploy first
 prepares the app's role and schema there, both `app_<name>` (dashes as underscores), using
 `spotcraft/provision` from [the CLI package](../packages/cli/README.md), so a laptop gets the
 same setup. The agent creates `apps` and the `spotcraft_app` group role the first time.
@@ -252,8 +277,7 @@ handle both.
 
 Removing an app keeps its schema (and the data in it). `DELETE ?purge=true` drops the schema,
 or the old app's database, and its role after the app is removed. To delete the data of an app
-that was already removed, add it again and remove it with `?purge=true`. Turning `database` off
-keeps the data too; the app only stops getting `DATABASE_URL`.
+that was already removed, add it again and remove it with `?purge=true`.
 
 When the agent starts, it brings every app's role and grants up to date. Postgres may still be starting, so failures
 are retried every 5 seconds for 3 minutes and logged.
@@ -287,6 +311,7 @@ while the app is down.
 | `POSTGRES_URL`     | —                        | the agent's Postgres role (optional)    |
 | `APPS_DOMAIN`      | —                        | apps get `<name>.<APPS_DOMAIN>`         |
 | `DASHBOARD_DOMAIN` | —                        | the dashboard's host; apps can't use it |
+| `AUTH_ISSUER`      | —                        | the user pool's `iss`; apps get AUTH_*  |
 | `EDGE`             | `direct`                 | `cloudflare`: sites are plain HTTP      |
 | `CLOUDFLARE_*`     | —                        | custom domains, Access (see below)      |
 | `LOG_LEVEL`        | `info`                   | log level                               |

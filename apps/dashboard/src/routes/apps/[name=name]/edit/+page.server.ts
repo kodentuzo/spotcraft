@@ -21,7 +21,6 @@ export const load: PageServerLoad = async ({ params }) => {
       memory: app.memory,
       cpus: String(app.cpus),
       readOnly: app.readOnly,
-      database: app.database,
       protected: app.protected ?? false,
       env: envToText(app.env),
       takeOver: app.takeOver ?? false,

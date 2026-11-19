@@ -12,6 +12,18 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
 
 ### Added
 
+- **Apps get the user pool and Spotcraft's env** ([ADR 0034](docs/decisions/0034-app-contract.md),
+  [ADR 0035](docs/decisions/0035-auth-pool.md)):
+  - every site sends `/_spotcraft/auth/*` to the user pool, with the visitor's address set by
+    Caddy, and `auth.<APPS_DOMAIN>/main/*` reaches it for clients without an app domain;
+  - every app gets `PORT`, `PUBLIC_URL`, `APP_NAME`, `APP_RELEASE`, `APP_SECRET` (made once and
+    kept), `AUTH_URL`, `AUTH_ISSUER`, `AUTH_JWKS_URL`, and on a server with Postgres
+    `DATABASE_URL` and `DATABASE_SCHEMA`;
+  - **migrations run on the server**: an image's `dev.spotcraft.migrate` label (a JSON array)
+    runs once per deploy, before the new version starts; if it fails, the old one keeps serving;
+  - an image without a `HEALTHCHECK` must answer `GET /health` (or at least its port) before
+    traffic moves to it.
+
 - **The user pool** (`auth`, [ADR 0035](docs/decisions/0035-auth-pool.md)): a new service from
   the Spotcraft image, Better Auth over the `auth` schema of the shared `apps` database. For now
   it makes guests, with a first-party cookie on whichever app domain asked, a bearer token for
@@ -36,6 +48,17 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
   - each repository gets its own local stack ([ADR 0037](docs/decisions/0037-local-stack-per-repo.md)).
 
 ### Changed
+
+- **Every app has a database on a server with Postgres** (breaking). The dashboard's Database
+  checkbox is gone and `database` in the agent's API is ignored; an app without one gets its
+  schema on its next deploy.
+- **An app's env can't set Spotcraft's names** (breaking): `PORT`, `PUBLIC_URL`, `APP_*`,
+  `DATABASE_*`, `AUTH_URL`, `AUTH_ISSUER`, `AUTH_JWKS_URL`, `SMTP_URL`, `MAIL_FROM`. Saving such
+  an app answers 400. `auth` is a reserved app name.
+
+  **Migrating:** before you next edit an app in the dashboard, remove these names from its env
+  (`PUBLIC_URL` is the usual one; Spotcraft now sets it to the custom domain, else the default
+  host). Deploys through the hook keep working until then, with Spotcraft's values winning.
 
 - **A new app with a database gets a schema, not a database** (breaking for apps on
   `@spotcraft/kit`). Apps share one database, `apps`, like a Supabase project: each has its own

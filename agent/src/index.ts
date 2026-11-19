@@ -30,7 +30,12 @@ const apps = new Apps(
   execRunner,
   config.caddyContainer,
   databases,
-  { appsDomain: config.appsDomain, dashboardDomain: config.dashboardDomain, edge: config.edge },
+  {
+    appsDomain: config.appsDomain,
+    dashboardDomain: config.dashboardDomain,
+    authIssuer: config.authIssuer,
+    edge: config.edge,
+  },
   cloudflare,
   config.backup && {
     target: new S3(config.backup),
