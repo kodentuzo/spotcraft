@@ -38,3 +38,22 @@ describe('usage chart', async () => {
     assert.deepEqual(axis(240), { top: 300, step: 100 })
   })
 })
+
+describe('usage across apps', () => {
+  it('adds every app up per day, ignoring days outside the week', async () => {
+    const { sumDays } = await import('../src/lib/usage.ts')
+    const days = ['2026-11-18', '2026-11-19']
+    const a = [
+      { day: '2026-11-18', value: 2 },
+      { day: '2026-11-10', value: 99 },
+    ]
+    const b = [
+      { day: '2026-11-18', value: 1 },
+      { day: '2026-11-19', value: 4 },
+    ]
+    assert.deepEqual(sumDays(days, [a, b]), [
+      { day: '2026-11-18', value: 3 },
+      { day: '2026-11-19', value: 4 },
+    ])
+  })
+})

@@ -12,6 +12,10 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
 
 ### Changed
 
+- **Dashboard sidebar:** every signed-in page gets a sidebar (instance domain and version, the
+  pages, Log out) and a header bar with an app switcher, the page's title and Add app; on a
+  phone the sidebar is a drawer. New pages: Usage (all apps), Logs, Domains, Backups (with Back
+  up now) and Settings (how the instance is set up).
 - **Dashboard home:** an overview (apps running, server memory and disk, backups when set up)
   above a list with a row per app: its icon (from its site) or initial, status, last deploy,
   24 hourly uptime bars, memory against its limit, and visitors (or requests without

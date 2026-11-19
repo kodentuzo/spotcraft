@@ -20,10 +20,7 @@
 
 <svelte:head><title>Apps · Spotcraft</title></svelte:head>
 
-<div class="mb-6 flex items-center justify-between gap-4">
-  <h1 class="font-heading text-title-1 font-bold">Apps</h1>
-  <Button href="/apps/new">Add app</Button>
-</div>
+<h1 class="mb-6 font-heading text-title-1 font-bold">Apps</h1>
 
 <section aria-label="Overview" class="mb-8 grid grid-cols-2 gap-3 {backups ? 'md:grid-cols-4' : 'md:grid-cols-3'}">
   {#if !data.agentError}

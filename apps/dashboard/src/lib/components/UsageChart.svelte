@@ -50,7 +50,7 @@
 </script>
 
 <section class="border bg-card" aria-label="Usage over the last 7 days">
-  <div role="tablist" class="grid grid-cols-2 border-b md:grid-cols-4">
+  <div role="tablist" class="tabs grid grid-cols-2 border-b" style="--tabs: {tabs.length}">
     {#each tabs as t, i (t.label)}
       <button
         type="button"
@@ -120,12 +120,13 @@
       {/if}
       </div>
       <span></span>
-      <!-- Each label sits under its point; the first and last keep inside the chart. -->
+      <!-- Each label sits under its point; the first and last keep inside the chart. A phone shows
+           every third, so they don't overlap. -->
       <div class="relative mt-2 h-4 text-caption-1 text-muted-foreground" aria-hidden="true">
         {#each tab.points as point, i (point.day)}
           {@const at = (x(i) / W) * 100}
           <span
-            class="absolute whitespace-nowrap {i === 0 ? '' : i === tab.points.length - 1 ? '-translate-x-full' : '-translate-x-1/2'}"
+            class="absolute whitespace-nowrap {i === 0 ? '' : i === tab.points.length - 1 ? '-translate-x-full' : '-translate-x-1/2'} {i % 3 === 0 || i === tab.points.length - 1 ? '' : 'hidden sm:inline'}"
             style="left: {at}%"
           >{dayLabel(point.day)}</span>
         {/each}
@@ -133,3 +134,11 @@
     </div>
   </div>
 </section>
+
+<style>
+  @media (width >= 48rem) {
+    .tabs {
+      grid-template-columns: repeat(var(--tabs), minmax(0, 1fr));
+    }
+  }
+</style>

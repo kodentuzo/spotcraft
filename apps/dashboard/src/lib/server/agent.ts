@@ -102,7 +102,9 @@ export async function removeApp(name: string, { purge = false } = {}): Promise<v
 /** The app's usage (ADR 0038): Umami's visits and the pool's accounts, each when known. */
 /** With `brief`, visit totals only (no breakdowns): what the app list needs. */
 export async function getUsage(name: string, { days = 7, brief = false } = {}): Promise<AppUsage> {
-  return expectJson<AppUsage>(await call(`${appPath(name)}/usage?days=${days}&brief=${brief}`))
+  // `brief` only when wanted: an agent from before it refuses the parameter.
+  const query = `days=${days}${brief ? '&brief=true' : ''}`
+  return expectJson<AppUsage>(await call(`${appPath(name)}/usage?${query}`))
 }
 
 export async function listUsers(cursor?: string): Promise<UserPage | undefined> {
