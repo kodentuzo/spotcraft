@@ -350,8 +350,8 @@ importers:
         specifier: ^5.3.0
         version: 5.3.0
       '@kodentuzo/spotstrap':
-        specifier: ^0.1.1
-        version: 0.1.1(tailwindcss@4.3.5)
+        specifier: ^0.1.4
+        version: 0.1.4(tailwindcss@4.3.5)
       bits-ui:
         specifier: ^2.21.0
         version: 2.21.0(@internationalized/date@3.12.4)(svelte@5.57.3)
@@ -1104,8 +1104,8 @@ packages:
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
 
-  '@kodentuzo/spotstrap@0.1.1':
-    resolution: {integrity: sha512-uS0YmU/DDYfd0VL7u7/0T6O8VG1Na3K01+oom56u5ujtcma0WF9ceZFsrP8XCoLf/JmdkDXgZiEgO3nPMYouLw==}
+  '@kodentuzo/spotstrap@0.1.4':
+    resolution: {integrity: sha512-K91+bOftCMO7AetipBCUKx0yHiV5KG7yuHZEV6ZNIYcHHxWXR6lSOF1nVkbVc8YkYsDCUwyPfxvsiMfCPI8y9w==}
     engines: {node: '>=24'}
     peerDependencies:
       tailwindcss: ^4.3.0
@@ -4229,7 +4229,7 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.6.0
 
-  '@kodentuzo/spotstrap@0.1.1(tailwindcss@4.3.5)':
+  '@kodentuzo/spotstrap@0.1.4(tailwindcss@4.3.5)':
     optionalDependencies:
       tailwindcss: 4.3.5
 

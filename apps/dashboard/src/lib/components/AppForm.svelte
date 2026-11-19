@@ -155,7 +155,7 @@
 
     <div class="space-y-2 sm:col-span-2">
       <Label for="env">Environment variables</Label>
-      <Textarea id="env" name="env" value={values.env} rows={6} class="font-mono text-sm" placeholder={'LOG_LEVEL=info\nTRUST_PROXY=1'} spellcheck={false} aria-invalid={errors.env ? true : undefined} />
+      <Textarea id="env" name="env" value={values.env} rows={6} class="font-mono" placeholder={'LOG_LEVEL=info\nTRUST_PROXY=1'} spellcheck={false} aria-invalid={errors.env ? true : undefined} />
       <p class={['text-xs', errors.env ? 'text-destructive' : 'text-muted-foreground']}>
         {errors.env ?? 'One KEY=value per line. Lines starting with # are ignored.'}
       </p>
