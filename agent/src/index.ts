@@ -1,7 +1,8 @@
 import { appRoleName, INSTANCE } from '@kodentuzo/spotcraft/provision'
 import { AccessApps } from './access.ts'
+import { Umami } from './analytics.ts'
 import { buildApp } from './app.ts'
-import { Apps } from './apps.ts'
+import { ANALYTICS_BACKUP, Apps, POOL_BACKUP } from './apps.ts'
 import { dockerDump, untilNext } from './backups.ts'
 import { CloudflareApi } from './cloudflare.ts'
 import { loadConfig } from './config.ts'
@@ -12,9 +13,9 @@ import { S3 } from './s3.ts'
 import { Store } from './store.ts'
 
 const config = loadConfig()
-/** One schema's dump, whatever the app: for the user pool's `auth`. */
-const dumpOf = (container: string, database: string, schema: string) => () =>
-  dockerDump(container, async () => ({ database, schema }))(schema)
+/** A dump of the platform's own data: the user pool's `auth` schema, or a whole database. */
+const dumpOf = (container: string, database: string, schema?: string) => () =>
+  dockerDump(container, async () => ({ database, schema }))(schema ?? database)
 const databases = config.postgresUrl ? postgresDatabases(config.postgresUrl) : undefined
 const cf = config.cloudflare
 const api = cf ? new CloudflareApi(cf.apiToken, cf.accountId) : undefined
@@ -42,10 +43,23 @@ const apps = new Apps(
     dump: dockerDump(config.backup.postgresContainer, async (app) =>
       databases ? databases.dumpTarget(app) : { database: appRoleName(app) },
     ),
-    // The user pool's schema in the apps database (ADR 0035).
-    dumpPool: dumpOf(config.backup.postgresContainer, INSTANCE.database, 'auth'),
+    platform: [
+      // The user pool's schema in the apps database (ADR 0035).
+      {
+        folder: POOL_BACKUP,
+        file: 'auth.dump',
+        dump: dumpOf(config.backup.postgresContainer, INSTANCE.database, 'auth'),
+      },
+      // Analytics' own database (ADR 0038).
+      {
+        folder: ANALYTICS_BACKUP,
+        file: 'umami.dump',
+        dump: dumpOf(config.backup.postgresContainer, 'umami'),
+      },
+    ],
   },
 )
+if (config.analytics) apps.analytics = new Umami(config.analytics.url, config.analytics.password)
 const app = buildApp({
   token: config.token,
   apps,
@@ -86,6 +100,13 @@ for (let attempt = 1; attempt <= 24; attempt++) {
     await new Promise((resolve) => setTimeout(resolve, 5000))
   }
 }
+
+// Apps without an Umami website (made before analytics, or while Umami was down) get one, and
+// their sites start counting. Umami may still be starting; this waits for it in the background.
+apps.backfillAnalytics().then(
+  (started) => started.length > 0 && app.log.info({ started }, 'analytics on for these apps'),
+  (error) => app.log.warn({ err: error }, 'could not turn analytics on for every app'),
+)
 
 // After an upgrade, bring every app database up to date. Postgres may still be starting
 // (both start in the same deploy), so failures are retried for a few minutes.

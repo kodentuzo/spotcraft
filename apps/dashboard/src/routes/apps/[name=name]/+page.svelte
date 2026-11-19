@@ -8,7 +8,7 @@
   import Sparkline from '#lib/components/Sparkline.svelte'
   import Stat from '#lib/components/Stat.svelte'
   import StatusBadge from '#lib/components/StatusBadge.svelte'
-  import { ago, bytes, dateTime, milliseconds, percent, uptime } from '#lib/format.ts'
+  import { ago, bytes, count, dateTime, milliseconds, percent, uptime } from '#lib/format.ts'
   import { enhance } from '$app/forms'
   import type { PageProps } from './$types'
 
@@ -156,10 +156,81 @@
         {#if app.database}Postgres <span class="font-mono">app_{app.name.replaceAll('-', '_')}</span>{:else}None{/if}
       </dd>
       <dt class="text-muted-foreground">Sign-in</dt><dd>{app.protected ? 'Cloudflare Access' : 'Public'}</dd>
+      <dt class="text-muted-foreground">Analytics</dt><dd>{app.analytics === false ? 'Off' : 'On'}</dd>
       <dt class="text-muted-foreground">Environment</dt><dd>{Object.keys(app.env).length === 1 ? '1 variable' : `${Object.keys(app.env).length} variables`}</dd>
     </dl>
   </div>
 </div>
+
+<section class="mt-8">
+  <h2 class="mb-2 font-heading text-lg font-semibold">Usage</h2>
+  {#await data.usage}
+    <p class="text-sm text-muted-foreground">Counting…</p>
+  {:then usage}
+    {@const visits = usage.visits}
+    {@const accounts = usage.accounts}
+    {@const requests = usage.requests}
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <Stat
+        label="Visitors"
+        value={count(visits?.visitors)}
+        detail={visits ? `Last ${visits.days} days · ${count(visits.previous.visitors)} the ${visits.days} before` : app.analytics === false ? 'Analytics is off for this app' : 'Not counted yet'}
+      />
+      <Stat
+        label="Page views"
+        value={count(visits?.views)}
+        detail={visits ? `${count(visits.visits)} visits · ${count(visits.previous.views)} views the ${visits.days} days before` : 'Pages and app screens'}
+      />
+      <Stat
+        label="Active accounts"
+        value={count(accounts?.active.week)}
+        detail={accounts ? `Last 7 days · ${count(accounts.active.day)} today · ${count(accounts.active.month)} in 30 days` : 'Accounts in the user pool that use this app'}
+      >
+        {#if accounts && accounts.newPerDay.length > 1}
+          <Sparkline
+            series={accounts.newPerDay.map(({ day, count: n }) => [Date.parse(day) / 1000, n] as [number, number])}
+            format={(v) => `${count(v)} new`}
+            label="New accounts per day, last 30 days"
+          />
+        {/if}
+      </Stat>
+      <Stat
+        label="Requests"
+        value={count(requests.day)}
+        detail={requests.day === null ? 'Last 24 hours' : `Last 24 hours · ${percent(requests.day > 0 ? ((requests.errors ?? 0) / requests.day) * 100 : 0, 1)} errors · p95 ${milliseconds(requests.p95)}`}
+      >
+        <Sparkline series={requests.perHour} format={(v) => `${count(v)} an hour`} label="Requests per hour, last 24 hours" />
+      </Stat>
+    </div>
+    {#if visits?.pages.length || visits?.systems.length || accounts?.clients.length}
+      <div class="mt-4 grid gap-4 text-sm sm:grid-cols-3">
+        {#each [
+          { title: 'Top pages', rows: visits?.pages.map((p) => [p.path, p.views] as const) ?? [] },
+          { title: 'Systems', rows: visits?.systems.map((s) => [s.name, s.visitors] as const) ?? [] },
+          { title: 'App versions', rows: accounts?.clients.map((c) => [c.client, c.active] as const) ?? [] },
+        ] as list (list.title)}
+          <div class="space-y-2 border p-4">
+            <p class="text-muted-foreground">{list.title}</p>
+            {#if list.rows.length}
+              <dl class="grid grid-cols-[1fr_auto] gap-x-4 gap-y-1">
+                {#each list.rows as [what, n] (what)}
+                  <dt class="truncate font-mono text-xs" title={what}>{what}</dt>
+                  <dd class="tabular-nums">{count(n)}</dd>
+                {/each}
+              </dl>
+            {:else}
+              <p class="text-xs text-muted-foreground">None yet</p>
+            {/if}
+          </div>
+        {/each}
+      </div>
+    {/if}
+    <p class="mt-2 text-xs text-muted-foreground">
+      Counted without cookies or anything that identifies a visitor
+      (<a class="underline" href="https://{app.hostnames[0]}/_spotcraft/privacy">what is counted</a>). Visitors from apps are approximate.
+    </p>
+  {/await}
+</section>
 
 {#if data.ownDatabase || (form && 'moved' in form)}
   <section class="mt-8">

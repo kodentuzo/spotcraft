@@ -1,5 +1,12 @@
 import type { AgentSettings, AppBody, AppSpec, DomainStatus } from '@spotcraft/agent/app-spec'
-import type { AppStatus, BackupStatus, Moved, ReleaseState, UserPage } from '@spotcraft/agent/apps'
+import type {
+  AppStatus,
+  AppUsage,
+  BackupStatus,
+  Moved,
+  ReleaseState,
+  UserPage,
+} from '@spotcraft/agent/apps'
 import { AGENT_TOKEN, AGENT_URL } from '$app/env/private'
 
 export type {
@@ -92,6 +99,11 @@ export async function removeApp(name: string, { purge = false } = {}): Promise<v
  * A page of the user pool's users (ADR 0035), newest first; `cursor` is the previous page's
  * `next`. Undefined on a server without Postgres, which has no pool.
  */
+/** The app's usage (ADR 0038): Umami's visits and the pool's accounts, each when known. */
+export async function getUsage(name: string, days = 7): Promise<AppUsage> {
+  return expectJson<AppUsage>(await call(`/apps/${name}/usage?days=${days}`))
+}
+
 export async function listUsers(cursor?: string): Promise<UserPage | undefined> {
   const query = new URLSearchParams({ limit: '50', ...(cursor ? { cursor } : {}) })
   const response = await call(`/pool/users?${query}`)

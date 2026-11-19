@@ -3,21 +3,23 @@
 Everything Spotcraft runs, on one server ([ADR 0026](../../docs/decisions/0026-one-server.md)),
 from `/opt/spotcraft` with Docker Compose.
 
-| Service           | Reachable from           | Purpose                                         |
-| ----------------- | ------------------------ | ----------------------------------------------- |
-| `caddy`           | public 80/443            | HTTPS, the dashboard and every app's site block |
-| `cloudflared`     | outbound only            | with `EDGE=cloudflare`: the tunnel to Caddy     |
-| `agent`           | `control` network :4000  | deploys apps; answers only the dashboard        |
-| `auth`            | `web` and `db` networks  | the user pool (guests), for every app           |
-| `dashboard`       | via Caddy                | SvelteKit app; no database, asks the agent      |
-| `postgres`        | `edge` and `db` networks | databases for hosted apps                       |
-| `victoriametrics` | `web` network            | metrics storage (90 days)                       |
-| `vmagent`         | `web` network            | scrapes the exporters, runs the probes          |
-| `blackbox`        | `web` network            | HTTP uptime probes of each app's public URLs    |
-| `node-exporter`   | `web` network :9100      | host metrics                                    |
-| `cadvisor`        | `web` network :8080      | per-container metrics                           |
+| Service           | Reachable from           | Purpose                                                                 |
+| ----------------- | ------------------------ | ----------------------------------------------------------------------- |
+| `caddy`           | public 80/443            | HTTPS, the dashboard and every app's site block, from Spotcraft's image |
+| `cloudflared`     | outbound only            | with `EDGE=cloudflare`: the tunnel to Caddy                             |
+| `agent`           | `control` network :4000  | deploys apps; answers only the dashboard                                |
+| `auth`            | `web` and `db` networks  | the user pool (guests), for every app                                   |
+| `umami`           | `web` and `db` networks  | analytics (Umami), for every app                                        |
+| `dashboard`       | via Caddy                | SvelteKit app; no database, asks the agent                              |
+| `postgres`        | `edge` and `db` networks | databases for hosted apps                                               |
+| `victoriametrics` | `web` network            | metrics storage (90 days)                                               |
+| `vmagent`         | `web` network            | scrapes the exporters, runs the probes                                  |
+| `blackbox`        | `web` network            | HTTP uptime probes of each app's public URLs                            |
+| `node-exporter`   | `web` network :9100      | host metrics                                                            |
+| `cadvisor`        | `web` network :8080      | per-container metrics                                                   |
 
-Only Caddy is published on host ports. Files: `compose.yaml`, `Caddyfile`, `pg_hba.conf`,
+Only Caddy is published on host ports. Caddy also serves its metrics, with requests per host,
+on port 2020 to the `web` network only (vmagent's `caddy` job); hosted apps get a 403. Files: `compose.yaml`, `Caddyfile`, `pg_hba.conf`,
 `scrape.yaml` (vmagent targets), `blackbox.yml` (probe modules) and `.env.example` (the deploy
 writes `.env`). A fresh server is prepared by [`../cloud-init.yaml`](../cloud-init.yaml).
 
@@ -26,13 +28,13 @@ ran on separate servers, so the existing volumes and container names carry over.
 
 ## Networks
 
-| Network                   | Members                                                                             |
-| ------------------------- | ----------------------------------------------------------------------------------- |
-| `edge` (`spotcraft-edge`) | Caddy, Postgres, every hosted app                                                   |
-| `web` (`10.255.254.0/27`) | Caddy, cloudflared (fixed `10.255.254.2`), the dashboard, the user pool, monitoring |
-| `control` (internal)      | the dashboard (fixed `10.255.255.2`) and the agent                                  |
-| `db` (internal)           | the agent, the user pool and Postgres                                               |
-| `default`                 | the agent alone, for its calls to the Cloudflare API                                |
+| Network                   | Members                                                                                        |
+| ------------------------- | ---------------------------------------------------------------------------------------------- |
+| `edge` (`spotcraft-edge`) | Caddy, Postgres, every hosted app                                                              |
+| `web` (`10.255.254.0/27`) | Caddy, cloudflared (fixed `10.255.254.2`), the dashboard, the user pool, analytics, monitoring |
+| `control` (internal)      | the dashboard (fixed `10.255.255.2`) and the agent                                             |
+| `db` (internal)           | the agent, the user pool, analytics and Postgres                                               |
+| `default`                 | the agent alone, for its calls to the Cloudflare API                                           |
 
 Hosted apps reach only Caddy and Postgres. The agent answers only `10.255.255.2`
 (`AGENT_ALLOWED_IPS`), with the bearer token. On `web` and `control`, other services get
@@ -113,6 +115,10 @@ The same SQL sets up what apps share ([ADR 0034](../../docs/decisions/0034-app-c
 - the user pool's role, `spotcraft_auth`, which may connect to `apps` and owns its `auth` schema.
   Its password (`POSTGRES_AUTH_PASSWORD`) and the pool's `AUTH_SECRET` are generated on the
   first deploy and kept in `.env`.
+- analytics' role, `spotcraft_umami`, which owns the `umami` database and may connect to nothing
+  else ([ADR 0038](../../docs/decisions/0038-analytics.md)). Umami migrates its own tables when
+  it starts. Its password (`POSTGRES_UMAMI_PASSWORD`) and `UMAMI_SECRET` are generated on the
+  first deploy and kept in `.env`.
 
 The deploy starts Postgres first, runs that SQL, then starts everything else, so the agent and
 the user pool find their roles.
@@ -124,7 +130,7 @@ With the `BACKUP_*` settings, the agent runs `pg_dump` in this container every n
 
 ## Memory
 
-Spotcraft's own limits add up to about 4.4 GB: Caddy 512 MB, cloudflared 128 MB, agent 256 MB,
-user pool 192 MB, dashboard 512 MB, Postgres 1 GB, VictoriaMetrics 1 GB, vmagent 256 MB, blackbox 128 MB,
+Spotcraft's own limits add up to about 4.9 GB: Caddy 512 MB, cloudflared 128 MB, agent 256 MB,
+user pool 192 MB, analytics 512 MB (about 360 MB in use), dashboard 512 MB, Postgres 1 GB, VictoriaMetrics 1 GB, vmagent 256 MB, blackbox 128 MB,
 node-exporter 128 MB, cAdvisor 256 MB. Limits are ceilings, not use; on a `cax21` (8 GB) the
 rest is for hosted apps.

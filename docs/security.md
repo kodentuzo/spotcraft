@@ -84,6 +84,22 @@ gets its own base URL, so a session cookie is first-party on that domain and the
 accepts only that origin, plus the origins set in `AUTH_TRUSTED_ORIGINS` for bearer clients. New
 guests are limited per client address, which Caddy sets in a header of its own.
 
+**Analytics** ([ADR 0038](decisions/0038-analytics.md)) is Umami in its own container on the
+`web` and `db` networks, never on `edge`. Its Postgres role owns only the `umami` database. It
+sets no cookies and stores no IP addresses: it hashes the address and User-Agent with a salt that
+rotates monthly, and keeps the country. Telemetry and update checks are off. Only its tracker
+script and its collect endpoint are reachable, through Caddy, at `/_spotcraft/s.js` and
+`/_spotcraft/e`; its interface and API are not. It starts with Umami's default account
+(`admin`), whose password the agent replaces with a generated one (`UMAMI_ADMIN_PASSWORD`) the
+first time it signs in, over the internal `db` network. Its container is not read-only, because
+Umami writes the collect path into its script when it starts. Caddy adds Umami's script to apps'
+HTML responses only, as a same-origin file, so a `script-src 'self'` CSP allows it; an app can
+turn analytics off. Caddy's metrics, with request counts per host, answer on port 2020 only to
+the monitoring network; hosted apps, which reach Caddy too, get a 403. The dashboard shows each
+app's usage as counts only: the pool's sessions record the host and the `Spotcraft-Client`
+header, and the agent never returns account ids from them. Caddy itself runs from Spotcraft's image, built with the pinned
+`replace-response` module, as root with only `NET_BIND_SERVICE`, as the official image did.
+
 **Spotcraft's own containers** run without capabilities (Caddy keeps `NET_BIND_SERVICE` for ports
 80 and 443), with `no-new-privileges`, read-only root filesystems where the software allows,
 limits and health checks. None runs privileged. The agent and the dashboard run from one

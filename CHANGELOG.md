@@ -10,9 +10,79 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-19
+
+Every app counts its usage, with no change to the app
+([ADR 0038](docs/decisions/0038-analytics.md)). Spotcraft runs Umami for the instance, Caddy adds
+its script to apps' HTML pages, and each app's page in the dashboard gets a Usage section:
+visitors and page views, the user pool's active and new accounts, requests with errors and
+latency, and the top pages, systems and app versions. Counts only: no cookies, and nothing that
+identifies a visitor.
+
+**Upgrading from 0.6:**
+
+1. **Rename any app called `umami`** (breaking): it is now a reserved name, like the server's
+   other services.
+2. **Deploy `0.7.0`** with the Deploy workflow. It generates the new passwords and secret in
+   `.env`, creates Umami's database and role, and runs Caddy from Spotcraft's image. When the
+   agent starts, it gives every app its Umami website, so apps start counting without a
+   redeploy.
+3. **Check an app with a strict CSP.** The script is same-origin, so `script-src 'self'` allows
+   it; an app whose CSP allows only scripts with a nonce should turn **Analytics** off in its
+   settings.
+
+The server needs about 512 MB more for Umami.
+
+### Added
+
+- **Analytics with Umami** ([ADR 0038](docs/decisions/0038-analytics.md)): an `umami` container
+  with its own `umami` database and role, set up by the deploy script, which generates
+  `POSTGRES_UMAMI_PASSWORD`, `UMAMI_SECRET` and `UMAMI_ADMIN_PASSWORD` and keeps them in `.env`.
+  The agent replaces Umami's default admin password with the generated one. Nightly backups add
+  `_umami/<time>/umami.dump`. `spotcraft dev` runs Umami too and prints its address (sign in as
+  `admin` / `umami`); a stack made before keeps its ports and gets one more.
+- **Every app counts its visits.** On deploy, the agent gives the app a website in Umami, kept
+  with the app and deleted with it, and Caddy adds Umami's script before `</head>` in the app's
+  HTML responses. Apps already running get theirs when the agent starts. If Umami is down, a
+  deploy still goes through and counting starts later. The app form has an **Analytics** switch,
+  on by default.
+- **Each app's usage in the dashboard:** visitors and page views from Umami (7 days, against
+  the 7 before), the pool's active accounts (today, 7 and 30 days) and new accounts per day,
+  requests, the share of errors and p95 latency from Caddy over 24 hours, and the top pages,
+  operating systems and app versions. The agent answers `GET /apps/:name/usage`.
+- **The app contract's analytics** ([docs/contracts.md](docs/contracts.md#analytics)): every app
+  domain serves `/_spotcraft/s.js`, `/_spotcraft/e`, `/_spotcraft/config.json` (the app's
+  analytics id, for native clients) and `/_spotcraft/privacy` (what is counted, with an opt-out
+  for the browser). Clients may send `Spotcraft-Client: <platform>/<version>` to the pool.
+- **The user pool records on each session** the host it was made or renewed on and the
+  `Spotcraft-Client` header (its migration 0004).
+
+### Changed
+
+- **Caddy runs from Spotcraft's own image**, built with the `replace-response` module, instead of
+  the official `caddy` image. Same version (2.11.9), same volumes, so certificates carry over.
+  It exports requests per host on port 2020, to the monitoring network only. The agent's health
+  probe for images without a `HEALTHCHECK` now runs with Node in Caddy's container.
+- `umami` is a reserved app name.
+
+### Fixed
+
+- **An app that still has its own database refuses a version made for its schema.** A deploy,
+  from the dashboard or the deploy hook, of an image with the `dev.spotcraft.migrate` label
+  now fails with a 409 until the app is moved
+  ([guide](docs/guides/move-into-the-pool.md)). Before, the migrations ran against the old
+  database and the new version started there, with guests from the pool the database didn't
+  know, so its saves failed until the move.
+
 ## [0.6.1] - 2026-11-19
 
 ### Fixed
+
+- **The contract's advice for Drizzle** ([docs/contracts.md](docs/contracts.md#database)).
+  Drizzle's `migrate()` and `drizzle-kit migrate` run `CREATE SCHEMA IF NOT EXISTS` first, which
+  Postgres refuses to an app's role even when its schema exists, so setting `migrationsSchema`
+  wasn't enough. The contract now shows a few lines that apply drizzle-kit's files in Drizzle's
+  own journal table.
 
 - **`spotcraft dev` gives every checkout its own stack:** a new stack is the Compose project
   `spotcraft-dev-<repo folder>-<hash>`, where the hash is 6 hex characters of the repository
@@ -471,7 +541,8 @@ handful of server-rendered apps from Docker Hub images behind HTTPS.
 - Servers: key-only SSH as a `deploy` user with modern algorithms only, root login refused,
   two firewalls, automatic security updates.
 
-[Unreleased]: https://github.com/kodentuzo/spotcraft/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/kodentuzo/spotcraft/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/kodentuzo/spotcraft/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/kodentuzo/spotcraft/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/kodentuzo/spotcraft/compare/v0.5.2...v0.6.0
 [0.5.2]: https://github.com/kodentuzo/spotcraft/compare/v0.5.1...v0.5.2

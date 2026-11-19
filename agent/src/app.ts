@@ -152,7 +152,16 @@ export function buildApp({ token, apps, allowedIps = [], logger = false }: Build
       }
       // Left out, `takeOver` keeps its current value too (ADR 0022).
       const takeOver = request.body.takeOver ?? current?.takeOver ?? false
-      return apps.deploy({ name, ...request.body, database, protected: protect, takeOver })
+      // And `analytics` (ADR 0038): on unless the app turned it off.
+      const analytics = request.body.analytics ?? current?.analytics ?? true
+      return apps.deploy({
+        name,
+        ...request.body,
+        database,
+        protected: protect,
+        takeOver,
+        analytics,
+      })
     },
   )
 
@@ -240,6 +249,22 @@ export function buildApp({ token, apps, allowedIps = [], logger = false }: Build
     '/apps/:name/backup',
     { schema: { params: nameParamsSchema } },
     async (request) => apps.backup(request.params.name),
+  )
+
+  // The app's usage (ADR 0038): visits from Umami and accounts from the pool, counts only.
+  app.get<{ Params: NameParams; Querystring: { days: number } }>(
+    '/apps/:name/usage',
+    {
+      schema: {
+        params: nameParamsSchema,
+        querystring: {
+          type: 'object',
+          additionalProperties: false,
+          properties: { days: { type: 'integer', minimum: 1, maximum: 90, default: 7 } },
+        },
+      },
+    },
+    (request) => apps.usage(request.params.name, request.query.days),
   )
 
   // Where the app's tables are, and moving an app made before ADR 0034 into its schema.

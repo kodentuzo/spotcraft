@@ -1,5 +1,6 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import type { AccessApps } from './access.ts'
+import type { Analytics } from './analytics.ts'
 import {
   type AgentSettings,
   type AppSpec,
@@ -73,6 +74,27 @@ export function readImageConfig(inspected: string): { migrate?: string[]; health
 
 /** Where the user pool's backups go in the bucket, and its key in `backupAll`'s result. */
 export const POOL_BACKUP = '_auth'
+
+/**
+ * The health probe, run with Node in Caddy's container: exits 0 on a 2xx, or a 404 (the app
+ * answers on its port, without that route); 1 otherwise, saying what it got.
+ */
+export const PROBE_SCRIPT = `fetch(process.argv[1], { signal: AbortSignal.timeout(3000) }).then(
+  (r) => { if (r.ok || r.status === 404) process.exit(0); console.error('HTTP ' + r.status); process.exit(1) },
+  (e) => { console.error(String(e.cause ?? e)); process.exit(1) },
+)`
+/** Analytics' database in the bucket (ADR 0038), beside the apps and the pool. */
+export const ANALYTICS_BACKUP = '_umami'
+
+/**
+ * A database the platform runs for itself, backed up nightly after the apps, as
+ * `<folder>/<time>/<file>`. Folders start with `_`, which app names can't.
+ */
+export interface PlatformDump {
+  folder: string
+  file: string
+  dump: () => Promise<Buffer>
+}
 
 export type { BackupStatus }
 
@@ -164,6 +186,40 @@ export interface Databases {
    * False if not found.
    */
   deleteUser(id: string): Promise<boolean>
+  /**
+   * Counts of the pool's accounts that use an app through `hosts` (ADR 0038), from the host each
+   * session was made or renewed on. Undefined until the pool records hosts.
+   */
+  accountUsage(hosts: string[]): Promise<AccountUsage | undefined>
+}
+
+/** An app's accounts, counted from the pool's sessions on its hosts. Counts only, no ids. */
+export interface AccountUsage {
+  /** Accounts with a session made or renewed in the last day, 7 days and 30 days. */
+  active: { day: number; week: number; month: number }
+  /** Accounts whose first session on the app's hosts started that day (UTC), last 30 days. */
+  newPerDay: { day: string; count: number }[]
+  /** Active accounts in the last 30 days per `Spotcraft-Client`, most first. */
+  clients: { client: string; active: number }[]
+}
+
+/** What Umami counted for an app (ADR 0038), over `days` days, and the days before. */
+export interface VisitSummary {
+  days: number
+  views: number
+  visitors: number
+  visits: number
+  previous: { views: number; visitors: number }
+  /** The most viewed pages (or screens), most first. */
+  pages: { path: string; views: number }[]
+  /** Visitors per operating system, most first. */
+  systems: { name: string; visitors: number }[]
+}
+
+/** An app's usage, for the dashboard: each part absent when its source can't say. */
+export interface AppUsage {
+  visits?: VisitSummary
+  accounts?: AccountUsage
 }
 
 /** What a move copied: guests, sessions, and rows per table. */
@@ -231,12 +287,17 @@ export class Apps {
 
   /** How an image without a HEALTHCHECK is waited for; tests shorten it. */
   probe = { intervalMs: 2000, seconds: PROBE_SECONDS }
+  /**
+   * The instance's analytics (ADR 0038). With it, every app gets an Umami website, whose id its
+   * site carries; without it, sites count nothing. Never a reason for a deploy to fail.
+   */
+  analytics: Analytics | undefined
   readonly #databases: Databases | undefined
   readonly settings: AgentSettings
   readonly #domains: Domains | undefined
   readonly #access: AccessApps | undefined
   readonly #backups:
-    | { target: BackupTarget; dump: Dump; dumpPool?: () => Promise<Buffer>; now: () => Date }
+    | { target: BackupTarget; dump: Dump; platform: PlatformDump[]; now: () => Date }
     | undefined
   /** Apps with a backup on request waiting or running. */
   readonly #backingUp = new Set<string>()
@@ -264,13 +325,14 @@ export class Apps {
      */
     cloudflare?: { domains: Domains; access?: AccessApps },
     /**
-     * With it, apps are backed up to a bucket (ADR 0030): `backupAll`, nightly. `dumpPool`
-     * dumps the user pool's `auth` schema (ADR 0035), backed up after the apps.
+     * With it, apps are backed up to a bucket (ADR 0030): `backupAll`, nightly. `platform`
+     * lists the platform's own databases, backed up after the apps: the user pool's `auth`
+     * schema (ADR 0035) and analytics' database (ADR 0038).
      */
     backups?: {
       target: BackupTarget
       dump: Dump
-      dumpPool?: () => Promise<Buffer>
+      platform?: PlatformDump[]
       now?: () => Date
     },
   ) {
@@ -284,7 +346,7 @@ export class Apps {
       access: Boolean(cloudflare?.access),
       backups: Boolean(backups),
     }
-    this.#backups = backups && { now: () => new Date(), ...backups }
+    this.#backups = backups && { now: () => new Date(), platform: [], ...backups }
     this.#domains = cloudflare?.domains
     this.#access = cloudflare?.access
   }
@@ -646,6 +708,16 @@ export class Apps {
       await this.#abandon(spec.name, service, previous)
       throw error
     }
+    // A migrate label means a version made for the schema and the pool (ADR 0034). On an app
+    // that still has its own database it would migrate that database and start against it,
+    // with guests the database doesn't know; only a move may deploy it.
+    if (image.migrate && !move && (await this.#databases?.layout(spec.name)) === 'database') {
+      await this.#abandon(spec.name, service, previous)
+      throw new AgentError(
+        `${spec.name} still has its own database, and ${spec.image}:${spec.tag} is made for its schema: move it first`,
+        409,
+      )
+    }
     // Migrations first, in a container of the new image, while the live slot still serves
     // (they only add, ADR 0028). If they fail, nothing has changed for visitors.
     if (image.migrate) {
@@ -689,7 +761,8 @@ export class Apps {
     }
     // The new slot is healthy: point the site at it, then commit. A restart before the commit
     // finds the old compose file, rewrites the site back and drops the new slot.
-    await this.#store.writeSite(spec.name, renderSite(spec, this.settings, service))
+    const websiteId = await this.#ensureWebsite(spec)
+    await this.#store.writeSite(spec.name, renderSite(spec, this.settings, service, websiteId))
     await this.#store.commit(spec.name)
     const reload = await this.#reloadCaddy()
     if (reload.code !== 0) {
@@ -793,6 +866,72 @@ export class Apps {
     })
   }
 
+  /**
+   * The id of the app's Umami website, made the first time and kept in `secrets.json`. If Umami
+   * can't be reached, the id kept so far (or none): the deploy goes on, and the site counts
+   * again once a later deploy or `backfillAnalytics` reaches Umami.
+   */
+  async #ensureWebsite(spec: AppSpec): Promise<string | undefined> {
+    const { analyticsId } = await this.#store.readSecrets(spec.name)
+    if (!this.analytics) return analyticsId
+    const [host] = hostnames(spec, this.settings.appsDomain)
+    try {
+      const id = await this.analytics.ensureWebsite(spec.name, host ?? spec.name, analyticsId)
+      if (id !== analyticsId) {
+        await this.#withSecrets(async () => {
+          const secrets = await this.#store.readSecrets(spec.name)
+          await this.#store.writeSecrets(spec.name, { ...secrets, analyticsId: id })
+        })
+      }
+      return id
+    } catch (error) {
+      console.warn(`analytics for ${spec.name}: ${message(error)}`)
+      return analyticsId
+    }
+  }
+
+  /**
+   * Gives every app without one an Umami website, then refreshes the sites, so apps made before
+   * analytics (or while Umami was down) start counting. Run after `recover`; Umami may still be
+   * starting, so it tries again every `retryMs` for up to `attempts` times. Returns the apps
+   * that got a website.
+   */
+  async backfillAnalytics({ attempts = 20, retryMs = 15_000 } = {}): Promise<string[]> {
+    const analytics = this.analytics
+    if (!analytics) return []
+    for (let attempt = 1; ; attempt++) {
+      const missing: AppSpec[] = []
+      for (const spec of await this.#store.list()) {
+        if (!(await this.#store.readSecrets(spec.name)).analyticsId) missing.push(spec)
+      }
+      const done: string[] = []
+      for (const spec of missing) if (await this.#ensureWebsite(spec)) done.push(spec.name)
+      if (done.length > 0) await this.refreshSites()
+      if (done.length === missing.length || attempt >= attempts) return done
+      await new Promise((resolve) => setTimeout(resolve, retryMs))
+    }
+  }
+
+  /**
+   * The app's usage (ADR 0038): what Umami counted on its website, and its accounts in the pool.
+   * A source that fails or doesn't answer leaves its part out; this never fails because of one.
+   */
+  async usage(name: string, days = 7): Promise<AppUsage> {
+    const spec = await this.#store.get(name)
+    if (!spec) throw new AgentError('No such app', 404)
+    const { analyticsId } = await this.#store.readSecrets(name)
+    const quietly = <T>(what: string, task: Promise<T> | undefined) =>
+      task?.catch((error) => {
+        console.warn(`${what} of ${name}: ${message(error)}`)
+        return undefined
+      })
+    const [visits, accounts] = await Promise.all([
+      quietly('visits', analyticsId ? this.analytics?.summary(analyticsId, days) : undefined),
+      quietly('accounts', this.#databases?.accountUsage(hostnames(spec, this.settings.appsDomain))),
+    ])
+    return { ...(visits ? { visits } : {}), ...(accounts ? { accounts } : {}) }
+  }
+
   async #refreshSites(): Promise<string[]> {
     const pending: { spec: AppSpec; files: AppFiles; site: string }[] = []
     for (const spec of await this.#store.list()) {
@@ -802,7 +941,8 @@ export class Apps {
       const files = await this.#store.read(spec.name)
       const service = files && composeService(files.compose)
       if (!files || !service) continue
-      const site = renderSite(spec, this.settings, service)
+      const { analyticsId } = await this.#store.readSecrets(spec.name)
+      const site = renderSite(spec, this.settings, service, analyticsId)
       if (files.site !== site) pending.push({ spec, files, site })
     }
     // The user pool's own host follows the apps domain and the edge, like the apps' sites.
@@ -928,18 +1068,16 @@ export class Apps {
     const deadline = Date.now() + this.probe.seconds * 1000
     let last: RunResult = { code: 1, stdout: '', stderr: 'not tried' }
     while (Date.now() < deadline) {
+      // Caddy runs from Spotcraft's image, which has Node and no wget (ADR 0038).
       last = await this.#run('docker', [
         'exec',
         this.#caddyContainer,
-        'wget',
-        '-q',
-        '-O',
-        '/dev/null',
-        '-T',
-        '3',
+        '/nodejs/bin/node',
+        '-e',
+        PROBE_SCRIPT,
         url,
       ])
-      if (last.code === 0 || /\b404\b/.test(last.stderr)) return { ...last, code: 0 }
+      if (last.code === 0) return last
       await new Promise((resolve) => setTimeout(resolve, this.probe.intervalMs))
     }
     return {
@@ -1074,7 +1212,8 @@ export class Apps {
 
   /**
    * Backs up every app, one at a time, each in its own turn in the queue so deploys can go
-   * between them, then the user pool (under `POOL_BACKUP`). A failure doesn't stop the others;
+   * between them, then the platform's databases (the pool under `POOL_BACKUP`, analytics under
+   * `ANALYTICS_BACKUP`). A failure doesn't stop the others;
    * its status says why.
    */
   async backupAll(): Promise<Record<string, BackupStatus>> {
@@ -1086,27 +1225,28 @@ export class Apps {
       )
       if (status) result[spec.name] = status
     }
-    const dumpPool = this.#backups.dumpPool
-    if (dumpPool) result[POOL_BACKUP] = await this.#exclusive(() => this.#backupPool(dumpPool))
+    for (const platform of this.#backups.platform)
+      result[platform.folder] = await this.#exclusive(() => this.#backupPlatform(platform))
     return result
   }
 
   /**
-   * The user pool's `auth` schema, as `_auth/<time>/auth.dump` (app names can't start with
-   * `_`). Its secret is in the server's .env, which Hetzner's backups hold.
+   * One of the platform's databases, as `<folder>/<time>/<file>`, such as
+   * `_auth/<time>/auth.dump`. Their secrets are in the server's .env, which Hetzner's backups
+   * hold.
    */
-  async #backupPool(dump: () => Promise<Buffer>): Promise<BackupStatus> {
+  async #backupPlatform({ folder, file, dump }: PlatformDump): Promise<BackupStatus> {
     const backups = this.#backups
     if (!backups) throw new AgentError('Backups are not set up on this server', 409)
-    const key = `${POOL_BACKUP}/${backupStamp(backups.now())}/`
+    const key = `${folder}/${backupStamp(backups.now())}/`
     try {
       const data = await dump()
-      await backups.target.put(`${key}auth.dump`, data)
+      await backups.target.put(`${key}${file}`, data)
       const at = backups.now().toISOString()
       return { at, ok: true, key, bytes: data.length, lastOkAt: at }
     } catch (error) {
       const status = { at: backups.now().toISOString(), ok: false, error: message(error) }
-      console.warn(`backup of the user pool failed: ${status.error}`)
+      console.warn(`backup of ${folder} failed: ${status.error}`)
       return status
     }
   }
@@ -1187,7 +1327,14 @@ export class Apps {
       if (!spec) return false
       const down = await this.#compose(name, ['down', '--remove-orphans'])
       if (down.code !== 0) throw new AgentError(`Could not stop ${name}`, 500, tail(down))
+      const { analyticsId } = await this.#store.readSecrets(name)
       await this.#store.remove(name)
+      // Its numbers go with it. Umami being down mustn't keep an app from being removed.
+      if (analyticsId && this.analytics) {
+        await this.analytics
+          .deleteWebsite(analyticsId)
+          .catch((error) => console.warn(`could not delete ${name}'s analytics: ${message(error)}`))
+      }
       this.#forgetReleases(name)
       await this.#reloadCaddy()
       try {

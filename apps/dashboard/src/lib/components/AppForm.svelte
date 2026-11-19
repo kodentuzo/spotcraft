@@ -18,6 +18,7 @@
     protected: boolean
     env: string
     takeOver: boolean
+    analytics: boolean
   }
 
   interface Props {
@@ -166,6 +167,16 @@
       <span class="text-sm">
         Read-only filesystem
         <span class="block text-xs text-muted-foreground">Recommended. The app can still write to a small /tmp.</span>
+      </span>
+    </label>
+
+    <label class="flex items-start gap-3 sm:col-span-2">
+      <input type="checkbox" name="analytics" checked={values.analytics} class="mt-1 size-4 accent-foreground" />
+      <span class="text-sm">
+        Analytics
+        <span class="block text-xs text-muted-foreground">
+          Counts visits with Spotcraft's Umami: no cookies, nothing that identifies a visitor. Adds a script to the app's pages; turn it off for an app whose CSP allows only scripts with a nonce.
+        </span>
       </span>
     </label>
 

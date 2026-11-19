@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
+import { hostLabel } from '../src/lib/server/host-label.ts'
 import {
   clearFailures,
   clientKey,
@@ -32,5 +33,17 @@ describe('login lockout', () => {
     assert.equal(isLockedOut('2001:db8:9:a::1'), false, 'the next /64 is not')
     clearFailures('2001:db8:9:9::1')
     assert.equal(isLockedOut('2001:db8:9:9::abcd'), false)
+  })
+})
+
+describe('PromQL for an app’s hosts', () => {
+  it('matches exactly the hosts given, dots escaped, and refuses anything else', () => {
+    assert.equal(
+      hostLabel(['blog.app', 'blog.apps.example.com']),
+      'host=~"blog\\\\.app|blog\\\\.apps\\\\.example\\\\.com"',
+    )
+    for (const bad of [[], ['blog.app"} or vector(1) #'], ['BLOG.APP']]) {
+      assert.throws(() => hostLabel(bad), /Bad host/)
+    }
   })
 })

@@ -21,12 +21,15 @@ describe('app form', () => {
     assert.equal(input?.memory, '512m')
     assert.equal(input?.takeOver, true)
     assert.equal(input?.readOnly, false, 'an unticked box is off')
+    assert.equal(input?.analytics, false)
+    assert.equal(parse({ analytics: 'on' }).input?.analytics, true)
   })
 
   it("refuses bad env lines, reserved names and Spotcraft's env names", () => {
     assert.match(parse({ env: 'OK=1\nnot a pair' }).errors.env ?? '', /Line 2/)
     assert.match(parse({ name: 'postgres' }).errors.name ?? '', /reserved/)
     assert.match(parse({ name: 'auth' }).errors.name ?? '', /reserved/)
+    assert.match(parse({ name: 'umami' }).errors.name ?? '', /reserved/)
     assert.match(parse({ env: 'DATABASE_URL=x' }).errors.env ?? '', /Spotcraft sets it/)
     assert.match(
       parse({ env: 'PORT=1\nAUTH_URL=y' }).errors.env ?? '',

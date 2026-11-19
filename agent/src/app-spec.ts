@@ -27,6 +27,11 @@ export interface AppSpec {
    * didn't make, e.g. ones pointing at an old server (ADR 0022).
    */
   takeOver?: boolean
+  /**
+   * Analytics (ADR 0038): left out or true, the app's pages get the tracker and `config.json`
+   * tells clients to send their events; false counts nothing (for a nonce-only CSP, say).
+   */
+  analytics?: boolean
 }
 
 /**
@@ -66,6 +71,8 @@ export const RESERVED_NAMES = new Set([
   'fallback',
   // The user pool: its container, and `auth.<APPS_DOMAIN>`, its address for bearer clients.
   'auth',
+  // Analytics' container (ADR 0038).
+  'umami',
 ])
 
 /**
@@ -158,6 +165,8 @@ export const appBodySchema = {
     protected: { type: 'boolean' },
     // Like `database`: left out, an update keeps the current setting.
     takeOver: { type: 'boolean' },
+    // Like `database`: left out, an update keeps the current setting (on for a new app).
+    analytics: { type: 'boolean' },
   },
 } as const
 

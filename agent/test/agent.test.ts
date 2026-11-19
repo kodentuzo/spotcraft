@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict'
+import { execFile } from 'node:child_process'
 import { chmod, mkdir, mkdtemp, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { createServer } from 'node:http'
+import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, it } from 'node:test'
 import { buildApp } from '../src/app.ts'
-import { Apps, type Databases } from '../src/apps.ts'
+import { Apps, type Databases, PROBE_SCRIPT } from '../src/apps.ts'
 import type { Domains } from '../src/domains.ts'
 import type { Runner, RunResult } from '../src/runner.ts'
 import { Store } from '../src/store.ts'
@@ -121,6 +124,14 @@ function fakeDatabases() {
     async dropSchema(name) {
       calls.push(['dropSchema', name])
     },
+    async accountUsage(hosts: string[]) {
+      calls.push(['accountUsage', ...hosts])
+      return {
+        active: { day: 1, week: 2, month: 3 },
+        newPerDay: [{ day: '2026-11-19', count: 1 }],
+        clients: [{ client: 'ios/1.4.0', active: 1 }],
+      }
+    },
     async listUsers({ limit, cursor }) {
       calls.push(['listUsers', String(limit), cursor ?? ''])
       return {
@@ -218,7 +229,9 @@ describe('agent', () => {
     assert.match(site, /^\t\t\?X-Frame-Options "DENY"$/m)
     assert.match(site, /^\t\t\?Permissions-Policy "camera=\(\), microphone=\(\), /m)
     assert.match(site, /^\t\t\?Cross-Origin-Opener-Policy "same-origin"$/m)
-    assert.doesNotMatch(site, /Content-Security-Policy/)
+    // The app's pages keep their own CSP; only Spotcraft's privacy page sets one.
+    const shared = site.slice(0, site.indexOf('handle'))
+    assert.doesNotMatch(shared, /Content-Security-Policy/)
 
     const steps = docker.calls.map((args) => args.find((a) => ['pull', 'up', 'reload'].includes(a)))
     assert.deepEqual(steps.filter(Boolean), ['pull', 'up', 'reload'])
@@ -503,13 +516,21 @@ describe('agent', () => {
       })
       await until(() => pulls().length >= 2)
       await release(token, '2.1.0')
+      // The edit must be in the queue before B: wait until the route has handed it to `deploy`
+      // (which queues it at once), not for a fixed time a slow runner may not keep.
+      let editQueued = false
+      const deploy = apps.deploy.bind(apps)
+      apps.deploy = (edited) => {
+        editQueued ||= edited.env.EDITED === '1'
+        return deploy(edited)
+      }
       const edit = app.inject({
         method: 'PUT',
         url: '/apps/tagtape',
         headers: auth,
         payload: { ...spec, tag: '2.0.2', env: { ...spec.env, EDITED: '1' } },
       })
-      await new Promise((r) => setTimeout(r, 5))
+      await until(() => editQueued)
       await release(token, '2.2.0')
       letGo()
       await busy
@@ -744,7 +765,7 @@ describe('agent', () => {
     assert.equal((await put('Bad_Name', spec)).statusCode, 400)
     assert.equal((await put('caddy', spec)).statusCode, 400)
     // The server's own services on the shared networks (ADR 0026).
-    for (const reserved of ['dashboard', 'victoriametrics', 'cloudflared', 'blackbox']) {
+    for (const reserved of ['dashboard', 'victoriametrics', 'cloudflared', 'blackbox', 'umami']) {
       assert.equal((await put(reserved, spec)).statusCode, 400, reserved)
     }
     // `app-<name>` is the alias Caddy reaches each app by: `app-blog` would answer for `blog`.
@@ -876,6 +897,14 @@ describe('agent', () => {
     })
     afterEach(() => withDb.close())
 
+    it("counts the app's accounts on its hosts in the pool", async () => {
+      assert.equal((await put(dbSpec)).statusCode, 200)
+      const res = await withDb.inject({ url: '/apps/tagtape/usage', headers: auth })
+      assert.equal(res.statusCode, 200, res.body)
+      assert.deepEqual(res.json().accounts.active, { day: 1, week: 2, month: 3 })
+      assert.deepEqual(db.calls.at(-1), ['accountUsage', 'tagtape.app'])
+    })
+
     it('prepares the database and gives the app DATABASE_URL', async () => {
       const res = await put(dbSpec)
       assert.equal(res.statusCode, 200, res.body)
@@ -929,6 +958,30 @@ describe('agent', () => {
         payload: { tag: '3.0.0' },
       })
       assert.equal(again.statusCode, 409, 'already in its schema')
+    })
+
+    it('refuses a version with a migrate label on an app that still has its own database', async () => {
+      docker.image({ healthcheck: true })
+      assert.equal((await put(dbSpec)).statusCode, 200)
+      db.ownDatabase('tagtape')
+      docker.image({
+        labels: { 'dev.spotcraft.migrate': '["node", "migrate.js"]' },
+        healthcheck: true,
+      })
+      const calls = docker.calls.length
+      const res = await put({ ...dbSpec, tag: '3.0.0' })
+      assert.equal(res.statusCode, 409)
+      assert.match(res.json().error, /still has its own database.*move it first/)
+      const after = docker.calls.slice(calls)
+      assert.ok(!after.some((args) => args.includes('run')), 'no migrations ran')
+      assert.ok(!after.some((args) => args.includes('up')), 'the new slot never started')
+      assert.ok(docker.running.has('spotcraft-app-tagtape/tagtape-blue'), 'the old version runs')
+      const stored = await withDb.inject({ url: '/apps/tagtape', headers: auth })
+      assert.equal(stored.json().tag, dbSpec.tag)
+
+      // A version without the label (the kit's) still deploys on the old database.
+      docker.image({ healthcheck: true })
+      assert.equal((await put({ ...dbSpec, tag: '2.0.1' })).statusCode, 200)
     })
 
     it('drops the schema and keeps the old version when the copy fails', async () => {
@@ -1207,33 +1260,38 @@ describe('the app contract (ADR 0034)', () => {
   it('waits for an image without a HEALTHCHECK to answer on /health, or on its port', async () => {
     docker.image({ healthcheck: false })
     assert.equal((await put()).statusCode, 200)
-    const probe = docker.calls.find((args) => args[0] === 'exec' && args.includes('wget'))
+    const probe = docker.calls.find((args) => args[0] === 'exec' && args.includes('-e'))
     assert.deepEqual(probe, [
       'exec',
       'caddy-test',
-      'wget',
-      '-q',
-      '-O',
-      '/dev/null',
-      '-T',
-      '3',
+      '/nodejs/bin/node',
+      '-e',
+      PROBE_SCRIPT,
       'http://app-tagtape-blue:3000/health',
     ])
+  })
 
-    // No /health route, but the port answers: that is enough.
-    docker.failWhen((args) => args.includes('wget'))
-    const notFound: Runner = async (file, args) =>
-      args.includes('wget')
-        ? { code: 1, stdout: '', stderr: 'wget: server returned error: HTTP/1.1 404 Not Found' }
-        : docker.run(file, args)
-    const lenient = new Apps(new Store(dir), notFound, 'caddy-test', undefined, settings)
-    lenient.probe = { intervalMs: 1, seconds: 0.05 }
-    await lenient.deploy({ name: 'tagtape', ...fullSpec, tag: '2.0.1' })
+  it('counts a 2xx or a 404 from the probe as an answer, and nothing else', async () => {
+    const statuses = [200, 404, 500]
+    const server = createServer((_req, res) => res.writeHead(statuses.shift() ?? 500).end())
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    const { port } = server.address() as AddressInfo
+    const probe = () =>
+      new Promise<number>((resolve) =>
+        execFile(process.execPath, ['-e', PROBE_SCRIPT, `http://127.0.0.1:${port}/health`], (e) =>
+          resolve(e ? Number(e.code) : 0),
+        ),
+      )
+    try {
+      assert.deepEqual([await probe(), await probe(), await probe()], [0, 0, 1])
+    } finally {
+      server.close()
+    }
   })
 
   it('fails the deploy when an image without a HEALTHCHECK never answers', async () => {
     docker.image({ healthcheck: false })
-    docker.failWhen((args) => args.includes('wget'))
+    docker.failWhen((args) => args.includes('-e'))
     const res = await put()
     assert.equal(res.statusCode, 502)
     assert.match(res.json().output, /No answer from http:\/\/app-tagtape-blue:3000\/health/)
@@ -1259,5 +1317,151 @@ describe('the app contract (ADR 0034)', () => {
       payload: spec,
     })
     assert.equal(taken.statusCode, 400)
+  })
+})
+
+describe('analytics (ADR 0038)', () => {
+  let dir: string
+  let docker: ReturnType<typeof fakeDocker>
+  let apps: Apps
+  const ID = '3f0c6a52-9b1e-4c7a-8a43-2d6f1e0b9c11'
+  /** A fake Umami: one website per name, and a switch that makes it unreachable. */
+  const umami = () => {
+    const websites = new Map<string, string>()
+    const deleted: string[] = []
+    let down = false
+    return {
+      websites,
+      deleted,
+      down: (value: boolean) => {
+        down = value
+      },
+      analytics: {
+        async ensureWebsite(name: string, _domain: string, known?: string) {
+          if (down) throw new Error('Umami did not answer')
+          if (known && [...websites.values()].includes(known)) return known
+          websites.set(name, ID)
+          return ID
+        },
+        async deleteWebsite(id: string) {
+          if (down) throw new Error('Umami did not answer')
+          deleted.push(id)
+        },
+        async summary(_id: string, days: number) {
+          if (down) throw new Error('Umami did not answer')
+          return {
+            days,
+            views: 12,
+            visitors: 5,
+            visits: 7,
+            previous: { views: 10, visitors: 4 },
+            pages: [{ path: '/', views: 9 }],
+            systems: [{ name: 'iOS', visitors: 3 }],
+          }
+        },
+      },
+    }
+  }
+  const site = () => readFile(join(dir, 'sites/tagtape.caddy'), 'utf8')
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), 'spotcraft-analytics-'))
+    docker = fakeDocker()
+    docker.image({ healthcheck: true })
+    apps = new Apps(new Store(dir), docker.run, 'caddy-test')
+  })
+  afterEach(() => rm(dir, { recursive: true, force: true }))
+
+  it('gives a deployed app a website, adds the tracker to its HTML and serves its settings', async () => {
+    const fake = umami()
+    apps.analytics = fake.analytics
+    await apps.deploy({ name: 'tagtape', ...fullSpec })
+    assert.equal(fake.websites.get('tagtape'), ID)
+    const text = await site()
+    assert.match(text, /handle \/_spotcraft\/s\.js \{\n\t\treverse_proxy umami:3000\n/)
+    assert.match(text, /handle \/_spotcraft\/e \{[\s\S]*?header_up X-Spotcraft-Client-IP/)
+    assert.match(text, /header_up Accept-Encoding identity/)
+    assert.match(
+      text,
+      /replace stream \{\n\t\t\tmatch \{\n\t\t\t\theader Content-Type text\/html\*/,
+    )
+    assert.ok(
+      text.includes(
+        `</head> \`<script defer src="/_spotcraft/s.js" data-website-id="${ID}"></script></head>\``,
+      ),
+    )
+    assert.ok(text.includes(`respond \`{"analytics":{"websiteId":"${ID}","enabled":true}}\` 200`))
+    assert.match(text, /handle \/_spotcraft\/privacy \{[\s\S]*?Don't count my visits/)
+    const secrets = JSON.parse(await readFile(join(dir, 'apps/tagtape/secrets.json'), 'utf8'))
+    assert.equal(secrets.analyticsId, ID, 'kept, so the site can be written again without Umami')
+  })
+
+  it('counts nothing for an app with analytics off, and says so to its clients', async () => {
+    apps.analytics = umami().analytics
+    await apps.deploy({ name: 'tagtape', ...fullSpec, analytics: false })
+    const text = await site()
+    assert.doesNotMatch(text, /replace stream|Accept-Encoding|data-website-id/)
+    assert.ok(text.includes('respond `{"analytics":{"enabled":false}}` 200'))
+    assert.match(text, /This site counts nothing about its visits/)
+  })
+
+  it('deploys anyway when Umami is down, and starts counting once it is back', async () => {
+    const fake = umami()
+    fake.down(true)
+    apps.analytics = fake.analytics
+    await apps.deploy({ name: 'tagtape', ...fullSpec })
+    assert.doesNotMatch(await site(), /data-website-id/)
+    fake.down(false)
+    assert.deepEqual(await apps.backfillAnalytics({ attempts: 1 }), ['tagtape'])
+    assert.ok((await site()).includes(`data-website-id="${ID}"`))
+    assert.deepEqual(await apps.backfillAnalytics({ attempts: 1 }), [], 'nothing left to do')
+  })
+
+  it("deletes the app's website with the app, and removes the app even when Umami is down", async () => {
+    const fake = umami()
+    apps.analytics = fake.analytics
+    await apps.deploy({ name: 'tagtape', ...fullSpec })
+    await apps.remove('tagtape')
+    assert.deepEqual(fake.deleted, [ID])
+    await apps.deploy({ name: 'tagtape', ...fullSpec })
+    fake.down(true)
+    assert.equal(await apps.remove('tagtape'), true)
+  })
+
+  it("reports the app's visits, and leaves them out when Umami can't say", async () => {
+    const fake = umami()
+    apps.analytics = fake.analytics
+    await apps.deploy({ name: 'tagtape', ...fullSpec })
+    const app = buildApp({ token: TOKEN, apps })
+    try {
+      const res = await app.inject({ url: '/apps/tagtape/usage?days=30', headers: auth })
+      assert.equal(res.statusCode, 200, res.body)
+      assert.equal(res.json().visits.days, 30)
+      assert.equal(res.json().visits.views, 12)
+      assert.equal(res.json().accounts, undefined, 'no Postgres on this server')
+      fake.down(true)
+      const quiet = await app.inject({ url: '/apps/tagtape/usage', headers: auth })
+      assert.deepEqual(quiet.json(), {})
+      const missing = await app.inject({ url: '/apps/nope/usage', headers: auth })
+      assert.equal(missing.statusCode, 404)
+    } finally {
+      await app.close()
+    }
+  })
+
+  it('keeps the switch as it was when an update leaves it out', async () => {
+    apps.analytics = umami().analytics
+    const app = buildApp({ token: TOKEN, apps })
+    try {
+      const put = (payload: object) =>
+        app.inject({ method: 'PUT', url: '/apps/tagtape', headers: auth, payload })
+      assert.equal((await put({ ...spec, analytics: false })).statusCode, 200)
+      assert.equal((await put({ ...spec, tag: '2.0.1' })).statusCode, 200)
+      assert.equal((await apps.get('tagtape'))?.analytics, false)
+      assert.equal((await put({ ...spec, analytics: true })).statusCode, 200)
+      assert.equal((await apps.get('tagtape'))?.analytics, true)
+    } finally {
+      await app.close()
+    }
   })
 })

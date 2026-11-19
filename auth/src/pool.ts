@@ -21,6 +21,15 @@ const LOCAL_ORIGIN = /^http:\/\/(localhost|127\.0\.0\.1):\d{1,5}$/
 export const isLocalOrigin = (origin: string | null | undefined) =>
   Boolean(origin && LOCAL_ORIGIN.test(origin))
 
+/** `Spotcraft-Client: <platform>/<version>` (docs/contracts.md); anything else is ignored. */
+const CLIENT = /^[a-z-]{1,16}\/[0-9A-Za-z.+-]{1,32}$/
+
+/** The client's `Spotcraft-Client` header, if it is one Spotcraft counts. */
+export const clientOf = (headers: Headers | undefined): string | null => {
+  const value = headers?.get('spotcraft-client')?.trim()
+  return value && CLIENT.test(value) ? value : null
+}
+
 /** A host name as Caddy passes it on, with an optional port. */
 const HOST = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*(:\d{1,5})?$/
 
@@ -72,7 +81,29 @@ export function createPool(config: Config, client: pg.Pool) {
         defaultCookieAttributes: { httpOnly: true, sameSite: 'lax', path: '/' },
       },
       // Guests keep their data as long as they keep coming back.
-      session: { expiresIn: 365 * DAY, updateAge: DAY },
+      session: {
+        expiresIn: 365 * DAY,
+        updateAge: DAY,
+        additionalFields: {
+          host: { type: 'string', required: false, input: false },
+          client: { type: 'string', required: false, input: false },
+        },
+      },
+      // Each session says which app's host it was made or renewed on, and the client, so the
+      // agent can count an app's accounts (ADR 0038). Renewals happen at most once a day.
+      databaseHooks: {
+        session: {
+          create: {
+            before: async (session, ctx) => ({
+              data: { ...session, host, client: clientOf(ctx?.headers) },
+            }),
+          },
+          update: {
+            before: async (session, ctx) =>
+              ctx ? { data: { ...session, host, client: clientOf(ctx.headers) } } : undefined,
+          },
+        },
+      },
       rateLimit: {
         enabled: true,
         storage: 'memory',

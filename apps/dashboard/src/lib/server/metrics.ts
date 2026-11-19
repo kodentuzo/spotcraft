@@ -1,5 +1,6 @@
 import { NAME, projectName } from '@spotcraft/agent/app-spec'
 import { VICTORIAMETRICS_URL } from '$app/env/private'
+import { hostLabel } from './host-label.ts'
 
 /** A time series as [unix seconds, value] points. */
 export type Series = Array<[number, number]>
@@ -67,6 +68,8 @@ const checked = (name: string) => {
 const project = (name: string) =>
   `container_label_com_docker_compose_project="${projectName(checked(name))}"`
 const probes = (name: string) => `job="probes",app="${checked(name)}"`
+const requests = (names: string[]) =>
+  `caddy_http_request_duration_seconds_count{${hostLabel(names)}}`
 
 export const promql = {
   appCpu: (name: string) => `sum(rate(container_cpu_usage_seconds_total{${project(name)}}[2m]))`,
@@ -79,6 +82,15 @@ export const promql = {
     `avg(avg_over_time(probe_success{${probes(name)}}[${window}]))`,
   uptimeByApp: (window: string) =>
     `avg by (app) (avg_over_time(probe_success{job="probes"}[${window}]))`,
+  /** Requests to the app's hosts in the last 24 hours, and the 5xx among them. */
+  appRequestsDay: (names: string[]) => `sum(increase(${requests(names)}[24h]))`,
+  appErrorsDay: (names: string[]) =>
+    `sum(increase(caddy_http_request_duration_seconds_count{${hostLabel(names)},code=~"5.."}[24h]))`,
+  /** Requests per hour, for a line over a day. */
+  appRequestsPerHour: (names: string[]) => `sum(rate(${requests(names)}[1h])) * 3600`,
+  /** Caddy's own time for a request (to the app and back), 95th percentile over the last hour. */
+  appLatencyP95: (names: string[]) =>
+    `histogram_quantile(0.95, sum by (le) (rate(caddy_http_request_duration_seconds_bucket{${hostLabel(names)}}[1h])))`,
   hostCpu: `100 * (1 - avg(rate(node_cpu_seconds_total{mode="idle"}[2m])))`,
   hostMemory: `100 * (1 - sum(node_memory_MemAvailable_bytes) / sum(node_memory_MemTotal_bytes))`,
   hostMemoryTotal: `sum(node_memory_MemTotal_bytes)`,

@@ -20,7 +20,9 @@ dashboard.
   [the contract](../contracts.md#database). Reference `auth.users` from a file drizzle-kit
   doesn't read.
 - **Start the migrations again** from one that creates today's tables in the schema. The old
-  ones stay with the old database. Keep the migrator's table in the schema too.
+  ones stay with the old database. With Drizzle, apply them as
+  [the contract](../contracts.md#database) shows: Drizzle's own migrator can't run in an app's
+  schema.
 - **Let the server run them:** add a `dev.spotcraft.migrate` label to the image, and drop
   anything that migrates at startup.
 - **Answer `GET /health`**, or keep the image's `HEALTHCHECK`.
@@ -29,6 +31,10 @@ dashboard.
 Try it with `spotcraft dev` from
 [`@kodentuzo/spotcraft`](../../packages/cli/README.md), which gives the app a schema, the pool and
 `.env`. Then build and push the image.
+
+Until the move, Spotcraft refuses to deploy an image with the migrate label to the app, from
+the dashboard or the deploy hook: it would run against the old database, with guests it
+doesn't know. A CI job that deploys through the hook fails, and the old version keeps serving.
 
 ## 2. Move it
 

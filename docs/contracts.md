@@ -91,16 +91,53 @@ export const workouts = app.table('workouts', {
 A plain `pgTable` would work for queries, but drizzle-kit writes `"public"."<table>"` into the
 foreign keys between the app's own tables, and an app can't use `public`.
 
-In `drizzle.config.ts`, keep the migrator's own table in the app's schema too:
+In `drizzle.config.ts`, list only the app's tables:
 
 ```ts
 export default defineConfig({
   dialect: 'postgresql',
   schema: './src/db/schema.ts',
   out: './drizzle',
-  migrations: { schema: 'app_lifts' },
-  dbCredentials: { url: process.env.DATABASE_URL! },
 })
+```
+
+Drizzle's `migrate()` and `drizzle-kit migrate` can't apply the files on Spotcraft: they first
+run `CREATE SCHEMA IF NOT EXISTS` for their journal, and Postgres checks the right to create
+schemas before it notices that the schema exists. Apply them with a few lines instead, in
+Drizzle's own journal table, so drizzle-kit keeps working as before:
+
+```ts
+// src/db/migrate.ts: `node src/db/migrate.ts`, or the image's migrate label.
+import { readMigrationFiles } from 'drizzle-orm/migrator'
+import pg from 'pg'
+
+const schema = process.env.DATABASE_SCHEMA ?? 'app_lifts'
+const journal = `${pg.escapeIdentifier(schema)}.__drizzle_migrations`
+const client = new pg.Client({ connectionString: process.env.DATABASE_URL })
+await client.connect()
+try {
+  await client.query('BEGIN')
+  await client.query('SELECT pg_advisory_xact_lock(1)')
+  await client.query(
+    `CREATE TABLE IF NOT EXISTS ${journal} (id serial PRIMARY KEY, hash text NOT NULL, created_at bigint)`,
+  )
+  const { rows } = await client.query(`SELECT max(created_at) AS last FROM ${journal}`)
+  const last = Number(rows[0].last ?? 0)
+  for (const migration of readMigrationFiles({ migrationsFolder: './drizzle' })) {
+    if (migration.folderMillis <= last) continue
+    for (const statement of migration.sql) await client.query(statement)
+    await client.query(`INSERT INTO ${journal} (hash, created_at) VALUES ($1, $2)`, [
+      migration.hash,
+      migration.folderMillis,
+    ])
+  }
+  await client.query('COMMIT')
+} catch (error) {
+  await client.query('ROLLBACK')
+  throw error
+} finally {
+  await client.end()
+}
 ```
 
 ## Migrations
@@ -126,12 +163,15 @@ LABEL dev.spotcraft.migrate='["/nodejs/bin/node", "dist/migrate.js"]'
 
 `/_spotcraft/*` on every app domain belongs to the platform:
 
-| Path                 | What                               |
-| -------------------- | ---------------------------------- |
-| `/_spotcraft/auth/*` | The user pool (Better Auth's API). |
+| Path                      | What                                                                  |
+| ------------------------- | --------------------------------------------------------------------- |
+| `/_spotcraft/auth/*`      | The user pool (Better Auth's API).                                    |
+| `/_spotcraft/s.js`        | The analytics script (Umami's tracker).                               |
+| `/_spotcraft/e`           | Where analytics events go (Umami's collect endpoint).                 |
+| `/_spotcraft/config.json` | The app's analytics settings, for clients that send their own events. |
+| `/_spotcraft/privacy`     | What Spotcraft counts for the app, and how to opt out.                |
 
-Analytics will add `/_spotcraft/s.js` and `/_spotcraft/e`. `/_spotcraft/webhook` is kept for
-calls from the platform to the app.
+`/_spotcraft/webhook` is kept for calls from the platform to the app.
 
 ## Users
 
@@ -151,6 +191,38 @@ Users come from the instance's pool. Today they are all guests.
   bearer token it is sent.
 - **App data** points at the user with a foreign key, `on delete cascade` or `on delete set
   null`. Deleting a user deletes their rows in every app. A key that blocks the delete is a bug.
+
+## Analytics
+
+Spotcraft counts how each app is used, with Umami on the instance
+([ADR 0038](decisions/0038-analytics.md)). Nothing goes to an outside service, and nothing
+collected holds an id, personal data or a cookie.
+
+**What needs no change to the app:**
+
+- **Page views:** Caddy adds
+  `<script defer src="/_spotcraft/s.js" data-website-id="…"></script>` before `</head>` in
+  `text/html` responses. A CSP of `script-src 'self'` allows it.
+- **Requests:** requests, errors and latency per app, from Caddy.
+- **Accounts:** new and active pool accounts per app, from the host each session was made or
+  renewed on.
+
+**Clients that can't be injected** (Expo, Electron) use `@kodentuzo/spotkit/client`, or do the
+same by hand:
+
+- `GET <app URL>/_spotcraft/config.json` answers
+  `{ "analytics": { "websiteId": "<uuid>", "enabled": true } }`. With `enabled: false`, send
+  nothing.
+- Screens and events go to `POST <app URL>/_spotcraft/e` as Umami event payloads, with a
+  User-Agent that names the platform. Event data must not hold ids or personal data.
+- Requests to the pool may carry `Spotcraft-Client: <platform>/<version>`, such as `ios/1.4.0`:
+  lowercase letters and dashes, a slash, then up to 32 characters of letters, digits and `.+-`.
+  The pool keeps it on the session to count platforms and versions; anything else is ignored.
+- A native app shows an opt-out, and sends nothing once it's off.
+
+**Analytics on or off** is a setting per app, on by default. Off removes the script and makes
+`config.json` say `enabled: false`. Use it for an app with a nonce-only CSP, or one that mustn't
+count.
 
 ## What the app does
 

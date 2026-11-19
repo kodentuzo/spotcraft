@@ -23,7 +23,7 @@ function cors(req: IncomingMessage, res: ServerResponse, config: Config): boolea
   res.setHeader('Vary', 'Origin')
   if (req.method !== 'OPTIONS') return false
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'authorization, content-type')
+  res.setHeader('Access-Control-Allow-Headers', 'authorization, content-type, spotcraft-client')
   res.setHeader('Access-Control-Max-Age', '600')
   res.writeHead(204).end()
   return true

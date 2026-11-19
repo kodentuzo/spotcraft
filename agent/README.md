@@ -34,6 +34,7 @@ The files it writes are the only record of which apps exist:
 | GET    | `/backups`               | `{ enabled, apps }`: every app's last backup, or null         |
 | GET    | `/apps/:name/backup`     | the app's last backup, or null                                |
 | POST   | `/apps/:name/backup`     | back it up now; the status (409 without backups)              |
+| GET    | `/apps/:name/usage`      | `{ visits?, accounts? }` over `?days=` (7): counts only       |
 | GET    | `/apps/:name/database`   | `{ layout }`: `schema`, `database` (its own) or `none`        |
 | POST   | `/apps/:name/move`       | `{ tag }`: move it from its own database into its schema      |
 | GET    | `/pool/users`            | the user pool's users, newest first (`?limit=`, `?cursor=`)   |
@@ -58,8 +59,8 @@ The files it writes are the only record of which apps exist:
 `database`, `protected` and `takeOver` keep their current value when left out.
 
 App names: lower-case letters, digits and dashes, 2–32 characters. The names of the server's
-own services (`caddy`, `cloudflared`, `agent`, `dashboard`, `postgres`, `victoriametrics`,
-`vmagent`, `blackbox`, `node-exporter`, `cadvisor`), since an app's service joins the same
+own services (`caddy`, `cloudflared`, `agent`, `dashboard`, `auth`, `umami`, `postgres`,
+`victoriametrics`, `vmagent`, `blackbox`, `node-exporter`, `cadvisor`), since an app's service joins the same
 network, plus `www` and `fallback`, are reserved, and so is every name starting with `app-`
 (Caddy reaches each app as `app-<name>`). A host can belong to one app only: a custom domain
 can't be another app's default host, and no app may use `DASHBOARD_DOMAIN` or a reserved host
@@ -123,7 +124,9 @@ live slot. `PUT` deploys into the other slot, next to the live one:
    `dev.spotcraft.migrate` (a JSON array: the command and its arguments), it runs that once,
    with `docker compose run --rm --no-deps` on the new slot's service and the command in place
    of the entrypoint, for up to 5 minutes
-   ([ADR 0034](../docs/decisions/0034-app-contract.md)). A failure ends the deploy here.
+   ([ADR 0034](../docs/decisions/0034-app-contract.md)). A failure ends the deploy here. An
+   app that still has its own database refuses such an image with a 409: the label marks a
+   version made for the schema, which only a move (`POST /apps/:name/move`) may deploy.
 3. It runs `docker compose up -d --wait` for the new slot's service only (up to 120 s for the
    container to run, and to be healthy if the image has a `HEALTHCHECK`). An image without one
    is then asked for `GET /health` from Caddy's container every 2 s for up to 120 s: a 2xx, or a
@@ -176,6 +179,38 @@ Every site sends `/_spotcraft/auth/*` to the user pool (`auth:3000`,
 `X-Spotcraft-Client-IP`, replacing whatever the client sent; every other path goes to the app.
 With `APPS_DOMAIN`, `auth.<APPS_DOMAIN>/main/*` reaches the pool too, for clients without an app
 domain; the name `auth` is reserved.
+
+Every site also serves analytics ([ADR 0038](../docs/decisions/0038-analytics.md)):
+
+- `/_spotcraft/s.js` and `/_spotcraft/e` go to Umami (`umami:3000`), the second with the visitor's
+  address in `X-Spotcraft-Client-IP` for the country;
+- `/_spotcraft/config.json` answers `{"analytics":{"websiteId":"…","enabled":true}}`, or
+  `{"analytics":{"enabled":false}}`;
+- `/_spotcraft/privacy` is a page saying what is counted, with a switch that stops counting in
+  that browser.
+
+With analytics on (the app's `analytics` isn't `false` and it has a website), the site asks the
+app for uncompressed responses (`Accept-Encoding: identity`) and, in `text/html` responses only,
+adds `<script defer src="/_spotcraft/s.js" data-website-id="…"></script>` before `</head>`,
+streamed; `encode` then compresses for the visitor. Caddy runs from Spotcraft's image, built with
+the `replace-response` module for this.
+
+The agent gives each app an Umami website when it deploys it (named after the app, for its first
+host) and keeps its id in `secrets.json` as `analyticsId`; removing the app deletes the website
+and its numbers. It signs in as Umami's `admin`, replacing Umami's default password with
+`UMAMI_ADMIN_PASSWORD` the first time. Umami being down never fails a deploy or a removal: the
+site then counts nothing, and after a start the agent keeps trying in the background
+(`backfillAnalytics`) until every app has a website.
+
+`GET /apps/:name/usage` puts two counts together, each left out when its source can't answer:
+
+- `visits`, from Umami: views, visitors and visits over the last `days`, the same before, and
+  the top pages and operating systems;
+- `accounts`, from the pool's sessions on the app's hosts: accounts active in the last day,
+  7 days and 30 days, new accounts per day (their first session on these hosts), and active
+  accounts per `Spotcraft-Client` value.
+
+The dashboard adds the requests per app from Caddy's metrics.
 
 Caddy passes the visitor's address to the app as `X-Forwarded-For`. With `EDGE=cloudflare`,
 site blocks are plain HTTP (`http://host`): Cloudflare terminates TLS and a tunnel delivers
@@ -329,20 +364,22 @@ move to the pool (`POST /apps/:name/move`); the dashboard doesn't show those.
 
 ## Settings
 
-| Env                | Default                  | Meaning                                 |
-| ------------------ | ------------------------ | --------------------------------------- |
-| `AGENT_TOKEN`      | —                        | required, at least 32 characters        |
-| `HOST`             | `127.0.0.1`              | bind address                            |
-| `PORT`             | `4000`                   | listen port                             |
-| `DATA_DIR`         | `/opt/spotcraft`         | holds `apps/` and `sites/`              |
-| `CADDY_CONTAINER`  | `spotcraft-apps-caddy-1` | container reloaded after site changes   |
-| `POSTGRES_URL`     | —                        | the agent's Postgres role (optional)    |
-| `APPS_DOMAIN`      | —                        | apps get `<name>.<APPS_DOMAIN>`         |
-| `DASHBOARD_DOMAIN` | —                        | the dashboard's host; apps can't use it |
-| `AUTH_ISSUER`      | —                        | the user pool's `iss`; apps get AUTH_*  |
-| `EDGE`             | `direct`                 | `cloudflare`: sites are plain HTTP      |
-| `CLOUDFLARE_*`     | —                        | custom domains, Access (see below)      |
-| `LOG_LEVEL`        | `info`                   | log level                               |
+| Env                    | Default                  | Meaning                                          |
+| ---------------------- | ------------------------ | ------------------------------------------------ |
+| `AGENT_TOKEN`          | —                        | required, at least 32 characters                 |
+| `HOST`                 | `127.0.0.1`              | bind address                                     |
+| `PORT`                 | `4000`                   | listen port                                      |
+| `DATA_DIR`             | `/opt/spotcraft`         | holds `apps/` and `sites/`                       |
+| `CADDY_CONTAINER`      | `spotcraft-apps-caddy-1` | container reloaded after site changes            |
+| `POSTGRES_URL`         | —                        | the agent's Postgres role (optional)             |
+| `APPS_DOMAIN`          | —                        | apps get `<name>.<APPS_DOMAIN>`                  |
+| `DASHBOARD_DOMAIN`     | —                        | the dashboard's host; apps can't use it          |
+| `AUTH_ISSUER`          | —                        | the user pool's `iss`; apps get AUTH_*           |
+| `EDGE`                 | `direct`                 | `cloudflare`: sites are plain HTTP               |
+| `UMAMI_URL`            | —                        | analytics (ADR 0038), with the password          |
+| `UMAMI_ADMIN_PASSWORD` | —                        | at least 32 characters; replaces Umami's default |
+| `CLOUDFLARE_*`         | —                        | custom domains, Access (see below)               |
+| `LOG_LEVEL`            | `info`                   | log level                                        |
 
 The agent runs from the `spotcraft` image (the root `Dockerfile`, shared with the dashboard;
 Compose starts it with `working_dir: /app/agent` and `command: ["src/index.ts"]`): distroless
