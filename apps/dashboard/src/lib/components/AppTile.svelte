@@ -2,7 +2,8 @@
   import { hue } from '#lib/icon.ts'
 
   /** `sm` for a list row, `lg` for a page header, `xl` for the deployment card. */
-  let { name, size = 'sm' }: { name: string; size?: 'sm' | 'lg' | 'xl' } = $props()
+  let { name, host, size = 'sm' }: { name: string; host?: string; size?: 'sm' | 'lg' | 'xl' } =
+    $props()
 
   const box = { sm: 'size-12', lg: 'size-16', xl: 'size-32' }
   const letter = { sm: 'text-title-3', lg: 'text-title-1', xl: 'text-7xl' }
@@ -24,7 +25,7 @@
   <span class="font-heading font-bold uppercase {letter[size]}">{name.charAt(0)}</span>
   {#if !iconFailed}
     <img
-      src="/apps/{name}/icon"
+      src="/apps/{name}/icon?host={encodeURIComponent(host ?? '')}"
       alt=""
       width={icon[size]}
       height={icon[size]}

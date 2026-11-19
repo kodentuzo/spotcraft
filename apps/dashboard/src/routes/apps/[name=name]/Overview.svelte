@@ -2,12 +2,14 @@
   import { Alert, AlertDescription, AlertTitle } from '@spotcraft/ui/components/alert'
   import { backupHealth } from '#lib/backup.ts'
   import AppTile from '#lib/components/AppTile.svelte'
+  import MemoryBar from '#lib/components/MemoryBar.svelte'
   import Sparkline from '#lib/components/Sparkline.svelte'
   import Stat from '#lib/components/Stat.svelte'
   import StatusBadge from '#lib/components/StatusBadge.svelte'
   import UptimeBars from '#lib/components/UptimeBars.svelte'
   import { ago, bytes, count, dateTime, milliseconds, percent, uptime } from '#lib/format.ts'
-  import { memoryLimit } from '#lib/overview.ts'
+  import { MEMORY_TIGHT, memoryLimit, memoryShare } from '#lib/overview.ts'
+  import { runningFor } from '#lib/status.ts'
   import type { PageData } from './$types'
 
   let { data }: { data: PageData } = $props()
@@ -18,7 +20,7 @@
   const last = (series: Array<[number, number]>) => (series.length ? series[series.length - 1][1] : null)
   const limit = $derived(memoryLimit(app.memory))
   const memoryNow = $derived(last(m.memory))
-  const memoryShare = $derived(memoryNow !== null && limit ? memoryNow / limit : null)
+  const share = $derived(memoryShare(memoryNow, app.memory))
   const backupLast = $derived(data.backup && data.backup.last !== 'unavailable' ? data.backup.last : null)
   const backupState = $derived(data.backup ? backupHealth(backupLast) : 'ok')
 </script>
@@ -27,7 +29,7 @@
 {#if deploy && !deploy.ok}
   <Alert variant="destructive" class="mb-4">
     <AlertTitle>The deploy of {deploy.tag} failed {ago(deploy.at)}</AlertTitle>
-    <AlertDescription>{deploy.error}. {deploy.lastOkTag ? `${deploy.lastOkTag} keeps running.` : 'The previous version keeps running.'}</AlertDescription>
+    <AlertDescription>{deploy.error}. {app.tag} keeps running.</AlertDescription>
   </Alert>
 {/if}
 {#if backupState === 'failed' || backupState === 'overdue'}
@@ -39,13 +41,13 @@
 
 <section aria-labelledby="deployment" class="mb-6 grid border bg-card md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
   <div class="flex items-center justify-center border-b p-8 md:border-r md:border-b-0">
-    <AppTile name={app.name} size="xl" />
+    <AppTile name={app.name} host={app.domain ?? app.hostnames[0]} size="xl" />
   </div>
   <div class="p-4">
     <h2 id="deployment" class="mb-3 text-headline">Deployment</h2>
     <dl class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-3 text-footnote">
       <dt class="text-muted-foreground">Status</dt>
-      <dd class="flex flex-wrap items-center gap-2"><StatusBadge state={app.state} health={app.health} />{#if app.status}<span class="text-muted-foreground">{app.status.replace(/\s*\(.*\)$/, '')}</span>{/if}</dd>
+      <dd class="flex flex-wrap items-center gap-2"><StatusBadge state={app.state} health={app.health} />{#if app.status}<span class="text-muted-foreground">{runningFor(app.status)}</span>{/if}</dd>
       <dt class="text-muted-foreground">Version</dt>
       <dd class="truncate font-mono" title="{app.image}:{app.tag}">{app.image}:{app.tag}</dd>
       <dt class="text-muted-foreground">Deployed</dt>
@@ -85,7 +87,7 @@
     detail="{m.up === null ? 'Not probed yet' : m.up === 1 ? 'Reachable now' : 'Not reachable now'} · 7 days: {uptime(m.uptimeWeek)}"
     bad={m.up === 0}
   >
-    <UptimeBars series={m.uptimeHourly} ratio={m.uptimeDay ?? undefined} showRatio={false} />
+    <UptimeBars series={m.uptimeHourly} ratio={m.uptimeDay ?? undefined} showRatio={false} now={data.now} />
   </Stat>
   <Stat label="Response time" value={milliseconds(last(m.response))} detail={app.protected ? 'Up to the Access sign-in' : 'Full HTTPS request, over the internet'}>
     <Sparkline series={m.response} format={milliseconds} label="Response time, last hour" />
@@ -93,10 +95,8 @@
   <Stat label="CPU" value={percent(last(m.cpu) === null ? null : (last(m.cpu) ?? 0) * 100, 1)} detail="of one core · limit {app.cpus}">
     <Sparkline series={m.cpu.map(([t, v]) => [t, v * 100] as [number, number])} format={(v) => percent(v, 1)} label="CPU, last hour" />
   </Stat>
-  <Stat label="Memory" value={bytes(memoryNow)} detail="of {limit ? bytes(limit) : app.memory}" bad={memoryShare !== null && memoryShare >= 0.9}>
-    <div class="mb-2 h-1 bg-muted" aria-hidden="true">
-      {#if memoryShare !== null}<div class="h-full {memoryShare >= 0.9 ? 'bg-destructive' : 'bg-muted-foreground/60'}" style="width: {Math.min(100, memoryShare * 100)}%"></div>{/if}
-    </div>
+  <Stat label="Memory" value={bytes(memoryNow)} detail="of {limit ? bytes(limit) : app.memory}" bad={share !== null && share >= MEMORY_TIGHT}>
+    <div class="mb-2"><MemoryBar {share} /></div>
     <Sparkline series={m.memory} format={bytes} label="Memory, last hour" />
   </Stat>
 </div>

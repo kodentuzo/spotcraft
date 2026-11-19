@@ -25,8 +25,6 @@ interface Details {
   requests: Record<string, number>
   /** Visitors in the last 7 days; missing when the app isn't counted. */
   visitors: Record<string, number>
-  /** The app's custom hosts that don't take traffic yet. */
-  domains: Record<string, string[]>
 }
 
 interface AppsPage {
@@ -43,6 +41,13 @@ interface AppsPage {
   backups: Record<string, BackupStatus | null> | null | 'unavailable'
   server: Server
   details: Promise<Details> | null
+  /**
+   * Each app's custom hosts that don't take traffic yet. Asks Cloudflare (slow): streamed on
+   * its own, so the figures don't wait for it.
+   */
+  domains: Promise<Record<string, string[]>> | null
+  /** When the page was made, so server and browser draw the same hours. */
+  now: number
   agentError: string | null
 }
 
@@ -75,13 +80,8 @@ export const load: PageServerLoad = async (): Promise<AppsPage> => {
     const shown = backups === 'unavailable' ? backups : backups.enabled ? backups.apps : null
     const details = Promise.all([
       instantBy(promql.requestsDayByHost, 'host'),
-      Promise.all(apps.map((app) => getUsage(app.name).catch(() => ({})))),
-      Promise.all(
-        apps.map((app) =>
-          app.domain ? getDomainStatus(app.name).catch(() => undefined) : undefined,
-        ),
-      ),
-    ]).then(([requests, usage, domains]) => ({
+      Promise.all(apps.map((app) => getUsage(app.name, { brief: true }).catch(() => ({})))),
+    ]).then(([requests, usage]) => ({
       requests: sumHosts(apps, requests),
       visitors: Object.fromEntries(
         apps.flatMap((app, i) => {
@@ -89,12 +89,18 @@ export const load: PageServerLoad = async (): Promise<AppsPage> => {
           return visits ? [[app.name, visits.visitors]] : []
         }),
       ),
-      domains: Object.fromEntries(
+    }))
+    const domains = Promise.all(
+      apps.map((app) =>
+        app.domain ? getDomainStatus(app.name).catch(() => undefined) : undefined,
+      ),
+    ).then((statuses) =>
+      Object.fromEntries(
         apps
-          .map((app, i) => [app.name, notActive(domains[i])] as const)
+          .map((app, i) => [app.name, notActive(statuses[i])] as const)
           .filter(([, hosts]) => hosts.length),
       ),
-    }))
+    )
     return {
       apps,
       uptime,
@@ -103,6 +109,8 @@ export const load: PageServerLoad = async (): Promise<AppsPage> => {
       backups: shown,
       server: { memory, memoryTotal, disk, diskTotal },
       details,
+      domains,
+      now: Date.now(),
       agentError: null,
     }
   } catch (error) {
@@ -117,6 +125,8 @@ export const load: PageServerLoad = async (): Promise<AppsPage> => {
       backups: null,
       server: { memory, memoryTotal, disk, diskTotal },
       details: null,
+      domains: null,
+      now: Date.now(),
       agentError: message,
     }
   }

@@ -11,3 +11,6 @@ export function statusView(state: string, health: string): { label: string; bad:
   if (state === 'missing') return { label: 'Not running', bad: true }
   return { label: state.charAt(0).toUpperCase() + state.slice(1), bad: true }
 }
+
+/** Docker's "Up 3 hours (healthy)" without the health, which the status badge already shows. */
+export const runningFor = (status: string) => status.replace(/\s*\(.*\)$/, '')

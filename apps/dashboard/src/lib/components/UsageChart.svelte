@@ -120,8 +120,15 @@
       {/if}
       </div>
       <span></span>
-      <div class="mt-2 flex justify-between text-caption-1 text-muted-foreground" aria-hidden="true">
-        {#each tab.points as point (point.day)}<span>{dayLabel(point.day)}</span>{/each}
+      <!-- Each label sits under its point; the first and last keep inside the chart. -->
+      <div class="relative mt-2 h-4 text-caption-1 text-muted-foreground" aria-hidden="true">
+        {#each tab.points as point, i (point.day)}
+          {@const at = (x(i) / W) * 100}
+          <span
+            class="absolute whitespace-nowrap {i === 0 ? '' : i === tab.points.length - 1 ? '-translate-x-full' : '-translate-x-1/2'}"
+            style="left: {at}%"
+          >{dayLabel(point.day)}</span>
+        {/each}
       </div>
     </div>
   </div>

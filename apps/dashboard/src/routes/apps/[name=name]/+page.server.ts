@@ -19,6 +19,7 @@ import {
 } from '#lib/server/agent.ts'
 import { instant, promql, range } from '#lib/server/metrics.ts'
 import { writeProbes } from '#lib/server/probes.ts'
+import { specOf } from '#lib/spec.ts'
 import type { Actions, PageServerLoad } from './$types'
 
 export const load: PageServerLoad = async ({ params, url, untrack }) => {
@@ -88,6 +89,8 @@ export const load: PageServerLoad = async ({ params, url, untrack }) => {
     hook: { enabled: hook, url: `https://${untrack(() => url.host)}/hooks/deploy/${name}` },
     // Backups (ADR 0030): null when the server has none set up.
     backup: settings?.backups ? { last: backup } : null,
+    // When the page was made, so server and browser draw the same hours.
+    now: Date.now(),
     // An app made before ADR 0034 still has its own database, until it moves.
     ownDatabase: layout === 'database',
   }
@@ -98,8 +101,7 @@ export const actions: Actions = {
   redeploy: async ({ params }) => {
     const app = await getApp(params.name)
     if (!app) error(404, 'No such app')
-    const { name, state, health, status, hostnames, ...input } = app
-    const result = await deployApp(name, input)
+    const result = await deployApp(app.name, specOf(app))
     if (!result.ok) return fail(502, { deployError: result.error, output: result.output })
     return { redeployed: true }
   },

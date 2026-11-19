@@ -62,3 +62,12 @@ export function hourlyBars(
     return { at, ratio: byHour.get(at) ?? null }
   })
 }
+
+/** Memory at or above this share of its limit shows as a warning. */
+export const MEMORY_TIGHT = 0.9
+
+/** How much of its limit (`512m`, `1g`) an app uses, 0–1; null when either is unknown. */
+export function memoryShare(used: number | null | undefined, limit: string): number | null {
+  const bytes = memoryLimit(limit)
+  return used === null || used === undefined || !bytes ? null : used / bytes
+}

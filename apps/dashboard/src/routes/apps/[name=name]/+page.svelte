@@ -38,7 +38,7 @@
 
 <header class="mt-3 mb-6 flex flex-wrap items-center justify-between gap-4">
   <div class="flex min-w-0 items-center gap-4">
-    <AppTile name={app.name} size="lg" />
+    <AppTile name={app.name} {host} size="lg" />
     <div class="min-w-0">
       <div class="flex flex-wrap items-center gap-3">
         <h1 class="font-heading text-title-1 font-bold">{app.name}</h1>

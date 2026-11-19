@@ -82,3 +82,20 @@ describe('row figures', () => {
     ])
   })
 })
+
+describe('icon download', () => {
+  it('reads a body up to the limit, and refuses a longer one without keeping it', async () => {
+    const { readLimited } = await import('../src/lib/icon.ts')
+    const small = await readLimited(new Response(new Uint8Array(10)), 16)
+    assert.equal(small?.byteLength, 10)
+    // No Content-Length: the stream itself is cut off past the limit.
+    const stream = new ReadableStream({
+      pull(controller) {
+        controller.enqueue(new Uint8Array(8))
+      },
+    })
+    assert.equal(await readLimited(new Response(stream), 16), null)
+    const declared = new Response('x', { headers: { 'content-length': '999999' } })
+    assert.equal(await readLimited(declared, 16), null)
+  })
+})

@@ -68,7 +68,7 @@
     </div>
     <ul class="divide-y">
       {#each data.apps as app (app.name)}
-        <AppRow {app} uptime={data.uptime[app.name]} uptimeHourly={data.uptimeHourly[app.name] ?? []} memory={data.memory[app.name]} backup={backups ? (backups[app.name] ?? null) : undefined} details={data.details} />
+        <AppRow {app} uptime={data.uptime[app.name]} uptimeHourly={data.uptimeHourly[app.name] ?? []} memory={data.memory[app.name]} backup={backups ? (backups[app.name] ?? null) : undefined} details={data.details} domains={data.domains} now={data.now} />
       {/each}
     </ul>
   </div>

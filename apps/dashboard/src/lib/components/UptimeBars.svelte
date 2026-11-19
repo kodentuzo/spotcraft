@@ -9,11 +9,13 @@
     ratio: number | undefined
     /** Repeat the ratio under the bars; off where it is already shown. */
     showRatio?: boolean
+    /** When the page was made (ms): the server's time, so the browser draws the same hours. */
+    now: number
   }
 
-  let { series, ratio, showRatio = true }: Props = $props()
+  let { series, ratio, showRatio = true, now }: Props = $props()
 
-  const bars = $derived(hourlyBars(series, Date.now() / 1000))
+  const bars = $derived(hourlyBars(series, now / 1000))
   const down = $derived(bars.filter((bar) => bar.ratio !== null && bar.ratio < 0.999).length)
   const summary = $derived(
     series.length === 0
