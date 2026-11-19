@@ -52,7 +52,7 @@
   },
   "overrides": [
     {
-      "includes": ["docs/decisions/0*.md"],
+      "includes": ["docs/decisions/0*.md", "apps/site/src/content/**/*.md"],
       "formatter": {
         "enabled": false
       }
