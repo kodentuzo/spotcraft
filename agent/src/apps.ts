@@ -646,6 +646,16 @@ export class Apps {
       await this.#abandon(spec.name, service, previous)
       throw error
     }
+    // A migrate label means a version made for the schema and the pool (ADR 0034). On an app
+    // that still has its own database it would migrate that database and start against it,
+    // with guests the database doesn't know; only a move may deploy it.
+    if (image.migrate && !move && (await this.#databases?.layout(spec.name)) === 'database') {
+      await this.#abandon(spec.name, service, previous)
+      throw new AgentError(
+        `${spec.name} still has its own database, and ${spec.image}:${spec.tag} is made for its schema: move it first`,
+        409,
+      )
+    }
     // Migrations first, in a container of the new image, while the live slot still serves
     // (they only add, ADR 0028). If they fail, nothing has changed for visitors.
     if (image.migrate) {

@@ -939,6 +939,30 @@ describe('agent', () => {
       assert.equal(again.statusCode, 409, 'already in its schema')
     })
 
+    it('refuses a version with a migrate label on an app that still has its own database', async () => {
+      docker.image({ healthcheck: true })
+      assert.equal((await put(dbSpec)).statusCode, 200)
+      db.ownDatabase('tagtape')
+      docker.image({
+        labels: { 'dev.spotcraft.migrate': '["node", "migrate.js"]' },
+        healthcheck: true,
+      })
+      const calls = docker.calls.length
+      const res = await put({ ...dbSpec, tag: '3.0.0' })
+      assert.equal(res.statusCode, 409)
+      assert.match(res.json().error, /still has its own database.*move it first/)
+      const after = docker.calls.slice(calls)
+      assert.ok(!after.some((args) => args.includes('run')), 'no migrations ran')
+      assert.ok(!after.some((args) => args.includes('up')), 'the new slot never started')
+      assert.ok(docker.running.has('spotcraft-app-tagtape/tagtape-blue'), 'the old version runs')
+      const stored = await withDb.inject({ url: '/apps/tagtape', headers: auth })
+      assert.equal(stored.json().tag, dbSpec.tag)
+
+      // A version without the label (the kit's) still deploys on the old database.
+      docker.image({ healthcheck: true })
+      assert.equal((await put({ ...dbSpec, tag: '2.0.1' })).statusCode, 200)
+    })
+
     it('drops the schema and keeps the old version when the copy fails', async () => {
       docker.image({ healthcheck: true })
       assert.equal((await put(dbSpec)).statusCode, 200)

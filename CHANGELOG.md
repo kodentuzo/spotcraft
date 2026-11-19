@@ -10,6 +10,15 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
 
 ## [Unreleased]
 
+### Fixed
+
+- **An app that still has its own database refuses a version made for its schema.** A deploy,
+  from the dashboard or the deploy hook, of an image with the `dev.spotcraft.migrate` label
+  now fails with a 409 until the app is moved
+  ([guide](docs/guides/move-into-the-pool.md)). Before, the migrations ran against the old
+  database and the new version started there, with guests from the pool the database didn't
+  know, so its saves failed until the move.
+
 ## [0.6.1] - 2026-11-19
 
 ### Fixed
