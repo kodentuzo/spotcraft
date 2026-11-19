@@ -46,7 +46,7 @@
     >
       <Button type="submit" variant="outline" disabled={redeploying}>{redeploying ? 'Redeploying…' : 'Redeploy'}</Button>
     </form>
-    <Button href="/apps/{app.name}/edit" variant="outline">Edit</Button>
+    <Button href="/{app.name}/edit" variant="outline">Edit</Button>
     {#if host}<Button href="https://{host}" target="_blank" rel="noopener noreferrer">Visit</Button>{/if}
   </div>
 </header>

@@ -10,7 +10,7 @@
 <svelte:head><title>Domains · {data.app.name} · Spotcraft</title></svelte:head>
 
 <AppHeading title="Domains" app={data.app}>
-  <Button href="/apps/{data.app.name}/edit" variant="outline">Change domain</Button>
+  <Button href="/{data.app.name}/edit" variant="outline">Change domain</Button>
 </AppHeading>
 
 <ul class="space-y-3">

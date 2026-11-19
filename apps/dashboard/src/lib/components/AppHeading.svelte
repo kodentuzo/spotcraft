@@ -22,7 +22,7 @@
     <div class="min-w-0">
       <h1 class="font-heading text-title-1 font-bold">{title}</h1>
       <p class="flex items-center gap-2 text-footnote text-muted-foreground">
-        <a href="/apps/{app.name}" class="hover:text-foreground hover:underline">{app.name}</a>
+        <a href="/{app.name}" class="hover:text-foreground hover:underline">{app.name}</a>
         <StatusBadge state={app.state} health={app.health} />
       </p>
     </div>

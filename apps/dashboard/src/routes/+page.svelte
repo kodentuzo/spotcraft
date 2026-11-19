@@ -52,7 +52,7 @@
   <div class="border p-10 text-center">
     <p class="text-headline">No apps yet</p>
     <p class="mt-1 text-footnote text-muted-foreground">Add a Docker image and Spotcraft runs it behind HTTPS, on its own subdomain or your domain.</p>
-    <Button href="/apps/new" class="mt-4">Add your first app</Button>
+    <Button href="/new" class="mt-4">Add your first app</Button>
   </div>
 {:else}
   {#if data.backups === 'unavailable'}

@@ -49,7 +49,7 @@
       <div class="flex items-center gap-2">
         <h2 class="truncate text-headline">
           <!-- The whole row opens the app; the host link sits above it. -->
-          <a href="/apps/{app.name}" class="after:absolute after:inset-0 focus-visible:outline-none">{app.name}</a>
+          <a href="/{app.name}" class="after:absolute after:inset-0 focus-visible:outline-none">{app.name}</a>
         </h2>
         <StatusBadge state={app.state} health={app.health} />
       </div>

@@ -44,7 +44,7 @@
 <svelte:head><title>Settings · {app.name} · Spotcraft</title></svelte:head>
 
 <AppHeading title="Settings" {app}>
-  <Button href="/apps/{app.name}/edit" variant="outline">Edit</Button>
+  <Button href="/{app.name}/edit" variant="outline">Edit</Button>
 </AppHeading>
 
 <section id="settings">

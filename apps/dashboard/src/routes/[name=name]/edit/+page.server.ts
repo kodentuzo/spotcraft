@@ -45,6 +45,6 @@ export const actions: Actions = {
       return fail(502, { values, errors, deployError: result.error, output: result.output ?? null })
     // A new domain or sign-in setting changes the app's probe targets and module.
     await writeProbes(await listApps()).catch(() => {})
-    redirect(303, `/apps/${params.name}`)
+    redirect(303, `/${params.name}`)
   },
 }

@@ -22,7 +22,7 @@
     {#each data.lines as line, i (i)}
       <div class="grid grid-cols-[4.5rem_8rem_minmax(0,1fr)] gap-3">
         <span class="text-muted-foreground tabular-nums">{time(line.at)}</span>
-        <a href="/logs/{line.app}" class="truncate text-muted-foreground hover:text-foreground">{line.app}</a>
+        <a href="/{line.app}/logs" class="truncate text-muted-foreground hover:text-foreground">{line.app}</a>
         <span class="break-words whitespace-pre-wrap">{line.text}</span>
       </div>
     {:else}

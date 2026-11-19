@@ -1,15 +1,11 @@
-import { error, fail, redirect } from '@sveltejs/kit'
-import { tabHref } from '#lib/nav.ts'
+import { error, fail } from '@sveltejs/kit'
 import { deployApp, getApp, getBackup, getDomainStatus, getSettings } from '#lib/server/agent.ts'
 import { appHealth, appOr404, appUsage } from '#lib/server/app-data.ts'
 import { specOf } from '#lib/spec.ts'
 import type { Actions, PageServerLoad } from './$types'
 
-export const load: PageServerLoad = async ({ params, url }) => {
+export const load: PageServerLoad = async ({ params }) => {
   const { name } = params
-  // The app's tabs moved into the sidebar: old links go to their section.
-  const moved = tabHref(name, url.searchParams.get('tab'))
-  if (moved) redirect(308, moved)
   const [app, metrics, settings, backup] = await Promise.all([
     appOr404(name),
     appHealth(name),

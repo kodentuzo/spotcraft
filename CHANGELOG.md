@@ -15,8 +15,8 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
 - **Dashboard sidebar:** every signed-in page gets a sidebar (instance domain and version, the
   sections, Log out) and a header bar with an app switcher, the section's title and Add app; on
   a phone the sidebar is a drawer. Each section (Overview, Usage, Logs, Server, Domains,
-  Backups, Users, Settings) shows every app, or the app picked in the switcher
-  (`/usage/<app>`). An app's tabs are gone: old `?tab=` links redirect to their section.
+  Backups, Users, Settings) shows every app, or the app picked in the switcher, app first:
+  `/<app>` and `/<app>/usage`. Adding an app is `/new`. Old `/apps/<app>` links redirect.
 - **App names** (breaking, unlikely to matter): the dashboard's pages are now reserved names,
   since an app's pages are `/<app>/…`: `new`, `apps`, `api`, `hooks`, `login`, `logout`,
   `usage`, `logs`, `server`, `domains`, `backups`, `users`, `settings`. To upgrade, rename an

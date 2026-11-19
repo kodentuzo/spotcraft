@@ -102,7 +102,7 @@
         </div>
         <p class="hidden text-footnote font-medium sm:block">{title}</p>
         <div class="col-start-3 flex justify-end">
-          <a href="/apps/new" class="flex min-h-11 items-center gap-2 px-2 text-footnote hover:bg-raised" aria-label="Add app">
+          <a href="/new" class="flex min-h-11 items-center gap-2 px-2 text-footnote hover:bg-raised" aria-label="Add app">
             <Icon name="plus" class="size-4" /><span class="hidden sm:inline">Add app</span>
           </a>
         </div>

@@ -1,6 +1,6 @@
 /**
- * The sidebar's sections. Each has two scopes: every app (`/usage`) and one app (`/usage/blog`);
- * Overview's are the app list (`/`) and the app's page (`/apps/blog`).
+ * The sidebar's sections. Each has two scopes: every app (`/usage`) and one app (`/blog/usage`);
+ * Overview's are the app list (`/`) and the app's page (`/blog`).
  */
 export const SECTIONS = [
   [
@@ -19,12 +19,14 @@ export const SECTIONS = [
 
 export type Section = (typeof SECTIONS)[number][number]['id']
 const IDS: readonly string[] = SECTIONS.flat().map((s) => s.id)
+// Top-level paths that are the dashboard's own, never an app (the agent reserves them).
+const OWN = new Set([...IDS, 'new', 'login', 'logout', 'api', 'hooks', 'apps'])
 
-/** Where a section is, for every app or for one. */
+/** Where a section is, for every app or for one: the app first, then the page. */
 export function hrefFor(section: Section, app?: string): string {
-  const name = app ? encodeURIComponent(app) : undefined
-  if (section === 'overview') return name ? `/apps/${name}` : '/'
-  return name ? `/${section}/${name}` : `/${section}`
+  const name = app ? `/${encodeURIComponent(app)}` : ''
+  if (section === 'overview') return name || '/'
+  return `${name}/${section}`
 }
 
 /**
@@ -33,25 +35,20 @@ export function hrefFor(section: Section, app?: string): string {
  */
 export function scopeOf(path: string): { section?: Section; app?: string; page?: 'new' | 'edit' } {
   if (path === '/') return { section: 'overview' }
-  const [first, second, third] = path.split('/').slice(1).map(decodeURIComponent)
-  if (first === 'apps') {
-    if (second === 'new') return { section: 'overview', page: 'new' }
-    return {
-      section: 'overview',
-      app: second,
-      ...(third === 'edit' ? { page: 'edit' as const } : {}),
-    }
-  }
-  if (IDS.includes(first)) return { section: first as Section, ...(second ? { app: second } : {}) }
-  return {}
+  const [first, second] = path.split('/').slice(1).map(decodeURIComponent)
+  if (first === 'new') return { section: 'overview', page: 'new' }
+  if (OWN.has(first)) return IDS.includes(first) ? { section: first as Section } : {}
+  if (second === 'edit') return { section: 'overview', app: first, page: 'edit' }
+  if (second && IDS.includes(second)) return { section: second as Section, app: first }
+  return { section: 'overview', app: first }
 }
 
 /** The header bar's title. */
 export function titleFor(path: string): string {
-  const { section, page } = scopeOf(path)
+  const { section, app, page } = scopeOf(path)
   if (page === 'new') return 'New app'
   if (page === 'edit') return 'Edit'
-  if (section === 'overview' && !scopeOf(path).app) return 'Apps'
+  if (section === 'overview' && !app) return 'Apps'
   return SECTIONS.flat().find((s) => s.id === section)?.label ?? ''
 }
 
@@ -60,8 +57,13 @@ export function switchHref(path: string, app?: string): string {
   return hrefFor(scopeOf(path).section ?? 'overview', app)
 }
 
-/** Where an old app tab link (`/apps/blog?tab=usage`) now lives; undefined for Overview. */
-export function tabHref(app: string, tab: string | null): string | undefined {
-  if (tab === 'usage' || tab === 'settings' || tab === 'logs') return hrefFor(tab, app)
-  return undefined
+/** Where an old link (`/apps/blog`, `/apps/blog?tab=usage`, `/apps/new`) now lives. */
+export function movedHref(rest: string, tab: string | null): string {
+  const [first, ...more] = rest.split('/').filter(Boolean)
+  if (!first) return '/'
+  if (first === 'new') return '/new'
+  if (more.length === 0 && (tab === 'usage' || tab === 'settings' || tab === 'logs')) {
+    return hrefFor(tab, first)
+  }
+  return `/${[first, ...more].map(encodeURIComponent).join('/')}`
 }
