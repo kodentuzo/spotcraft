@@ -174,7 +174,6 @@ export function buildApp({ token, apps, allowedIps = [], logger = false }: Build
     },
   )
 
-  // An app's users (ADR 0018), read and deleted in its own database's `auth` tables.
   // Where the app's custom domain stands, and which records its owner still has to create.
   app.get<{ Params: NameParams }>(
     '/apps/:name/domain',
@@ -185,11 +184,11 @@ export function buildApp({ token, apps, allowedIps = [], logger = false }: Build
     },
   )
 
-  app.get<{ Params: NameParams; Querystring: { limit: number; cursor?: string } }>(
-    '/apps/:name/users',
+  // The user pool's users (ADR 0035), read and deleted in the instance database's `auth`.
+  app.get<{ Querystring: { limit: number; cursor?: string } }>(
+    '/pool/users',
     {
       schema: {
-        params: nameParamsSchema,
         querystring: {
           type: 'object',
           additionalProperties: false,
@@ -200,25 +199,22 @@ export function buildApp({ token, apps, allowedIps = [], logger = false }: Build
         },
       },
     },
-    async (request) => apps.listUsers(request.params.name, request.query),
+    async (request) => apps.listUsers(request.query),
   )
 
-  app.delete<{ Params: NameParams & { id: string } }>(
-    '/apps/:name/users/:id',
+  app.delete<{ Params: { id: string } }>(
+    '/pool/users/:id',
     {
       schema: {
         params: {
           type: 'object',
-          required: ['name', 'id'],
-          properties: {
-            ...nameParamsSchema.properties,
-            id: { type: 'string', pattern: UUID },
-          },
+          required: ['id'],
+          properties: { id: { type: 'string', pattern: UUID } },
         },
       },
     },
     async (request, reply) => {
-      const deleted = await apps.deleteUser(request.params.name, request.params.id)
+      const deleted = await apps.deleteUser(request.params.id)
       return deleted ? reply.code(204).send() : reply.code(404).send({ error: 'No such user' })
     },
   )

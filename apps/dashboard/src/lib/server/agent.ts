@@ -88,17 +88,23 @@ export async function removeApp(name: string, { purge = false } = {}): Promise<v
   if (!response.ok && response.status !== 404) await expectJson(response)
 }
 
-/** A page of the app's users, newest first; `cursor` is the previous page's `next`. */
-export async function listUsers(name: string, cursor?: string): Promise<UserPage> {
+/**
+ * A page of the user pool's users (ADR 0035), newest first; `cursor` is the previous page's
+ * `next`. Undefined on a server without Postgres, which has no pool.
+ */
+export async function listUsers(cursor?: string): Promise<UserPage | undefined> {
   const query = new URLSearchParams({ limit: '50', ...(cursor ? { cursor } : {}) })
-  return expectJson<UserPage>(await call(`${appPath(name)}/users?${query}`))
+  const response = await call(`/pool/users?${query}`)
+  if (response.status === 409) return undefined
+  return expectJson<UserPage>(response)
 }
 
-/** Deletes a user and, through its foreign keys, what the app kept for them. */
-export async function deleteUser(name: string, id: string): Promise<boolean> {
-  const response = await call(`${appPath(name)}/users/${encodeURIComponent(id)}`, {
-    method: 'DELETE',
-  })
+/**
+ * Deletes a user from the pool and, through every app's foreign keys, what the apps kept for
+ * them. False if there was no such user; throws with the agent's message otherwise.
+ */
+export async function deleteUser(id: string): Promise<boolean> {
+  const response = await call(`/pool/users/${encodeURIComponent(id)}`, { method: 'DELETE' })
   if (response.status === 404) return false
   if (!response.ok) await expectJson(response) // throws with the agent's message
   return true

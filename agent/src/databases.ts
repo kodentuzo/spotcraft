@@ -2,13 +2,12 @@ import pg from 'pg'
 import {
   appLayout,
   appRoleName,
-  hasOwnDatabase,
   INSTANCE,
   type Instance,
   provision,
   purge,
 } from 'spotcraft/provision'
-import { AgentError, type AppUser, type Databases } from './apps.ts'
+import { AgentError, type Databases, type PoolUser } from './apps.ts'
 
 /** Keyset cursor for user pages: the last row's creation time and id. */
 const encodeCursor = (createdAt: Date, id: string) =>
@@ -53,20 +52,15 @@ export function postgresDatabases(
   }
 
   /**
-   * Runs `fn` connected as the agent to the app's own database, where the kit's `auth` tables
-   * are. Apps in a schema have none (their users are the instance's), so it returns `missing`.
+   * Runs `fn` connected as the agent to the instance database, where the user pool keeps its
+   * `auth` schema and lets the agent read users and sessions and delete users. Apps own schemas
+   * there; every query here is qualified, and a fixed search_path keeps anything an app made
+   * from shadowing what they resolve to. Set as a startup option, so there is no extra query
+   * that could fail after connecting.
    */
-  async function inAppDatabase<T>(
-    name: string,
-    missing: T,
-    fn: (client: pg.Client) => Promise<T>,
-  ): Promise<T> {
-    if (!(await hasOwnDatabase(adminUrl, name))) return missing
-    // The app owns its database and could create schemas; every query here is qualified, and a
-    // fixed search_path keeps anything the app made from shadowing what they resolve to. Set as a
-    // startup option, so there is no extra query that could fail after connecting.
+  async function inPool<T>(fn: (client: pg.Client) => Promise<T>): Promise<T> {
     const client = new pg.Client({
-      connectionString: urlFor(appRoleName(name)),
+      connectionString: urlFor(instance.database),
       options: '-c search_path=pg_catalog,auth',
     })
     await client.connect()
@@ -97,12 +91,14 @@ export function postgresDatabases(
 
     purge: (name) => purge(adminUrl, name, instance),
 
-    listUsers: (name, { limit, cursor }) =>
-      inAppDatabase(name, { available: false, total: 0, users: [] }, async (db) => {
+    listUsers: ({ limit, cursor }) =>
+      inPool(async (db) => {
         const found = await db.query<{ ok: boolean }>(
-          `SELECT to_regclass('auth.users') IS NOT NULL AS ok`,
+          `SELECT to_regclass('auth.users') IS NOT NULL
+             AND has_table_privilege('auth.users', 'SELECT')
+             AND has_table_privilege('auth.sessions', 'SELECT') AS ok`,
         )
-        if (!found.rows[0]?.ok) return { available: false, total: 0, users: [] }
+        if (!found.rows[0]?.ok) return { available: false, total: 0, guests: 0, users: [] }
         const after = cursor ? decodeCursor(cursor) : null
         const { rows } = await db.query<{
           id: string
@@ -118,9 +114,11 @@ export function postgresDatabases(
            LIMIT $3`,
           [after?.[0] ?? null, after?.[1] ?? null, limit + 1],
         )
-        const total = await db.query<{ n: number }>('SELECT count(*)::int AS n FROM auth.users')
+        const counts = await db.query<{ total: number; guests: number }>(
+          'SELECT count(*)::int AS total, count(*) FILTER (WHERE is_anonymous)::int AS guests FROM auth.users',
+        )
         const page = rows.slice(0, limit)
-        const users: AppUser[] = page.map((row) => ({
+        const users: PoolUser[] = page.map((row) => ({
           id: row.id,
           guest: row.is_anonymous,
           createdAt: row.created_at.toISOString(),
@@ -129,15 +127,16 @@ export function postgresDatabases(
         const last = page.at(-1)
         return {
           available: true,
-          total: total.rows[0]?.n ?? 0,
+          total: counts.rows[0]?.total ?? 0,
+          guests: counts.rows[0]?.guests ?? 0,
           users,
           ...(rows.length > limit && last ? { next: encodeCursor(last.created_at, last.id) } : {}),
         }
       }),
 
-    deleteUser: (name, id) =>
-      inAppDatabase(name, false, async (db) => {
-        // Sessions, accounts and the app's own rows go through their foreign-key cascades.
+    deleteUser: (id) =>
+      inPool(async (db) => {
+        // Sessions, accounts and every app's rows go through their foreign-key cascades.
         const deleted = await db.query('DELETE FROM auth.users WHERE id = $1', [id])
         return (deleted.rowCount ?? 0) > 0
       }),

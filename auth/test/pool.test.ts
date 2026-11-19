@@ -23,6 +23,7 @@ const DATABASE = 'auth_test_apps'
 const POOL_ROLE = 'auth_test_pool'
 const GROUP = 'auth_test_app'
 const APP = 'app_auth_test'
+const ADMIN = 'auth_test_agent'
 const PASSWORD = 'auth-test-password-0123456789'
 
 function urlFor(user: string, password: string, database = DATABASE) {
@@ -65,6 +66,7 @@ describe('the user pool', { skip: !SUPERUSER_URL && 'KIT_TEST_POSTGRES_URL is no
     protocol: 'https',
     trustedOrigins: ['https://expo.example.test'],
     appGroup: GROUP,
+    adminRole: ADMIN,
     guestDays: 180,
   }
   let db: pg.Pool
@@ -122,7 +124,10 @@ describe('the user pool', { skip: !SUPERUSER_URL && 'KIT_TEST_POSTGRES_URL is no
 
   async function cleanUp() {
     await query(su(), `DROP DATABASE IF EXISTS ${DATABASE} WITH (FORCE)`, [])
-    for (const role of [APP, POOL_ROLE, GROUP]) await query(su(), `DROP ROLE IF EXISTS ${role}`)
+    for (const role of [APP, POOL_ROLE, GROUP, ADMIN]) {
+      await query(su(), `DROP OWNED BY ${role} CASCADE`).catch(() => {})
+      await query(su(), `DROP ROLE IF EXISTS ${role}`)
+    }
   }
 
   before(async () => {
@@ -132,6 +137,8 @@ describe('the user pool', { skip: !SUPERUSER_URL && 'KIT_TEST_POSTGRES_URL is no
     // owning `auth`, and one app in its own schema.
     await query(su(), `CREATE DATABASE ${DATABASE}`)
     await query(su(), `CREATE ROLE ${GROUP} NOLOGIN`)
+    await query(su(), `CREATE ROLE ${ADMIN} LOGIN PASSWORD '${PASSWORD}'`)
+    await query(su(), `GRANT CONNECT ON DATABASE ${DATABASE} TO ${ADMIN}`)
     await query(su(), `CREATE ROLE ${POOL_ROLE} LOGIN PASSWORD '${PASSWORD}'`)
     await query(su(), `CREATE ROLE ${APP} LOGIN PASSWORD '${PASSWORD}' IN ROLE ${GROUP}`)
     await query(su(), `ALTER ROLE ${APP} SET search_path = ${APP}`)
@@ -143,8 +150,8 @@ describe('the user pool', { skip: !SUPERUSER_URL && 'KIT_TEST_POSTGRES_URL is no
     const client = await db.connect()
     try {
       const migrations = loadMigrations()
-      assert.deepEqual(await migrate(client, GROUP), { from: 0, to: migrations.length })
-      assert.deepEqual(await migrate(client, GROUP), {
+      assert.deepEqual(await migrate(client, GROUP, ADMIN), { from: 0, to: migrations.length })
+      assert.deepEqual(await migrate(client, GROUP, 'no_such_role'), {
         from: migrations.length,
         to: migrations.length,
       })
@@ -286,6 +293,14 @@ describe('the user pool', { skip: !SUPERUSER_URL && 'KIT_TEST_POSTGRES_URL is no
     await assert.rejects(query(app, 'SELECT email FROM auth.users'), /permission denied/)
     await assert.rejects(query(app, 'SELECT * FROM auth.sessions'), /permission denied/)
     await assert.rejects(query(app, 'DELETE FROM auth.users'), /permission denied/)
+  })
+
+  it('lets the agent list and delete users, and nothing more', async () => {
+    const agent = urlFor(ADMIN, PASSWORD)
+    await query(agent, 'SELECT id, is_anonymous, created_at FROM auth.users')
+    await query(agent, 'SELECT user_id, updated_at FROM auth.sessions')
+    await assert.rejects(query(agent, 'SELECT * FROM auth.jwks'), /permission denied/)
+    await assert.rejects(query(agent, "UPDATE auth.users SET name = 'x'"), /permission denied/)
   })
 
   it("deletes idle guests, and their rows in the apps' tables with them", async () => {

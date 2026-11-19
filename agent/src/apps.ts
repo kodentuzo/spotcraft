@@ -142,14 +142,17 @@ export interface Databases {
   provision(name: string, password: string): Promise<Record<string, string>>
   /** Drops the app's schema or database, and its role, if they exist. */
   purge(name: string): Promise<void>
-  /** A page of the app's users (ADR 0018), newest first. */
-  listUsers(name: string, page: { limit: number; cursor?: string }): Promise<UserPage>
-  /** Deletes a user; their sessions and the app's rows go with them. False if not found. */
-  deleteUser(name: string, id: string): Promise<boolean>
+  /** A page of the user pool's users (ADR 0035), newest first. */
+  listUsers(page: { limit: number; cursor?: string }): Promise<UserPage>
+  /**
+   * Deletes a user from the pool; their sessions and every app's rows for them go with them.
+   * False if not found.
+   */
+  deleteUser(id: string): Promise<boolean>
 }
 
-/** A user of an app, as the dashboard shows it. */
-export interface AppUser {
+/** A user of the pool, as the dashboard shows it. */
+export interface PoolUser {
   id: string
   /** A guest (no sign-up) rather than a registered user. */
   guest: boolean
@@ -159,10 +162,12 @@ export interface AppUser {
 }
 
 export interface UserPage {
-  /** False when the app's database has no `auth` schema (it doesn't use the kit). */
+  /** False until the user pool has set up its schema and given the agent access. */
   available: boolean
   total: number
-  users: AppUser[]
+  /** How many of them are guests. */
+  guests: number
+  users: PoolUser[]
   /** Pass back as `cursor` for the next (older) page; absent on the last page. */
   next?: string
 }
@@ -1053,20 +1058,32 @@ export class Apps {
     return status
   }
 
-  /** The app's database interface, or why its users can't be shown (404 or 409). */
-  async #userDatabase(name: string): Promise<Databases> {
-    const spec = await this.#store.get(name)
-    if (!spec) throw new AgentError('No such app', 404)
-    if (!spec.database || !this.#databases) throw new AgentError(`${name} has no database`, 409)
+  /** The pool's database interface, or 409 on a server without Postgres. */
+  #poolDatabase(): Databases {
+    if (!this.#databases) throw new AgentError('This server has no Postgres, so no user pool', 409)
     return this.#databases
   }
 
-  async listUsers(name: string, page: { limit: number; cursor?: string }): Promise<UserPage> {
-    return (await this.#userDatabase(name)).listUsers(name, page)
+  /** A page of the user pool's users (ADR 0035). */
+  listUsers(page: { limit: number; cursor?: string }): Promise<UserPage> {
+    return this.#poolDatabase().listUsers(page)
   }
 
-  async deleteUser(name: string, id: string): Promise<boolean> {
-    return (await this.#userDatabase(name)).deleteUser(name, id)
+  /** Deletes a pool user; 409 when an app's foreign key keeps their rows (a bug in that app). */
+  async deleteUser(id: string): Promise<boolean> {
+    try {
+      return await this.#poolDatabase().deleteUser(id)
+    } catch (error) {
+      if ((error as { code?: string }).code === '23503') {
+        const detail = (error as { detail?: string; table?: string }).table
+        throw new AgentError(
+          `An app keeps rows for this user that can't be deleted with them${detail ? ` (${detail})` : ''}`,
+          409,
+          message(error),
+        )
+      }
+      throw error
+    }
   }
 
   /**

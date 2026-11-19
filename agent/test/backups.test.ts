@@ -127,7 +127,7 @@ describe('backups', () => {
       },
       async purge() {},
       async listUsers() {
-        return { available: true, total: 0, users: [] }
+        return { available: true, total: 0, guests: 0, users: [] }
       },
       async deleteUser() {
         return false

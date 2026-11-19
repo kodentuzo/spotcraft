@@ -9,6 +9,7 @@
 
   const nav = [
     { href: '/', label: 'Apps' },
+    { href: '/users', label: 'Users' },
     { href: '/server', label: 'Server' },
   ]
   const isActive = (href: string) =>

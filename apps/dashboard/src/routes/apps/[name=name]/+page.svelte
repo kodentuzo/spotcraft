@@ -68,7 +68,6 @@
     </p>
   </div>
   <div class="flex gap-2">
-    {#if app.database}<Button href="/apps/{app.name}/users" variant="outline">Users</Button>{/if}
     <Button href="/apps/{app.name}/edit" variant="outline">Edit</Button>
     <form
       method="POST"

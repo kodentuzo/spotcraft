@@ -10,20 +10,19 @@
 
   let { data, form }: PageProps = $props()
 
-  const app = $derived(data.app)
+  const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
   /** The user the delete dialog is about; the dialog is open while one is set. */
   let deleting = $state<string | null>(null)
 </script>
 
-<svelte:head><title>Users · {app.name} · Spotcraft</title></svelte:head>
+<svelte:head><title>Users · Spotcraft</title></svelte:head>
 
-<a href="/apps/{app.name}" class="text-sm text-muted-foreground hover:text-foreground">← {app.name}</a>
-<div class="mt-2 mb-6">
+<div class="mb-6">
   <h1 class="font-heading text-2xl font-bold">Users</h1>
   {#if data.page?.available}
     <p class="mt-1 text-sm text-muted-foreground">
-      {data.page.total === 1 ? '1 user' : `${data.page.total} users`} in
-      <span class="font-mono">app_{app.name.replaceAll('-', '_')}</span>, newest first. Guests are visitors who haven't signed up.
+      {count(data.page.total, 'user', 'users')}, {count(data.page.guests, 'guest', 'guests')}, shared by every app on this server, newest first. Guests are
+      visitors who haven't signed up.
     </p>
   {/if}
 </div>
@@ -31,20 +30,20 @@
 {#if form && 'deleteError' in form}
   <Alert variant="destructive" class="mb-6"><AlertTitle>{form.deleteError}</AlertTitle></Alert>
 {:else if form && 'deleted' in form}
-  <Alert class="mb-6"><AlertTitle>Deleted the user and what {app.name} kept for them.</AlertTitle></Alert>
+  <Alert class="mb-6"><AlertTitle>Deleted the user and what every app kept for them.</AlertTitle></Alert>
 {/if}
 
 {#if !data.page}
   <div class="border p-10 text-center text-sm text-muted-foreground">
-    {app.name} has no database, so it has no users here. Turn on Database in its settings to use the backend kit.
+    This server has no Postgres, so it has no user pool.
   </div>
 {:else if !data.page.available}
   <div class="border p-10 text-center text-sm text-muted-foreground">
-    {app.name}'s database has no users table yet. It appears when the app is deployed again.
+    The user pool isn't set up yet. It appears once the auth service has started.
   </div>
 {:else if data.page.users.length === 0}
   <div class="border p-10 text-center text-sm text-muted-foreground">
-    No users yet. With the backend kit, every visitor becomes a guest on their first request.
+    No users yet. Apps add guests through <span class="font-mono">/_spotcraft/auth</span>.
   </div>
 {:else}
   <div class="overflow-x-auto border">
@@ -77,8 +76,8 @@
   </div>
 
   <div class="mt-4 flex gap-2">
-    {#if data.cursor}<Button href="/apps/{app.name}/users" variant="outline">Newest</Button>{/if}
-    {#if data.page.next}<Button href="/apps/{app.name}/users?cursor={data.page.next}" variant="outline">Older</Button>{/if}
+    {#if data.cursor}<Button href="/users" variant="outline">Newest</Button>{/if}
+    {#if data.page.next}<Button href="/users?cursor={data.page.next}" variant="outline">Older</Button>{/if}
   </div>
 {/if}
 
@@ -90,7 +89,7 @@
       <AlertDialog.Title>Delete this user?</AlertDialog.Title>
       <AlertDialog.Description>
         <span class="font-mono text-xs">{deleting}</span><br />
-        Their sessions end and everything {app.name} kept for them is deleted with them. This cannot be undone.
+        Their sessions end and everything every app kept for them is deleted with them. This cannot be undone.
       </AlertDialog.Description>
     </AlertDialog.Header>
     <form
