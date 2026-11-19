@@ -10,7 +10,7 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
 
 ## [Unreleased]
 
-## [0.8.0] - 2026-11-19
+## [0.8.0] - 2026-11-20
 
 ### Added
 
