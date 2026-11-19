@@ -17,6 +17,13 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
   24 hourly uptime bars, memory against its limit, and visitors (or requests without
   analytics). A failed backup, deploy or custom domain shows only when there is one. Apps
   that need a look come first.
+- **App page:** a header with the app's icon, status and address (Redeploy, Edit, Visit),
+  and tabs: Overview (failures first, then the deployment and its health), Usage, Settings
+  (with Remove at the bottom) and Logs. Tabs are links (`?tab=`), so they work without
+  JavaScript and can be shared.
+- **Usage panels:** an app's Usage tab breaks its visits down by page and host, referrer,
+  country, device and browser, operating system, custom event (`umami.track`) and app
+  version. The agent asks Umami for each; one Umami can't give stays empty.
 - **Agent:** records each app's last deploy (time, tag, and the error if it failed) in
   `deploy.json`, and returns it as `lastDeploy` with the app. Apps show it after their next
   deploy.

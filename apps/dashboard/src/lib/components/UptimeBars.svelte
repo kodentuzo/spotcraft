@@ -7,9 +7,11 @@
     series: Array<[number, number]>
     /** Over the whole 24 hours. */
     ratio: number | undefined
+    /** Repeat the ratio under the bars; off where it is already shown. */
+    showRatio?: boolean
   }
 
-  let { series, ratio }: Props = $props()
+  let { series, ratio, showRatio = true }: Props = $props()
 
   const bars = $derived(hourlyBars(series, Date.now() / 1000))
   const down = $derived(bars.filter((bar) => bar.ratio !== null && bar.ratio < 0.999).length)
@@ -30,6 +32,6 @@
     {/each}
   </div>
   <p class="mt-1 whitespace-nowrap text-caption-1 text-muted-foreground tabular-nums" aria-hidden="true">
-    {uptime(ratio)}{#if down > 0}<span class="text-destructive">{` · ${down} h down`}</span>{/if}
+    {#if showRatio}{uptime(ratio)}{/if}{#if down > 0}<span class="text-destructive">{`${showRatio ? ' · ' : ''}${down} h down`}</span>{/if}
   </p>
 </div>

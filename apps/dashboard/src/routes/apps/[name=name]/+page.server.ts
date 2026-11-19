@@ -21,7 +21,7 @@ import { instant, promql, range } from '#lib/server/metrics.ts'
 import { writeProbes } from '#lib/server/probes.ts'
 import type { Actions, PageServerLoad } from './$types'
 
-export const load: PageServerLoad = async ({ params, url }) => {
+export const load: PageServerLoad = async ({ params, url, untrack }) => {
   const { name } = params
   // The name goes into PromQL and agent URLs before the app is looked up: only valid names.
   if (!new RegExp(NAME).test(name)) error(404, 'No such app')
@@ -34,6 +34,7 @@ export const load: PageServerLoad = async ({ params, url }) => {
     up,
     uptimeDay,
     uptimeWeek,
+    uptimeHourly,
     logs,
     hook,
     settings,
@@ -47,6 +48,7 @@ export const load: PageServerLoad = async ({ params, url }) => {
     instant(promql.appUp(name)),
     instant(promql.appUptime(name, '24h')),
     instant(promql.appUptime(name, '7d')),
+    range(promql.appUptimeHourly(name), 24 * 60, 3600),
     appLogs(name, 200),
     hookEnabled(name).catch(() => undefined),
     getSettings().catch(() => undefined),
@@ -73,12 +75,13 @@ export const load: PageServerLoad = async ({ params, url }) => {
   }))
   return {
     app,
-    metrics: { cpu, memory, response, up, uptimeDay, uptimeWeek },
+    metrics: { cpu, memory, response, up, uptimeDay, uptimeWeek, uptimeHourly },
     logs,
     domain,
     usage,
     // Always https: behind the tunnel the dashboard itself sees plain HTTP.
-    hook: { enabled: hook, url: `https://${url.host}/hooks/deploy/${name}` },
+    // Untracked: switching tabs (`?tab=`) changes the URL but needs no new data.
+    hook: { enabled: hook, url: `https://${untrack(() => url.host)}/hooks/deploy/${name}` },
     // Backups (ADR 0030): null when the server has none set up.
     backup: settings?.backups ? { last: backup } : null,
     // An app made before ADR 0034 still has its own database, until it moves.

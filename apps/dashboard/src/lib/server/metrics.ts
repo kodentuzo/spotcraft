@@ -112,6 +112,8 @@ export const promql = {
   uptimeHourlyByApp: 'avg by (app) (avg_over_time(probe_success{job="probes"}[1h]))',
   /** Requests in the last 24 hours, keyed by Caddy's host label. */
   requestsDayByHost: 'sum by (host) (increase(caddy_http_request_duration_seconds_count[24h]))',
+  /** The app's uptime per hour, for a strip of bars. */
+  appUptimeHourly: (name: string) => `avg(avg_over_time(probe_success{${probes(name)}}[1h]))`,
   uptimeByApp: (window: string) =>
     `avg by (app) (avg_over_time(probe_success{job="probes"}[${window}]))`,
   /** Requests to the app's hosts in the last 24 hours, and the 5xx among them. */

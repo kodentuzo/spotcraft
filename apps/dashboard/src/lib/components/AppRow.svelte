@@ -1,10 +1,10 @@
 <script lang="ts">
   import type { AppStatus, BackupStatus } from '@spotcraft/agent/apps'
   import { backupHealth } from '#lib/backup.ts'
+  import AppTile from '#lib/components/AppTile.svelte'
   import StatusBadge from '#lib/components/StatusBadge.svelte'
   import UptimeBars from '#lib/components/UptimeBars.svelte'
   import { ago, bytes, count } from '#lib/format.ts'
-  import { hue } from '#lib/icon.ts'
   import { memoryLimit } from '#lib/overview.ts'
 
   interface Details {
@@ -36,22 +36,11 @@
   const limit = $derived(memoryLimit(app.memory))
   const memoryShare = $derived(memory !== undefined && limit ? memory / limit : null)
 
-  let iconFailed = $state(false)
-  // An icon that failed before the page hydrated fired its error event too early: check it.
-  const checkIcon = (img: HTMLImageElement) => {
-    if (img.complete && img.naturalWidth === 0) iconFailed = true
-  }
 </script>
 
 <li class="relative flex flex-col gap-3 p-4 transition-colors hover:bg-raised md:flex-row md:items-center md:gap-6">
   <div class="flex min-w-0 flex-1 items-center gap-3">
-    <!-- The app's icon, or its initial, on a color of its own. -->
-    <div class="tile relative flex size-12 shrink-0 items-center justify-center" style="--hue: {hue(app.name)}" aria-hidden="true">
-      <span class="font-heading text-title-3 font-bold uppercase">{app.name.charAt(0)}</span>
-      {#if !iconFailed}
-        <img src="/apps/{app.name}/icon" alt="" width="32" height="32" loading="lazy" class="absolute size-8 object-contain" onerror={() => (iconFailed = true)} {@attach checkIcon} />
-      {/if}
-    </div>
+    <AppTile name={app.name} />
     <div class="min-w-0 flex-1">
       <div class="flex items-center gap-2">
         <h2 class="truncate text-headline">
@@ -114,16 +103,3 @@
     </div>
   </dl>
 </li>
-
-<style>
-  .tile {
-    background: oklch(0.92 0.05 var(--hue));
-    color: oklch(0.45 0.09 var(--hue));
-  }
-  @media (prefers-color-scheme: dark) {
-    .tile {
-      background: oklch(0.32 0.07 var(--hue));
-      color: oklch(0.8 0.08 var(--hue));
-    }
-  }
-</style>
