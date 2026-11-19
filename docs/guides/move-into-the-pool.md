@@ -32,6 +32,10 @@ Try it with `spotcraft dev` from
 [`@kodentuzo/spotcraft`](../../packages/cli/README.md), which gives the app a schema, the pool and
 `.env`. Then build and push the image.
 
+Until the move, Spotcraft refuses to deploy an image with the migrate label to the app, from
+the dashboard or the deploy hook: it would run against the old database, with guests it
+doesn't know. A CI job that deploys through the hook fails, and the old version keeps serving.
+
 ## 2. Move it
 
 On the app's page in the dashboard, under **Own database**, enter the new version's tag and

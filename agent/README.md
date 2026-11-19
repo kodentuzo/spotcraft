@@ -123,7 +123,9 @@ live slot. `PUT` deploys into the other slot, next to the live one:
    `dev.spotcraft.migrate` (a JSON array: the command and its arguments), it runs that once,
    with `docker compose run --rm --no-deps` on the new slot's service and the command in place
    of the entrypoint, for up to 5 minutes
-   ([ADR 0034](../docs/decisions/0034-app-contract.md)). A failure ends the deploy here.
+   ([ADR 0034](../docs/decisions/0034-app-contract.md)). A failure ends the deploy here. An
+   app that still has its own database refuses such an image with a 409: the label marks a
+   version made for the schema, which only a move (`POST /apps/:name/move`) may deploy.
 3. It runs `docker compose up -d --wait` for the new slot's service only (up to 120 s for the
    container to run, and to be healthy if the image has a `HEALTHCHECK`). An image without one
    is then asked for `GET /health` from Caddy's container every 2 s for up to 120 s: a 2xx, or a
