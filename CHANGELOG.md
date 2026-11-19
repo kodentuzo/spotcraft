@@ -10,6 +10,8 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-19
+
 ### Added
 
 - **Moving an app into the user pool** ([guide](docs/guides/move-into-the-pool.md)): an app
@@ -454,7 +456,8 @@ handful of server-rendered apps from Docker Hub images behind HTTPS.
 - Servers: key-only SSH as a `deploy` user with modern algorithms only, root login refused,
   two firewalls, automatic security updates.
 
-[Unreleased]: https://github.com/kodentuzo/spotcraft/compare/v0.5.2...HEAD
+[Unreleased]: https://github.com/kodentuzo/spotcraft/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/kodentuzo/spotcraft/compare/v0.5.2...v0.6.0
 [0.5.2]: https://github.com/kodentuzo/spotcraft/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/kodentuzo/spotcraft/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/kodentuzo/spotcraft/compare/v0.4.1...v0.5.0
