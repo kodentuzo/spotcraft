@@ -70,7 +70,7 @@
         <li class="relative flex flex-col gap-3 p-4 hover:bg-raised md:flex-row md:items-center md:gap-6">
           <div class="flex min-w-0 flex-1 items-center gap-3">
             <AppTile name={app.name} host={app.host} />
-            <a href="/apps/{app.name}?tab=usage" class="truncate text-headline after:absolute after:inset-0">{app.name}</a>
+            <a href="/usage/{app.name}" class="truncate text-headline after:absolute after:inset-0">{app.name}</a>
           </div>
           <dl class="grid grid-cols-3 gap-4 md:w-96 md:shrink-0 md:text-right">
             <div>

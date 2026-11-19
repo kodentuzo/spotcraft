@@ -23,7 +23,7 @@
       <section aria-labelledby="domain-{app.name}">
         <div class="mb-2 flex items-center gap-3">
           <AppTile name={app.name} host={app.domain ?? app.hostnames[0]} />
-          <h2 id="domain-{app.name}" class="text-headline"><a href="/apps/{app.name}?tab=settings#domain" class="hover:underline">{app.name}</a></h2>
+          <h2 id="domain-{app.name}" class="text-headline"><a href="/domains/{app.name}" class="hover:underline">{app.name}</a></h2>
         </div>
         <ul class="space-y-3">
           {#each app.own as host (host)}

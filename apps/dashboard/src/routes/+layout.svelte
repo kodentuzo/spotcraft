@@ -2,7 +2,7 @@
   import './layout.css'
   import favicon from '#lib/assets/favicon.svg'
   import Icon from '#lib/components/Icon.svelte'
-  import { currentApp, isCurrent, SECTIONS, switchHref, titleFor } from '#lib/nav.ts'
+  import { hrefFor, SECTIONS, scopeOf, switchHref, titleFor } from '#lib/nav.ts'
   import { statusView } from '#lib/status.ts'
   import { RELEASE_URL, VERSION } from '#lib/version.ts'
   import { page } from '$app/state'
@@ -11,8 +11,9 @@
   let { data, children }: LayoutProps = $props()
 
   const path = $derived(page.url.pathname)
-  const app = $derived(currentApp(path, page.url.searchParams))
-  const title = $derived(titleFor(path, page.url.searchParams))
+  const scope = $derived(scopeOf(path))
+  const app = $derived(scope.app)
+  const title = $derived(titleFor(path))
 
   let drawer = $state<HTMLElement>()
   let switcher = $state<HTMLElement>()
@@ -50,14 +51,16 @@
       {#each SECTIONS as group, i (i)}
         {#if i > 0}<hr class="my-2 border-sidebar-border" />{/if}
         <ul class="space-y-0.5">
-          {#each group as item (item.href)}
-            {#if item.href !== '/backups' || settings?.backups}
+          {#each group as item (item.id)}
+            {#if item.id !== 'backups' || settings?.backups}
+              {@const current = scope.section === item.id}
               <li>
+                <!-- Links keep the app picked in the switcher. -->
                 <a
-                  href={item.href}
+                  href={hrefFor(item.id, app)}
                   onclick={closeAll}
-                  aria-current={isCurrent(item.href, path) ? 'page' : undefined}
-                  class="flex min-h-9 items-center gap-3 px-2.5 text-footnote {isCurrent(item.href, path) ? 'bg-sidebar-accent font-medium text-sidebar-accent-foreground' : 'text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground'}"
+                  aria-current={current ? 'page' : undefined}
+                  class="flex min-h-9 items-center gap-3 px-2.5 text-footnote {current ? 'bg-sidebar-accent font-medium text-sidebar-accent-foreground' : 'text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground'}"
                 ><Icon name={item.icon} class="size-4" />{item.label}</a>
               </li>
             {/if}
@@ -120,7 +123,7 @@
     style="top: {switcherAt.top}px; left: {switcherAt.left}px"
   >
     <a
-      href={path === '/logs' ? '/logs' : '/'}
+      href={switchHref(path)}
       onclick={closeAll}
       class="flex min-h-9 items-center px-2.5 text-footnote {app ? 'text-muted-foreground hover:bg-raised' : 'bg-raised font-medium'}"
     >All apps</a>
@@ -129,7 +132,7 @@
       {#each apps ?? [] as item (item.name)}
         {@const view = statusView(item.state, item.health)}
         <a
-          href={switchHref(path, page.url.searchParams, item.name)}
+          href={switchHref(path, item.name)}
           onclick={closeAll}
           aria-current={app === item.name ? 'page' : undefined}
           class="flex min-h-9 items-center gap-3 px-2.5 text-footnote {app === item.name ? 'bg-raised font-medium' : 'hover:bg-raised'}"

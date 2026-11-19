@@ -1,54 +1,67 @@
-/** The dashboard's global pages, in the sidebar's two groups. */
+/**
+ * The sidebar's sections. Each has two scopes: every app (`/usage`) and one app (`/usage/blog`);
+ * Overview's are the app list (`/`) and the app's page (`/apps/blog`).
+ */
 export const SECTIONS = [
   [
-    { href: '/', label: 'Apps', icon: 'apps' },
-    { href: '/usage', label: 'Usage', icon: 'usage' },
-    { href: '/logs', label: 'Logs', icon: 'logs' },
-    { href: '/server', label: 'Server', icon: 'server' },
+    { id: 'overview', label: 'Overview', icon: 'apps' },
+    { id: 'usage', label: 'Usage', icon: 'usage' },
+    { id: 'logs', label: 'Logs', icon: 'logs' },
+    { id: 'server', label: 'Server', icon: 'server' },
   ],
   [
-    { href: '/domains', label: 'Domains', icon: 'globe' },
-    { href: '/backups', label: 'Backups', icon: 'archive' },
-    { href: '/users', label: 'Users', icon: 'users' },
-    { href: '/settings', label: 'Settings', icon: 'settings' },
+    { id: 'domains', label: 'Domains', icon: 'globe' },
+    { id: 'backups', label: 'Backups', icon: 'archive' },
+    { id: 'users', label: 'Users', icon: 'users' },
+    { id: 'settings', label: 'Settings', icon: 'settings' },
   ],
 ] as const
 
-/** Whether a sidebar item is the current page: Apps also covers every app's pages. */
-export function isCurrent(href: string, path: string): boolean {
-  if (href === '/') return path === '/' || path.startsWith('/apps')
-  return path === href || path.startsWith(`${href}/`)
+export type Section = (typeof SECTIONS)[number][number]['id']
+const IDS: readonly string[] = SECTIONS.flat().map((s) => s.id)
+
+/** Where a section is, for every app or for one. */
+export function hrefFor(section: Section, app?: string): string {
+  const name = app ? encodeURIComponent(app) : undefined
+  if (section === 'overview') return name ? `/apps/${name}` : '/'
+  return name ? `/${section}/${name}` : `/${section}`
 }
 
-const APP_TABS: Record<string, string> = { usage: 'Usage', settings: 'Settings', logs: 'Logs' }
-
-/** The header bar's title for a path: on an app's page, its tab. */
-export function titleFor(path: string, search?: Pick<URLSearchParams, 'get'>): string {
-  if (path === '/') return 'Apps'
-  if (path === '/apps/new') return 'New app'
-  if (/^\/apps\/[^/]+\/edit$/.test(path)) return 'Edit'
-  if (path.startsWith('/apps/')) return APP_TABS[search?.get('tab') ?? ''] ?? 'Overview'
-  const item = SECTIONS.flat().find(
-    (section) => section.href !== '/' && isCurrent(section.href, path),
-  )
-  return item?.label ?? 'Overview'
+/**
+ * The section and app a path is about. Adding or editing an app counts as its Overview; a path
+ * outside the sections (login, say) has none.
+ */
+export function scopeOf(path: string): { section?: Section; app?: string; page?: 'new' | 'edit' } {
+  if (path === '/') return { section: 'overview' }
+  const [first, second, third] = path.split('/').slice(1).map(decodeURIComponent)
+  if (first === 'apps') {
+    if (second === 'new') return { section: 'overview', page: 'new' }
+    return {
+      section: 'overview',
+      app: second,
+      ...(third === 'edit' ? { page: 'edit' as const } : {}),
+    }
+  }
+  if (IDS.includes(first)) return { section: first as Section, ...(second ? { app: second } : {}) }
+  return {}
 }
 
-/** The app a path is about, from `/apps/<name>…` or `?app=` on Logs; undefined for all apps. */
-export function currentApp(path: string, search: Pick<URLSearchParams, 'get'>): string | undefined {
-  const match = /^\/apps\/([^/]+)/.exec(path)
-  if (match && match[1] !== 'new') return match[1]
-  if (path === '/logs') return search.get('app') ?? undefined
+/** The header bar's title. */
+export function titleFor(path: string): string {
+  const { section, page } = scopeOf(path)
+  if (page === 'new') return 'New app'
+  if (page === 'edit') return 'Edit'
+  if (section === 'overview' && !scopeOf(path).app) return 'Apps'
+  return SECTIONS.flat().find((s) => s.id === section)?.label ?? ''
+}
+
+/** Where the switcher goes: the same section, for the app picked (or every app). */
+export function switchHref(path: string, app?: string): string {
+  return hrefFor(scopeOf(path).section ?? 'overview', app)
+}
+
+/** Where an old app tab link (`/apps/blog?tab=usage`) now lives; undefined for Overview. */
+export function tabHref(app: string, tab: string | null): string | undefined {
+  if (tab === 'usage' || tab === 'settings' || tab === 'logs') return hrefFor(tab, app)
   return undefined
-}
-
-/** Where picking an app in the switcher goes: the same view for that app where there is one. */
-export function switchHref(
-  path: string,
-  search: Pick<URLSearchParams, 'get'>,
-  name: string,
-): string {
-  if (path === '/logs') return `/logs?app=${encodeURIComponent(name)}`
-  const tab = path.startsWith('/apps/') ? search.get('tab') : null
-  return `/apps/${encodeURIComponent(name)}${tab ? `?tab=${encodeURIComponent(tab)}` : ''}`
 }

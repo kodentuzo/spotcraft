@@ -4,17 +4,14 @@
   import { Button, buttonVariants } from '@spotcraft/ui/components/button'
   import { Input } from '@spotcraft/ui/components/input'
   import { Label } from '@spotcraft/ui/components/label'
-  import { backupHealth } from '#lib/backup.ts'
-  import DomainHosts from '#lib/components/DomainHosts.svelte'
-  import { ago, bytes, dateTime } from '#lib/format.ts'
+  import AppHeading from '#lib/components/AppHeading.svelte'
   import { enhance } from '$app/forms'
-  import type { ActionData, PageData } from './$types'
+  import type { PageProps } from './$types'
 
-  let { data, form }: { data: PageData; form: ActionData } = $props()
+  let { data, form }: PageProps = $props()
 
   const app = $derived(data.app)
   let purge = $state(false)
-  let backingUp = $state(false)
   let moving = $state(false)
 
   // A GitHub Actions step for the app's workflow, after its image is pushed (ADR 0029).
@@ -44,8 +41,14 @@
     echo "Not live after $WAIT_MINUTES minutes"; exit 1`)
 </script>
 
+<svelte:head><title>Settings · {app.name} · Spotcraft</title></svelte:head>
+
+<AppHeading title="Settings" {app}>
+  <Button href="/apps/{app.name}/edit" variant="outline">Edit</Button>
+</AppHeading>
+
 <section id="settings">
-  <h2 class="mb-2 text-headline">Settings</h2>
+  <h2 class="sr-only">Settings</h2>
   <div class="border bg-card p-4 text-footnote">
     <dl class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-2">
       <dt class="text-muted-foreground">Image</dt><dd class="truncate font-mono">{app.image}:{app.tag}</dd>
@@ -63,14 +66,6 @@
   </div>
 </section>
 
-{#await data.domain then domain}
-{#if domain && domain.hosts.length > 0}
-  <section id="domain" class="mt-8">
-    <h2 class="mb-2 text-headline">Domain</h2>
-    <DomainHosts hosts={domain.hosts} />
-  </section>
-{/if}
-{/await}
 
 {#if data.hook.enabled !== undefined}
   {@const token = form && 'hookToken' in form ? form.hookToken : undefined}
@@ -92,11 +87,11 @@
         </Alert>
       {/if}
       <div class="flex flex-wrap gap-2">
-        <form method="POST" action="?tab=settings&/createHook" use:enhance>
+        <form method="POST" action="?/createHook" use:enhance>
           <Button type="submit" variant="outline">{enabled ? 'New token' : 'Turn on'}</Button>
         </form>
         {#if enabled}
-          <form method="POST" action="?tab=settings&/deleteHook" use:enhance>
+          <form method="POST" action="?/deleteHook" use:enhance>
             <Button type="submit" variant="outline">Turn off</Button>
           </form>
         {/if}
@@ -105,49 +100,6 @@
         <p class="text-muted-foreground">A step for the app's GitHub Actions workflow, after it pushes the image. It deploys the commit's <span class="font-mono">sha-…</span> tag and waits until it is live:</p>
         <pre class="overflow-x-auto border bg-muted p-3 text-xs leading-relaxed">{hookStep}</pre>
       {/if}
-    </div>
-  </section>
-{/if}
-
-{#if data.backup}
-  {@const known = form && 'backedUp' in form ? form.backedUp : data.backup.last}
-  {@const last = known === 'unavailable' ? null : known}
-  {@const health = backupHealth(last)}
-  <section id="backups" class="mt-8">
-    <h2 class="mb-2 text-headline">Backups</h2>
-    <div class="space-y-3 border bg-card p-4 text-footnote">
-      <p class="text-muted-foreground">
-        Every night at 03:00 UTC: {app.database ? 'a dump of its database and ' : ''}its settings, kept as long as the bucket keeps them (30 days by default).
-      </p>
-      {#if known === 'unavailable'}
-        <p class="text-destructive">The agent couldn't say how the last backup went. Check its log.</p>
-      {:else if health === 'none'}
-        <p>No backup yet.</p>
-      {:else if last}
-        <p class={health === 'ok' ? '' : 'text-destructive'}>
-          {#if last.ok}
-            Last backup {ago(last.at)} ({dateTime(last.at)}){#if app.database}, database {bytes(last.bytes ?? 0)}{/if}.
-            {#if health === 'overdue'}That is more than a day ago: check the agent's log.{/if}
-          {:else}
-            The last backup failed {ago(last.at)}: {last.error}.
-            {#if last.lastOkAt}The last one that worked was {ago(last.lastOkAt)}.{:else}None has worked yet.{/if}
-          {/if}
-        </p>
-      {/if}
-      {#if form && 'backupError' in form}<p class="text-destructive">{form.backupError}</p>{/if}
-      <form
-        method="POST"
-        action="?tab=settings&/backup"
-        use:enhance={() => {
-          backingUp = true
-          return async ({ update }) => {
-            await update()
-            backingUp = false
-          }
-        }}
-      >
-        <Button type="submit" variant="outline" disabled={backingUp}>{backingUp ? 'Backing up…' : 'Back up now'}</Button>
-      </form>
     </div>
   </section>
 {/if}
@@ -169,7 +121,7 @@
         {#if form && 'moveError' in form}<p class="text-destructive">{form.moveError}</p>{/if}
         <form
           method="POST"
-          action="?tab=settings&/move"
+          action="?/move"
           class="flex flex-wrap items-end gap-2"
           use:enhance={() => {
             moving = true

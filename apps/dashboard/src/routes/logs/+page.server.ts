@@ -1,22 +1,24 @@
 import { NAME } from '@spotcraft/agent/app-spec'
-import { error, isHttpError } from '@sveltejs/kit'
+import { redirect } from '@sveltejs/kit'
+import { mergeLogs } from '#lib/logs.ts'
 import { AgentUnavailable, appLogs, listApps } from '#lib/server/agent.ts'
 import type { PageServerLoad } from './$types'
 
 export const load: PageServerLoad = async ({ url }) => {
+  // The app is in the path now (`/logs/blog`); keep `?app=` links working.
+  const asked = url.searchParams.get('app')
+  if (asked && new RegExp(NAME).test(asked)) redirect(308, `/logs/${asked}`)
   try {
     const apps = (await listApps()).map((app) => app.name).sort()
-    const asked = url.searchParams.get('app')
-    // The name goes into an agent URL: only a valid one, and only an app that exists.
-    if (asked !== null && (!new RegExp(NAME).test(asked) || !apps.includes(asked))) {
-      error(404, 'No such app')
+    const logs = await Promise.all(apps.map((name) => appLogs(name, 100)))
+    return {
+      apps,
+      lines: mergeLogs(Object.fromEntries(apps.map((name, i) => [name, logs[i]]))),
+      agentError: null,
     }
-    const app = asked ?? apps[0] ?? null
-    return { apps, app, logs: app ? await appLogs(app, 200) : '', agentError: null }
-  } catch (cause) {
-    if (isHttpError(cause)) throw cause
+  } catch (error) {
     const message =
-      cause instanceof AgentUnavailable ? cause.message : 'The agent returned an error'
-    return { apps: [], app: null, logs: '', agentError: message }
+      error instanceof AgentUnavailable ? error.message : 'The agent returned an error'
+    return { apps: [], lines: [], agentError: message }
   }
 }

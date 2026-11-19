@@ -23,6 +23,11 @@
   const tab = $derived(tabs[current])
   const id = $props.id()
 
+  // About seven labels on a wide chart and three on a phone; the last day always has one.
+  const wide = $derived(Math.max(1, Math.ceil(tab.points.length / 7)))
+  const narrow = $derived(Math.max(1, Math.ceil(tab.points.length / 3)))
+  const labelled = (i: number, every: number) => i % every === 0 || i === tab.points.length - 1
+
   const W = 800
   const H = 220
   const scale = $derived(axis(Math.max(0, ...tab.points.map((p) => p.value))))
@@ -120,13 +125,12 @@
       {/if}
       </div>
       <span></span>
-      <!-- Each label sits under its point; the first and last keep inside the chart. A phone shows
-           every third, so they don't overlap. -->
+      <!-- Each label sits under its point; the first and last keep inside the chart. -->
       <div class="relative mt-2 h-4 text-caption-1 text-muted-foreground" aria-hidden="true">
         {#each tab.points as point, i (point.day)}
           {@const at = (x(i) / W) * 100}
           <span
-            class="absolute whitespace-nowrap {i === 0 ? '' : i === tab.points.length - 1 ? '-translate-x-full' : '-translate-x-1/2'} {i % 3 === 0 || i === tab.points.length - 1 ? '' : 'hidden sm:inline'}"
+            class="absolute whitespace-nowrap {i === 0 ? '' : i === tab.points.length - 1 ? '-translate-x-full' : '-translate-x-1/2'} {labelled(i, wide) ? (labelled(i, narrow) ? '' : 'hidden sm:inline') : 'hidden'}"
             style="left: {at}%"
           >{dayLabel(point.day)}</span>
         {/each}

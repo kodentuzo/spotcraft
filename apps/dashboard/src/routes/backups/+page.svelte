@@ -33,7 +33,7 @@
         <div class="flex min-w-0 flex-1 items-center gap-3">
           <AppTile name={app.name} host={app.host} />
           <div class="min-w-0">
-            <a href="/apps/{app.name}?tab=settings#backups" class="text-headline hover:underline">{app.name}</a>
+            <a href="/backups/{app.name}" class="text-headline hover:underline">{app.name}</a>
             <p class="text-caption-1 {health === 'ok' ? 'text-muted-foreground' : 'text-destructive'}">
               {label[health]}{#if last?.ok}{` · ${ago(last.at)} · ${dateTime(last.at)}`}{#if app.database}{` · ${bytes(last.bytes ?? 0)}`}{/if}{:else if last}{` · ${ago(last.at)}: ${last.error}`}{/if}
             </p>

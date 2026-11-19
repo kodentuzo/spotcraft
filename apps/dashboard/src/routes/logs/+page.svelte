@@ -3,6 +3,8 @@
   import type { PageProps } from './$types'
 
   let { data }: PageProps = $props()
+
+  const time = (iso: string) => (iso ? iso.slice(11, 19) : '')
 </script>
 
 <svelte:head><title>Logs · Spotcraft</title></svelte:head>
@@ -10,21 +12,21 @@
 <h1 class="mb-1 font-heading text-title-1 font-bold">Logs</h1>
 {#if data.agentError}
   <Alert variant="destructive" class="mt-4"><AlertTitle>Can't reach the agent</AlertTitle><AlertDescription>{data.agentError}.</AlertDescription></Alert>
-{:else if !data.app}
+{:else if data.apps.length === 0}
   <p class="text-footnote text-muted-foreground">No apps yet.</p>
 {:else}
   <p class="mb-4 text-footnote text-muted-foreground">
-    <a href="/apps/{data.app}" class="font-medium text-foreground hover:underline">{data.app}</a>: the last 200 lines, newest at the
-    bottom. Pick another app in the switcher above; reload for newer lines.
+    Every app's latest lines, merged by time (UTC), newest at the bottom. Pick an app in the switcher for all of its own; reload for newer lines.
   </p>
-  <nav aria-label="Apps" class="mb-3 flex flex-wrap gap-1">
-    {#each data.apps as name (name)}
-      <a
-        href="?app={name}"
-        aria-current={name === data.app ? 'page' : undefined}
-        class="min-h-9 border px-3 py-1.5 text-footnote {name === data.app ? 'border-foreground font-medium' : 'text-muted-foreground hover:text-foreground'}"
-      >{name}</a>
+  <div class="max-h-[70dvh] overflow-auto border bg-muted p-4 font-mono text-xs leading-relaxed">
+    {#each data.lines as line, i (i)}
+      <div class="grid grid-cols-[4.5rem_8rem_minmax(0,1fr)] gap-3">
+        <span class="text-muted-foreground tabular-nums">{time(line.at)}</span>
+        <a href="/logs/{line.app}" class="truncate text-muted-foreground hover:text-foreground">{line.app}</a>
+        <span class="break-words whitespace-pre-wrap">{line.text}</span>
+      </div>
+    {:else}
+      <p class="text-muted-foreground">No logs yet.</p>
     {/each}
-  </nav>
-  <pre class="max-h-[70dvh] overflow-auto border bg-muted p-4 text-xs leading-relaxed whitespace-pre-wrap">{data.logs || 'No logs yet.'}</pre>
+  </div>
 {/if}

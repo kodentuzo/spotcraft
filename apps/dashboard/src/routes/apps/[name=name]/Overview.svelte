@@ -35,7 +35,7 @@
 {#if backupState === 'failed' || backupState === 'overdue'}
   <Alert variant="destructive" class="mb-4">
     <AlertTitle>{backupState === 'failed' ? 'The last backup failed' : 'The backup is overdue'}</AlertTitle>
-    <AlertDescription><a href="?tab=settings#backups" class="underline">See backups</a></AlertDescription>
+    <AlertDescription><a href="/backups/{app.name}" class="underline">See backups</a></AlertDescription>
   </Alert>
 {/if}
 
@@ -69,7 +69,7 @@
             {@const status = domain?.hosts.find((h) => h.host === host)}
             <span class="flex min-w-0 items-center gap-2">
               <a href="https://{host}" class="truncate hover:underline" target="_blank" rel="noopener noreferrer">{host}</a>
-              {#if status && status.state !== 'active'}<a href="?tab=settings#domain" class="shrink-0 text-caption-1 text-destructive underline">Not live yet</a>{/if}
+              {#if status && status.state !== 'active'}<a href="/domains/{app.name}" class="shrink-0 text-caption-1 text-destructive underline">Not live yet</a>{/if}
             </span>
           {/each}
         {/await}

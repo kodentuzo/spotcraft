@@ -1,28 +1,38 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { currentApp, isCurrent, switchHref, titleFor } from '../src/lib/nav.ts'
+import { hrefFor, scopeOf, switchHref, tabHref, titleFor } from '../src/lib/nav.ts'
 
-const q = (s = '') => new URLSearchParams(s)
-
-describe('sidebar and header bar', () => {
-  it('marks Apps current on every app page', () => {
-    assert.ok(isCurrent('/', '/apps/blog'))
-    assert.ok(isCurrent('/logs', '/logs'))
-    assert.ok(!isCurrent('/users', '/usage'))
+describe('sidebar and switcher', () => {
+  it('puts each section at the page first, then the app', () => {
+    assert.equal(hrefFor('usage'), '/usage')
+    assert.equal(hrefFor('usage', 'blog'), '/usage/blog')
+    assert.equal(hrefFor('overview'), '/')
+    assert.equal(hrefFor('overview', 'blog'), '/apps/blog')
   })
-  it('titles each page', () => {
+  it('reads the section and app from a path', () => {
+    assert.deepEqual(scopeOf('/'), { section: 'overview' })
+    assert.deepEqual(scopeOf('/apps/blog'), { section: 'overview', app: 'blog' })
+    assert.deepEqual(scopeOf('/apps/blog/edit'), { section: 'overview', app: 'blog', page: 'edit' })
+    assert.deepEqual(scopeOf('/apps/new'), { section: 'overview', page: 'new' })
+    assert.deepEqual(scopeOf('/logs/shop'), { section: 'logs', app: 'shop' })
+    assert.deepEqual(scopeOf('/settings'), { section: 'settings' })
+    assert.deepEqual(scopeOf('/login'), {})
+  })
+  it('keeps the section when switching apps, and drops the app for all apps', () => {
+    assert.equal(switchHref('/usage', 'blog'), '/usage/blog')
+    assert.equal(switchHref('/settings/blog'), '/settings')
+    assert.equal(switchHref('/apps/blog/edit', 'shop'), '/apps/shop')
+    assert.equal(switchHref('/', 'shop'), '/apps/shop')
+  })
+  it('titles pages by section', () => {
     assert.equal(titleFor('/'), 'Apps')
     assert.equal(titleFor('/apps/blog'), 'Overview')
+    assert.equal(titleFor('/backups/blog'), 'Backups')
     assert.equal(titleFor('/apps/new'), 'New app')
-    assert.equal(titleFor('/backups'), 'Backups')
-    assert.equal(titleFor('/apps/blog', q('tab=usage')), 'Usage')
   })
-  it('knows which app a page is about, and keeps the view when switching', () => {
-    assert.equal(currentApp('/apps/blog', q()), 'blog')
-    assert.equal(currentApp('/apps/new', q()), undefined)
-    assert.equal(currentApp('/logs', q('app=shop')), 'shop')
-    assert.equal(switchHref('/logs', q('app=blog'), 'shop'), '/logs?app=shop')
-    assert.equal(switchHref('/apps/blog', q('tab=usage'), 'shop'), '/apps/shop?tab=usage')
-    assert.equal(switchHref('/users', q(), 'shop'), '/apps/shop')
+  it('sends old app tab links to their section', () => {
+    assert.equal(tabHref('blog', 'usage'), '/usage/blog')
+    assert.equal(tabHref('blog', 'settings'), '/settings/blog')
+    assert.equal(tabHref('blog', null), undefined)
   })
 })
