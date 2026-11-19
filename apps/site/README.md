@@ -16,6 +16,7 @@ JavaScript, published on GitHub Pages
   path links to GitHub at the release tag.
 - **Styling**: Tailwind v4 through `@tailwindcss/vite`, with the theme from
   `@spotcraft/ui/styles.css`, so it matches the dashboard. Dark mode follows the system.
+  Button links (`src/components/ButtonLink.astro`) use spotstrap's `btn` classes.
 - **Content-Security-Policy**: a meta tag with `script-src 'none'` (`src/layouts/Base.astro`).
 - **Static files** (`public/`): `CNAME`, `robots.txt`, the favicon and the dashboard screenshots.
 

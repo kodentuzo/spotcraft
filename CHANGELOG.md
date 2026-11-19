@@ -10,6 +10,14 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
 
 ## [Unreleased]
 
+### Changed
+
+- **The theme comes from [spotstrap](https://spotstrap.dev)** (`@kodentuzo/spotstrap`), the
+  owner's UI library, through `@spotcraft/ui`
+  ([ADR 0033](docs/decisions/0033-theme-from-spotstrap.md)). The colors, corners and font stay
+  the same. Body text is 17px instead of 16px, muted text is slightly darker, and the website's
+  buttons are 44px tall.
+
 ## [0.5.2] - 2026-11-18
 
 The repository moved to the kodentuzo organization, with updated server images.

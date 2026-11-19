@@ -10,7 +10,7 @@ that supersedes the old one; old records are never rewritten.
 | 0003 | [VictoriaMetrics and VictoriaLogs](0003-victoria-monitoring.md)                                | accepted                                     |
 | 0004 | [Generic VPS bootstrap, optional Hetzner](0004-provisioning.md)                                | accepted, partly superseded by 0026          |
 | 0005 | [One pnpm monorepo: SvelteKit and Fastify](0005-repo-and-stack.md)                             | accepted                                     |
-| 0006 | [Shared UI package with shadcn-svelte](0006-shared-ui.md)                                      | accepted                                     |
+| 0006 | [Shared UI package with shadcn-svelte](0006-shared-ui.md)                                      | accepted, partly superseded by 0033          |
 | 0007 | [App state lives on the apps server; agent API](0007-app-state-on-apps-server.md)              | accepted                                     |
 | 0008 | [Dashboard login with one admin password](0008-dashboard-login.md)                             | accepted, partly superseded by 0023          |
 | 0009 | [Multi-arch images on Docker Hub, built by CI](0009-images-on-docker-hub.md)                   | accepted, partly superseded by 0025          |
@@ -27,7 +27,7 @@ that supersedes the old one; old records are never rewritten.
 | 0021 | [Apps get a default subdomain; Cloudflare can sit in front](0021-cloudflare-edge.md)           | accepted, partly superseded by 0022 and 0023 |
 | 0022 | [Taking over a custom domain's DNS records is an app setting](0022-takeover-setting.md)        | accepted                                     |
 | 0023 | [A Cloudflare Access sign-in also signs in to the dashboard](0023-access-sign-in.md)           | accepted                                     |
-| 0024 | [The website is plain Astro, published on GitHub Pages](0024-website-on-pages.md)              | accepted                                     |
+| 0024 | [The website is plain Astro, published on GitHub Pages](0024-website-on-pages.md)              | accepted, partly superseded by 0033          |
 | 0025 | [One image runs the agent and the dashboard as two containers](0025-one-image.md)              | accepted                                     |
 | 0026 | [Spotcraft runs on one server](0026-one-server.md)                                             | accepted                                     |
 | 0027 | [The kit has its own version](0027-kit-version.md)                                             | accepted                                     |
@@ -36,3 +36,4 @@ that supersedes the old one; old records are never rewritten.
 | 0030 | [Nightly dumps of every app to a bucket, and Hetzner backups of the server](0030-backups.md)   | accepted                                     |
 | 0031 | [The kit holds the server glue every app repeated](0031-kit-app-glue.md)                       | accepted, partly superseded by 0032          |
 | 0032 | [An older app starts on a database a newer one migrated](0032-rollback-on-a-newer-database.md) | accepted                                     |
+| 0033 | [The theme and plain-CSS components come from spotstrap](0033-theme-from-spotstrap.md)         | accepted                                     |
