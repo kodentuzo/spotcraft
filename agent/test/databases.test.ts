@@ -81,10 +81,11 @@ describe('postgres app databases', {
       database: INSTANCE.database,
       schema: 'app_agent_test',
     })
-    // Its users are the instance's (ADR 0035), not in tables of its own.
-    assert.deepEqual(await databases().listUsers('agent-test', { limit: 2 }), {
+    // No user pool has set up `auth` here yet.
+    assert.deepEqual(await databases().listUsers({ limit: 2 }), {
       available: false,
       total: 0,
+      guests: 0,
       users: [],
     })
 
@@ -98,41 +99,48 @@ describe('postgres app databases', {
     await assert.rejects(query(env.DATABASE_URL, 'SELECT 1'), /password authentication failed/)
   })
 
-  /**
-   * An app made before ADR 0034: its own role and database, made by the agent, with the kit's
-   * `auth` schema owned by the agent.
-   */
-  async function addOldApp(): Promise<string> {
+  it('keeps an app made before ADR 0034 in its own database', async () => {
+    // Its own role and database, made by the agent.
     await query(adminUrl(), `CREATE ROLE app_agent_test LOGIN PASSWORD '${PASSWORD}'`)
     await query(adminUrl(), `GRANT app_agent_test TO ${ADMIN} WITH INHERIT FALSE, SET TRUE`)
     await query(adminUrl(), 'CREATE DATABASE app_agent_test OWNER app_agent_test')
     const env = await databases().provision('agent-test', PASSWORD)
     assert.equal(env.DATABASE_SCHEMA, undefined, 'it keeps its own database')
     assert.equal(new URL(env.DATABASE_URL).pathname, '/app_agent_test')
-    const asAgent = urlFor(ADMIN, ADMIN_PASSWORD, 'app_agent_test')
-    await migrate(asAgent)
-    await query(asAgent, 'GRANT USAGE ON SCHEMA auth TO app_agent_test')
-    await query(
-      asAgent,
-      'GRANT SELECT, INSERT, UPDATE, DELETE, REFERENCES ON ALL TABLES IN SCHEMA auth TO app_agent_test',
+    assert.deepEqual(await databases().dumpTarget('agent-test'), { database: 'app_agent_test' })
+    await databases().purge('agent-test')
+    const left = await query(
+      SUPERUSER_URL as string,
+      `SELECT 1 FROM pg_database WHERE datname = 'app_agent_test'`,
     )
-    return env.DATABASE_URL
-  }
+    assert.equal(left.rowCount, 0)
+  })
 
-  it("lists an app's users newest first, page by page, and deletes with cascades", async () => {
+  it("lists the pool's users newest first, page by page, and deletes with cascades", async () => {
     const databases = postgresDatabases(adminUrl(), INSTANCE)
-    const url = await addOldApp()
-    assert.deepEqual(await databases.dumpTarget('agent-test'), { database: 'app_agent_test' })
-    // Three users a minute apart: a registered one and two guests, one with an old session.
+    const app = await databases.provision('agent-test', PASSWORD)
+    // The pool's `auth`, as the auth service sets it up: the kit's tables have the same shape.
+    const pool = new URL(SUPERUSER_URL as string)
+    pool.pathname = `/${INSTANCE.database}`
+    await migrate(pool.toString())
     await query(
-      url,
-      `CREATE TABLE public.notes (
-      id serial PRIMARY KEY,
-      user_id uuid NOT NULL REFERENCES auth.users (id) ON DELETE CASCADE,
-      body text NOT NULL)`,
+      pool.toString(),
+      `GRANT USAGE ON SCHEMA auth TO ${INSTANCE.group}, ${ADMIN};
+       GRANT SELECT (id, is_anonymous, created_at, updated_at), REFERENCES (id) ON auth.users TO ${INSTANCE.group};
+       GRANT SELECT ON auth.users, auth.sessions TO ${ADMIN};
+       GRANT DELETE ON auth.users TO ${ADMIN};`,
     )
+    // An app's own table, pointing at its users.
+    await query(
+      app.DATABASE_URL,
+      `CREATE TABLE notes (
+         id serial PRIMARY KEY,
+         user_id uuid NOT NULL REFERENCES auth.users (id) ON DELETE CASCADE,
+         body text NOT NULL)`,
+    )
+    // Three users a minute apart: a registered one and two guests, one with sessions.
     const { rows: made } = await query(
-      url,
+      pool.toString(),
       `INSERT INTO auth.users (email, is_anonymous, created_at) VALUES
          ('member@example.test', false, now() - interval '3 minutes'),
          ('guest-1@example.test', true, now() - interval '2 minutes'),
@@ -141,19 +149,20 @@ describe('postgres app databases', {
     )
     const idOf = (email: string) => made.find((row) => row.email === email)?.id as string
     await query(
-      url,
+      pool.toString(),
       `INSERT INTO auth.sessions (user_id, token, expires_at, updated_at) VALUES
          ('${idOf('guest-1@example.test')}', 't1', now() + interval '1 day', now() - interval '30 seconds'),
          ('${idOf('guest-1@example.test')}', 't2', now() + interval '1 day', now() - interval '90 seconds')`,
     )
     await query(
-      url,
-      `INSERT INTO public.notes (user_id, body) VALUES ('${idOf('guest-1@example.test')}', 'hi')`,
+      app.DATABASE_URL,
+      `INSERT INTO notes (user_id, body) VALUES ('${idOf('guest-1@example.test')}', 'hi')`,
     )
 
-    const first = await databases.listUsers('agent-test', { limit: 2 })
+    const first = await databases.listUsers({ limit: 2 })
     assert.equal(first.available, true)
     assert.equal(first.total, 3)
+    assert.equal(first.guests, 2)
     assert.deepEqual(
       first.users.map((u) => [u.id, u.guest]),
       [
@@ -166,25 +175,26 @@ describe('postgres app databases', {
     assert.ok(Date.now() - seen < 60_000, 'the most recent of their sessions')
     assert.ok(first.next)
 
-    const second = await databases.listUsers('agent-test', { limit: 2, cursor: first.next })
+    const second = await databases.listUsers({ limit: 2, cursor: first.next })
     assert.deepEqual(
       second.users.map((u) => [u.id, u.guest]),
       [[idOf('member@example.test'), false]],
     )
     assert.equal(second.next, undefined)
     await assert.rejects(
-      databases.listUsers('agent-test', { limit: 2, cursor: 'bm9wZQ' }),
+      databases.listUsers({ limit: 2, cursor: 'bm9wZQ' }),
       (error: unknown) => error instanceof AgentError && error.statusCode === 400,
     )
 
-    assert.equal(await databases.deleteUser('agent-test', idOf('guest-1@example.test')), true)
-    assert.equal(await databases.deleteUser('agent-test', idOf('guest-1@example.test')), false)
+    assert.equal(await databases.deleteUser(idOf('guest-1@example.test')), true)
+    assert.equal(await databases.deleteUser(idOf('guest-1@example.test')), false)
     const left = await query(
-      url,
-      `SELECT (SELECT count(*) FROM auth.sessions)::int AS sessions, (SELECT count(*) FROM public.notes)::int AS notes`,
+      pool.toString(),
+      `SELECT (SELECT count(*) FROM auth.sessions)::int AS sessions,
+              (SELECT count(*) FROM app_agent_test.notes)::int AS notes`,
     )
     assert.deepEqual(left.rows[0], { sessions: 0, notes: 0 })
-    assert.equal((await databases.listUsers('agent-test', { limit: 10 })).total, 2)
+    assert.equal((await databases.listUsers({ limit: 10 })).total, 2)
     await databases.purge('agent-test')
   })
 })

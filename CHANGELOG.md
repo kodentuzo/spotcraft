@@ -12,6 +12,12 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
 
 ### Added
 
+- **The dashboard's Users page** (`/users`) lists the user pool's users, shared by every app,
+  with how many are guests, and deletes one with what every app kept for them
+  ([ADR 0035](docs/decisions/0035-auth-pool.md)). If an app's foreign key keeps a user's rows,
+  the page says which table. The agent's routes are `GET /pool/users` and
+  `DELETE /pool/users/:id`.
+
 - **Apps get the user pool and Spotcraft's env** ([ADR 0034](docs/decisions/0034-app-contract.md),
   [ADR 0035](docs/decisions/0035-auth-pool.md)):
   - every site sends `/_spotcraft/auth/*` to the user pool, with the visitor's address set by
@@ -48,6 +54,10 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
   - each repository gets its own local stack ([ADR 0037](docs/decisions/0037-local-stack-per-repo.md)).
 
 ### Changed
+
+- **The per-app Users page and the agent's `/apps/:name/users` routes are gone** (breaking for
+  API callers). Guests of apps made before ADR 0034 stay in their own database until those apps
+  move to the pool, and aren't listed meanwhile.
 
 - **Every app has a database on a server with Postgres** (breaking). The dashboard's Database
   checkbox is gone and `database` in the agent's API is ignored; an app without one gets its

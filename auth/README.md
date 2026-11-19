@@ -44,6 +44,9 @@ start, the service:
 2. grants `spotcraft_app` (every app role belongs to it) `USAGE` on `auth`, `SELECT` on
    `auth.users (id, is_anonymous, created_at, updated_at)` and `REFERENCES (id)`. Apps can't
    read emails, sessions, accounts or keys.
+3. grants the agent's role (`AUTH_ADMIN_ROLE`, default `spotcraft_agent`), if it exists,
+   `SELECT` on `auth.users` and `auth.sessions` and `DELETE` on `auth.users`, for the
+   dashboard's Users page.
 
 Postgres may still be starting, so it retries every 5 seconds for 3 minutes; `/health` answers
 503 until then.
@@ -67,6 +70,7 @@ blocks is skipped and logged.
 | `AUTH_TRUSTED_ORIGINS` | optional, comma-separated origins of bearer clients on other sites |
 | `AUTH_PROTOCOL`        | `https` (default), or `http` for a local stack                     |
 | `AUTH_APP_GROUP`       | the app group, default `spotcraft_app`                             |
+| `AUTH_ADMIN_ROLE`      | the agent's role, default `spotcraft_agent`                        |
 | `AUTH_GUEST_DAYS`      | idle guests are deleted after this many days, default 180          |
 | `PORT`, `HOST`         | default `3000`, `0.0.0.0`                                          |
 

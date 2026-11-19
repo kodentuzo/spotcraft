@@ -33,6 +33,8 @@ const LOCK = 4_250_816_002
 export async function migrate(
   client: pg.ClientBase,
   appGroup: string,
+  /** The agent's role, which lists and deletes users for the dashboard, if it exists. */
+  adminRole?: string,
   migrations = loadMigrations(),
 ): Promise<{ from: number; to: number }> {
   await client.query('BEGIN')
@@ -63,6 +65,16 @@ export async function migrate(
     await client.query(
       `GRANT SELECT (id, is_anonymous, created_at, updated_at), REFERENCES (id) ON auth.users TO ${group}`,
     )
+    // The dashboard's Pool page, through the agent: who is in the pool, and deleting someone
+    // (their sessions and app rows go through the foreign keys' cascades).
+    const admin = adminRole
+      ? await client.query('SELECT 1 FROM pg_roles WHERE rolname = $1', [adminRole])
+      : undefined
+    if (adminRole && admin?.rowCount) {
+      await client.query(`GRANT USAGE ON SCHEMA auth TO ${id(adminRole)}`)
+      await client.query(`GRANT SELECT ON auth.users, auth.sessions TO ${id(adminRole)}`)
+      await client.query(`GRANT DELETE ON auth.users TO ${id(adminRole)}`)
+    }
     await client.query('COMMIT')
     return { from, to }
   } catch (error) {

@@ -31,7 +31,7 @@ for (let attempt = 1; ; attempt++) {
   const client = await db.connect().catch((error: Error) => error)
   if (!(client instanceof Error)) {
     try {
-      const { from, to } = await migrate(client, config.appGroup)
+      const { from, to } = await migrate(client, config.appGroup, config.adminRole)
       migrated = true
       log('info', 'auth schema up to date', { from, to })
       break

@@ -15,27 +15,27 @@ The files it writes are the only record of which apps exist:
 
 ## API
 
-| Method | Path                     | What                                                       |
-| ------ | ------------------------ | ---------------------------------------------------------- |
-| GET    | `/health`                | `{ ok: true }`, no token needed                            |
-| GET    | `/settings`              | `{ appsDomain?, edge, dns, access }`: what is set up       |
-| GET    | `/apps`                  | settings plus `state`, `health`, `status`, `hostnames`     |
-| GET    | `/apps/:name`            | one app, or 404                                            |
-| PUT    | `/apps/:name`            | create or update, then deploy; returns the app with status |
-| DELETE | `/apps/:name`            | stop and remove the app and its site; 204, or 404          |
-|        |                          | `?purge=true` also deletes its database and role           |
-| GET    | `/apps/:name/domain`     | custom domain status and records still to create           |
-| GET    | `/apps/:name/logs`       | last `?tail=` lines (default 200, max 5000), plain text    |
-| GET    | `/apps/:name/users`      | the app's users, newest first (`?limit=`, `?cursor=`)      |
-| DELETE | `/apps/:name/users/:id`  | delete a user and what the app kept for them; 204, or 404  |
-| GET    | `/apps/:name/hook-token` | `{ enabled }`: whether the app has a deploy hook           |
-| POST   | `/apps/:name/hook-token` | a new deploy hook token, returned once (201)               |
-| DELETE | `/apps/:name/hook-token` | turn the deploy hook off; 204                              |
-| POST   | `/apps/:name/release`    | `{ tag }` with `X-Hook-Token`: deploy that tag; 202        |
-| GET    | `/apps/:name/release`    | with `X-Hook-Token`: how the last release went             |
-| GET    | `/backups`               | `{ enabled, apps }`: every app's last backup, or null      |
-| GET    | `/apps/:name/backup`     | the app's last backup, or null                             |
-| POST   | `/apps/:name/backup`     | back it up now; the status (409 without backups)           |
+| Method | Path                     | What                                                          |
+| ------ | ------------------------ | ------------------------------------------------------------- |
+| GET    | `/health`                | `{ ok: true }`, no token needed                               |
+| GET    | `/settings`              | `{ appsDomain?, edge, dns, access }`: what is set up          |
+| GET    | `/apps`                  | settings plus `state`, `health`, `status`, `hostnames`        |
+| GET    | `/apps/:name`            | one app, or 404                                               |
+| PUT    | `/apps/:name`            | create or update, then deploy; returns the app with status    |
+| DELETE | `/apps/:name`            | stop and remove the app and its site; 204, or 404             |
+|        |                          | `?purge=true` also deletes its database and role              |
+| GET    | `/apps/:name/domain`     | custom domain status and records still to create              |
+| GET    | `/apps/:name/logs`       | last `?tail=` lines (default 200, max 5000), plain text       |
+| GET    | `/apps/:name/hook-token` | `{ enabled }`: whether the app has a deploy hook              |
+| POST   | `/apps/:name/hook-token` | a new deploy hook token, returned once (201)                  |
+| DELETE | `/apps/:name/hook-token` | turn the deploy hook off; 204                                 |
+| POST   | `/apps/:name/release`    | `{ tag }` with `X-Hook-Token`: deploy that tag; 202           |
+| GET    | `/apps/:name/release`    | with `X-Hook-Token`: how the last release went                |
+| GET    | `/backups`               | `{ enabled, apps }`: every app's last backup, or null         |
+| GET    | `/apps/:name/backup`     | the app's last backup, or null                                |
+| POST   | `/apps/:name/backup`     | back it up now; the status (409 without backups)              |
+| GET    | `/pool/users`            | the user pool's users, newest first (`?limit=`, `?cursor=`)   |
+| DELETE | `/pool/users/:id`        | delete a user and what every app kept for them; 204, 404, 409 |
 
 `PUT` body (unknown fields are rejected):
 
@@ -284,20 +284,23 @@ are retried every 5 seconds for 3 minutes and logged.
 
 Without `POSTGRES_URL`, the agent runs as before, and asking for a database returns 409.
 
-## App users
+## The user pool's users
 
-For an app made before ADR 0034, the agent reads and deletes its users directly in its own
-database's `auth` tables, which it owns ([ADR 0018](../docs/decisions/0018-user-management.md)). It works
-while the app is down.
+The agent reads and deletes the user pool's users ([ADR 0035](../docs/decisions/0035-auth-pool.md))
+in the `auth` schema of the `apps` database. The pool grants it `SELECT` on `auth.users` and
+`auth.sessions` and `DELETE` on `auth.users`, and nothing else. It works while the pool is down.
 
-- `GET /apps/:name/users` returns `{ available, total, users, next }`. Each user has `id`,
+- `GET /pool/users` returns `{ available, total, guests, users, next }`. Each user has `id`,
   `guest` (no sign-up), `createdAt` and `lastSeen` (their most recently used session, or
   `null`). Pages hold `?limit=` users (default 50, max 200); pass `next` back as `?cursor=` for
-  the older ones. `available` is false for an app in a schema, whose users are the instance's,
-  and for an old app whose database has no `auth` schema.
-- `DELETE /apps/:name/users/:id` (a uuid) deletes the user. Their sessions and the app's own
-  rows go with them through their foreign keys.
-- An app without a database answers 409; an unknown app, 404.
+  the older ones. `available` is false until the pool has set up `auth` and its grants.
+- `DELETE /pool/users/:id` (a uuid) deletes the user. Their sessions, and every app's rows for
+  them, go with them through the foreign keys' cascades. An app's foreign key that blocks the
+  delete answers 409, naming its table.
+- A server without Postgres answers 409.
+
+Apps made before ADR 0034 keep their guests in their own database's `auth` schema until they
+move to the pool; the dashboard doesn't show those.
 
 ## Settings
 

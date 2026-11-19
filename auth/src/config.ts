@@ -14,6 +14,8 @@ export interface Config {
   trustedOrigins: string[]
   /** The role every app role belongs to; it may read and reference `auth.users`. */
   appGroup: string
+  /** The agent's role, which may list and delete users for the dashboard. */
+  adminRole: string
   /** Guests unused for this many days are deleted. */
   guestDays: number
 }
@@ -59,6 +61,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     protocol,
     trustedOrigins,
     appGroup: env.AUTH_APP_GROUP?.trim() || 'spotcraft_app',
+    adminRole: env.AUTH_ADMIN_ROLE?.trim() || 'spotcraft_agent',
     guestDays,
   }
 }
