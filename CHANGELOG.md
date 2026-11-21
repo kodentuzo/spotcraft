@@ -10,6 +10,15 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
 
 ## [Unreleased]
 
+### Fixed
+
+- **Deploys failed on 0.9.0, and the legal facts weren't served.** The agent kept the facts'
+  date in `/opt/spotcraft/legal.json`, but its container can only write `apps/` and `sites/`.
+  Building the facts then failed, which failed every deploy (they give apps `LEGAL_FACTS`)
+  and the agent's rewrite of every site at start. The file is now `apps/.legal.json`, and a
+  date that can't be saved is logged instead of failing a deploy or a site. The agent also
+  lists only folders in `apps/` as apps.
+
 ## [0.9.0] - 2026-11-21
 
 ### Added

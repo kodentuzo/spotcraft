@@ -42,7 +42,12 @@ export class Store {
   /** Every app directory, complete or not (a new app's first deploy has only staged files). */
   async names(): Promise<string[]> {
     try {
-      return (await readdir(join(this.dataDir, 'apps'))).sort()
+      // Only folders are apps; files such as `.legal.json` are the agent's own.
+      const entries = await readdir(join(this.dataDir, 'apps'), { withFileTypes: true })
+      return entries
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => entry.name)
+        .sort()
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []
       throw error
