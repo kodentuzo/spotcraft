@@ -37,8 +37,8 @@ variant follows it too, and there is no toggle.
 
 Components: `alert`, `alert-dialog`, `avatar`, `badge`, `button`, `card`, `dropdown-menu`,
 `input`, `label`, `separator`, `sheet`, `sidebar`, `skeleton`, `table`, `textarea`, `tooltip`.
-Icons come from `@lucide/svelte`; an app that uses icons itself depends on it too. They are as the CLI writes them; change a component's look with classes
-where it is used, not by editing it.
+They are as the CLI writes them; change a component's look with classes where it is used, not by
+editing it. Icons come from `@lucide/svelte`; an app that uses icons itself depends on it too.
 
 Inside the package, files import each other through `#ui/*` (package `imports`).
 
