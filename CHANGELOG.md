@@ -21,6 +21,11 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
 - **Every deleted user's id is logged** in `auth.deletions` for as long as backups are kept
   (`AUTH_BACKUP_DAYS`, 30 days), so a restore can delete them again. A trigger fills it, so the
   dashboard's deletes and the idle-guest cleanup count too.
+- **Restore an app from a backup in the dashboard** (the app's **Backups** page). The agent backs
+  up the data now, restores the app's schema in one transaction as the app's own role, then
+  deploys it again. Users deleted since the backup stay deleted: the agent puts them back as
+  placeholders for the restore, then deletes them with their rows. If it fails, the data is as
+  it was. The agent's routes are `GET /apps/:name/backups` and `POST /apps/:name/restore`.
 - **The pool's retention settings are in the server's Compose file and `.env.example`:**
   `AUTH_GUEST_DAYS`, `AUTH_IP_DAYS`, `AUTH_BACKUP_DAYS`.
 

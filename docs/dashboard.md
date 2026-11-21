@@ -58,7 +58,8 @@ here. Change an app's domain from its Edit page.
 ## Backups
 
 When backups are set up, every app's last backup: when, its size, and whether it failed or is
-overdue. **Back up now** backs one up at once. See
+overdue. **Back up now** backs one up at once. On an app's page, **Restore** puts its database
+back as it was at one of the backups in the bucket, after backing up the data now. See
 [Backups and restoring](guides/backups.md) for setting them up and restoring.
 
 ## Users

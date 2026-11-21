@@ -35,6 +35,8 @@ The files it writes are the only record of which apps exist:
 | GET    | `/backups`               | `{ enabled, apps }`: every app's last backup, or null                                                                                                              |
 | GET    | `/apps/:name/backup`     | the app's last backup, or null                                                                                                                                     |
 | POST   | `/apps/:name/backup`     | back it up now; the status (409 without backups)                                                                                                                   |
+| GET    | `/apps/:name/backups`    | `{ backups }`: its backups in the bucket, newest first, `{ key, at }` each                                                                                         |
+| POST   | `/apps/:name/restore`    | `{ key }`: back it up, restore its schema from that backup, deploy it (ADR 0043)                                                                                   |
 | GET    | `/apps/:name/usage`      | `{ visits?, accounts? }` over `?days=` (7): counts, top pages, hosts, referrers, countries, devices, browsers, systems, events, per day; `?brief=true` totals only |
 | GET    | `/apps/:name/database`   | `{ layout }`: `schema`, `database` (its own) or `none`                                                                                                             |
 | POST   | `/apps/:name/move`       | `{ tag }`: move it from its own database into its schema                                                                                                           |
@@ -293,6 +295,33 @@ of `key` and `bytes`. A failure is also logged. Uploads are signed with AWS SigV
 | `POSTGRES_CONTAINER`       | where `pg_dump` runs (default `spotcraft-apps-postgres-1`) |
 
 All four `BACKUP_*` or none; the agent refuses to start with some.
+
+### Restoring
+
+`POST /apps/:name/restore` with a backup's folder (`{ key: '<name>/<time>/' }`, from
+`GET /apps/:name/backups`) puts an app's schema back ([ADR 0043](../docs/decisions/0043-apps-own-their-ui.md)).
+It takes its turn in the deploy queue, and refuses an app without a schema (409) and a key
+that isn't one of the app's folders (400). Then:
+
+1. it reads `database.dump` from the bucket (up to 32 MB, held in memory);
+2. it backs the app up, and stops if that fails. The result says where (`before`);
+3. it restores, with `docker exec` in `POSTGRES_CONTAINER` as the superuser (`src/backups.ts`,
+   `dockerRestore`):
+   1. the live schema is renamed to `spotcraft_restore_old`, and an empty one made for the app's
+      role. A `spotcraft_restore_old` left from an earlier restore stops it;
+   2. users in `auth.deletions` (deleted since, kept as long as backups) are put back as
+      placeholders (email `<id>@restore.invalid`, created in 1970), so the dump's foreign keys
+      to `auth.users` hold;
+   3. `pg_restore -n <schema> --role=<app role> --no-owner --no-privileges --single-transaction
+      --exit-on-error`, from stdin: only the app's schema, with only the app's rights;
+   4. the placeholders are deleted, which deletes their restored rows through the app's
+      cascading keys, and keeps their deletion times. The old schema is dropped.
+
+   If `pg_restore` fails, the empty schema is dropped and the old one gets its name back;
+4. it deploys the same version, which runs its migrations on the restored data.
+
+While it restores, the running app sees an empty schema and may answer with errors. A
+placeholder left by a crash is an idle guest, which the pool deletes within a day.
 
 ## App databases
 

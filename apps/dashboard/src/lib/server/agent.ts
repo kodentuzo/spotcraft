@@ -210,6 +210,42 @@ export async function backupNow(name: string): Promise<BackupStatus> {
   return expectJson(await call(`${appPath(name)}/backup`, { method: 'POST' }, 900_000))
 }
 
+/** The app's backups in the bucket, newest first (ADR 0043). */
+export async function listBackups(name: string): Promise<{ key: string; at: string }[]> {
+  return (
+    await expectJson<{ backups: { key: string; at: string }[] }>(
+      await call(`${appPath(name)}/backups`, {}, 30_000),
+    )
+  ).backups
+}
+
+/**
+ * Puts the app's schema back from the backup in folder `key`: a backup first, the restore, then
+ * a deploy, so the timeout is generous. A failure says why, with pg_restore's own words.
+ */
+export async function restoreBackup(
+  name: string,
+  key: string,
+): Promise<{ status: AppStatus; restored: string; before?: string }> {
+  const response = await call(
+    `${appPath(name)}/restore`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ key }),
+    },
+    900_000,
+  )
+  if (!response.ok) {
+    const body = (await response.json().catch(() => ({}))) as { error?: string; output?: string }
+    const detail = body.output?.trim().split('\n').slice(0, 3).join(' ')
+    throw new Error(
+      `${body.error ?? `Agent answered ${response.status}`}${detail ? `: ${detail}` : ''}`,
+    )
+  }
+  return response.json()
+}
+
 /** Where the app's tables are: its schema, its own database (before ADR 0034), or none. */
 export async function databaseLayout(name: string): Promise<'schema' | 'database' | 'none'> {
   return (
