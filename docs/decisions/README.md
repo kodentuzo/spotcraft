@@ -41,8 +41,9 @@ that supersedes the old one; old records are never rewritten.
 | 0035 | [Each instance runs one user pool, starting with guests](0035-auth-pool.md)                    | accepted                                        |
 | 0036 | [The kit becomes spotkit, outside this repository](0036-spotkit.md)                            | accepted                                        |
 | 0037 | [Each repository gets its own local stack](0037-local-stack-per-repo.md)                       | accepted                                        |
-| 0038 | [Every app gets usage numbers, collected by the platform with Umami](0038-analytics.md)        | accepted, partly superseded by 0040             |
+| 0038 | [Every app gets usage numbers, collected by the platform with Umami](0038-analytics.md)        | accepted, partly superseded by 0040, 0043       |
 | 0039 | [Deploys are recorded, and the dashboard fetches app icons](0039-app-status-at-a-glance.md)    | accepted                                        |
 | 0040 | [The dashboard lists which users use an app](0040-admin-sees-app-users.md)                     | accepted                                        |
 | 0041 | [All UI is shadcn-svelte, with its own theme](0041-all-ui-from-shadcn-svelte.md)               | accepted                                        |
 | 0042 | [One long-lived branch, main; a tag is a release](0042-one-branch.md)                          | accepted                                        |
+| 0043 | [Apps own their UI; Spotcraft offers services, Spotstrap blocks](0043-apps-own-their-ui.md)    | accepted                                        |
