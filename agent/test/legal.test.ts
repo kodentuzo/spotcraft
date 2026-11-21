@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, it } from 'node:test'
@@ -111,6 +111,11 @@ describe('legal facts (ADR 0043)', () => {
       assert.equal(await legal.setOwner(parsed), false, 'the same details again')
       assert.equal((await legal.facts()).updated, '2026-11-25')
 
+      assert.ok(
+        await readFile(join(dir, 'apps/.legal.json'), 'utf8'),
+        'kept where the agent can write',
+      )
+
       // The instance changed: backups were turned on.
       const later = new Legal(
         dir,
@@ -119,6 +124,29 @@ describe('legal facts (ADR 0043)', () => {
       )
       assert.equal((await later.facts()).updated, '2026-11-26')
     })
+  })
+
+  it("still answers the facts when their date can't be saved, as on a read-only disk", {
+    skip: process.getuid?.() === 0 && 'root ignores file permissions',
+  }, async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'spotcraft-legal-ro-'))
+    try {
+      await mkdir(join(dir, 'apps'))
+      await chmod(join(dir, 'apps'), 0o500)
+      const legal = new Legal(dir, platform, () => new Date('2026-11-21T10:00:00Z'))
+      const facts = await legal.facts()
+      assert.equal(facts.updated, '2026-11-21')
+      assert.deepEqual(
+        facts.processing.map((p) => p.id),
+        ['hosting', 'accounts', 'sessions'],
+      )
+      const parsed = parseOwner(owner)
+      assert.ok(typeof parsed !== 'string')
+      await assert.rejects(legal.setOwner(parsed), 'saving the owner still says it failed')
+    } finally {
+      await chmod(join(dir, 'apps'), 0o700)
+      await rm(dir, { recursive: true, force: true })
+    }
   })
 
   describe('the agent', () => {
@@ -141,6 +169,13 @@ describe('legal facts (ADR 0043)', () => {
     afterEach(async () => {
       await app.close()
       await rm(dir, { recursive: true, force: true })
+    })
+
+    it("doesn't take the facts file for an app", async () => {
+      await mkdir(join(dir, 'apps'), { recursive: true })
+      await writeFile(join(dir, 'apps/.legal.json'), '{}')
+      const list = await app.inject({ url: '/apps', headers: auth })
+      assert.deepEqual(list.json().apps, [])
     })
 
     it('serves the facts on every site, gives them to apps, and deploys apps when they change', async () => {

@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
-import { readFile, rename, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
 import type { AnalyticsMode, Edge } from './app-spec.ts'
 
 /*
@@ -198,9 +198,10 @@ const hashOf = (facts: Omit<LegalFacts, 'updated'>) =>
   createHash('sha256').update(JSON.stringify(facts)).digest('hex')
 
 /**
- * The owner's details and the facts' date, in `<dataDir>/legal.json`. The date moves whenever
- * the facts change, whether the owner changed their details or the instance changed (a new
- * edge, backups turned on).
+ * The owner's details and the facts' date, in `<dataDir>/apps/.legal.json`: the agent's
+ * container is read-only but for `apps/` and `sites/`, and `sites/` is Caddy's. The date moves
+ * whenever the facts change, whether the owner changed their details or the instance changed
+ * (a new edge, backups turned on).
  */
 export class Legal {
   readonly #file: string
@@ -208,7 +209,7 @@ export class Legal {
   readonly #now: () => Date
 
   constructor(dataDir: string, platform: PlatformFacts, now = () => new Date()) {
-    this.#file = join(dataDir, 'legal.json')
+    this.#file = join(dataDir, 'apps', '.legal.json')
     this.#platform = platform
     this.#now = now
   }
@@ -222,6 +223,7 @@ export class Legal {
   }
 
   async #write(stored: Stored) {
+    await mkdir(dirname(this.#file), { recursive: true })
     const temp = `${this.#file}.tmp`
     await writeFile(temp, `${JSON.stringify(stored, null, 2)}\n`, { mode: 0o600 })
     await rename(temp, this.#file)
@@ -231,14 +233,19 @@ export class Legal {
     return (await this.#read())?.owner ?? null
   }
 
-  /** The facts now, with the date they last changed. */
+  /**
+   * The facts now, with the date they last changed. Deploys and every site need them, so a
+   * date that can't be saved never fails them: it is logged, and saved on a later call.
+   */
   async facts(): Promise<LegalFacts> {
     const stored = await this.#read()
     const facts = buildFacts(stored?.owner ?? null, this.#platform)
     const hash = hashOf(facts)
     if (stored?.hash === hash) return { ...facts, updated: stored.updated }
     const updated = today(this.#now())
-    await this.#write({ owner: stored?.owner ?? null, updated, hash })
+    await this.#write({ owner: stored?.owner ?? null, updated, hash }).catch((error: unknown) => {
+      console.warn(`could not save the legal facts' date: ${String(error)}`)
+    })
     return { ...facts, updated }
   }
 

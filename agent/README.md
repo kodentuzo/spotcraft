@@ -283,7 +283,8 @@ to `/apps/:name/release` ([ADR 0029](../docs/decisions/0029-deploy-hook.md), gui
 
 `src/legal.ts` ([ADR 0043](../docs/decisions/0043-apps-own-their-ui.md), the shape is in
 [the contract](../docs/contracts.md#legal-facts)). The facts are built from the owner's details
-(`PUT /legal`, kept in `legal.json` in `DATA_DIR`) and from the agent's settings: the edge, the
+(`PUT /legal`, kept in `apps/.legal.json` in `DATA_DIR`, as the agent's container can only
+write `apps/` and `sites/`) and from the agent's settings: the edge, the
 backup bucket's endpoint (R2 with `.eu.` in it is in the EU), whether analytics is set up, and
 the pool's `AUTH_GUEST_DAYS`, `AUTH_IP_DAYS` and `AUTH_BACKUP_DAYS`, which Compose passes to both.
 `updated` moves to the day the facts last changed; a hash of them is kept with it.
