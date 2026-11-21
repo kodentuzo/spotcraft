@@ -43,6 +43,7 @@ Spotcraft sets these for every container app. The app's own env can't override t
 | `AUTH_JWKS_URL`   | The pool's public keys.                                                    |
 | `SMTP_URL`        | Coming with instance SMTP: `smtp://user:pass@host:587`.                    |
 | `MAIL_FROM`       | Coming with instance SMTP: the sender address.                             |
+| `LEGAL_FACTS`     | The instance's legal facts, as JSON (below).                               |
 
 Locally, `spotcraft dev` writes the same names to `.env`, pointing at the repository's own stack
 ([the CLI](../packages/cli/README.md)).
@@ -172,6 +173,7 @@ LABEL dev.spotcraft.migrate='["/nodejs/bin/node", "dist/migrate.js"]'
 | `/_spotcraft/e`           | Where analytics events go (Umami's collect endpoint).                 |
 | `/_spotcraft/config.json` | The app's analytics settings, for clients that send their own events. |
 | `/_spotcraft/privacy`     | What Spotcraft counts for the app, and how to opt out.                |
+| `/_spotcraft/legal.json`  | The instance's legal facts, the same as `LEGAL_FACTS`.                |
 
 `/_spotcraft/webhook` is kept for calls from the platform to the app.
 
@@ -203,6 +205,63 @@ Users come from the instance's pool. Today they are all guests.
   users' ids are kept 30 days, as long as backups, so a restore can delete them again.
 - **Logs:** Spotcraft keeps no access logs. An app that logs a client's IP address keeps it no
   longer than 30 days, and says so in its privacy page.
+
+## Legal facts
+
+Who runs the instance and what it does with personal data, as data
+([ADR 0043](decisions/0043-apps-own-their-ui.md)), for an app's privacy policy and legal notice.
+The owner sets their details once on the dashboard's Settings page; nothing goes into the app's
+repository. A server reads `LEGAL_FACTS`; a client without one reads
+`<app URL>/_spotcraft/legal.json`.
+
+```json
+{
+  "version": 1,
+  "updated": "2026-11-21",
+  "controller": {
+    "name": "…",
+    "address": ["…", "…"],
+    "email": "privacy@…",
+    "authority": { "name": "…", "url": "https://…" }
+  },
+  "processing": [
+    {
+      "id": "hosting",
+      "basis": "contract",
+      "retentionDays": null,
+      "processor": { "name": "Hetzner Online GmbH", "country": "DE" }
+    },
+    {
+      "id": "edge",
+      "basis": "legitimate-interests",
+      "retentionDays": null,
+      "processor": { "name": "Cloudflare, Inc.", "country": "US" },
+      "transfer": { "country": "US", "basis": "dpf" }
+    },
+    { "id": "accounts", "basis": "contract", "retentionDays": 180 },
+    { "id": "sessions", "basis": "legitimate-interests", "retentionDays": 30 }
+  ]
+}
+```
+
+- `updated` is when any fact last changed: the policy's "last changed" date.
+- `controller` is null until the owner fills in their details.
+- `processing` lists only what the instance does. Each `id` says what data and why:
+  `hosting` (everything the app stores and serves), `edge` (requests pass through Cloudflare),
+  `accounts` (the pool's accounts and their data in apps), `sessions` (IP address and user
+  agent, against abuse), `backups` (nightly copies) and `analytics` (counts without cookies or
+  ids). The words for them, translated, come with Spotstrap.
+- `basis` is the GDPR Art. 6(1) legal basis: `contract`, `legitimate-interests` or `consent`.
+  `retentionDays` counts from last use, or for `backups` from when the backup was made; null
+  when it isn't limited. `processor.country` is a
+  two-letter code, `EU`, or null when unknown. `transfer.basis` `dpf` is the EU–US Data
+  Privacy Framework.
+- When the owner's details change, every site serves the new facts at once, and every app is
+  deployed again to get the new `LEGAL_FACTS`. When the instance changes (backups turned on,
+  another edge), `legal.json` follows when the agent starts, and `LEGAL_FACTS` with each app's
+  next deploy.
+- The app writes, in its own page, what it stores itself.
+- Outside Spotcraft, set `LEGAL_FACTS` yourself, and serve the same JSON at that path.
 
 ## Analytics
 

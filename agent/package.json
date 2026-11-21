@@ -23,6 +23,7 @@
   },
   "exports": {
     "./app-spec": "./src/app-spec.ts",
-    "./apps": "./src/apps.ts"
+    "./apps": "./src/apps.ts",
+    "./legal": "./src/legal.ts"
   }
 }

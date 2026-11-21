@@ -8,6 +8,7 @@ import { CloudflareApi } from './cloudflare.ts'
 import { loadConfig } from './config.ts'
 import { postgresDatabases } from './databases.ts'
 import { Domains } from './domains.ts'
+import { Legal } from './legal.ts'
 import { execRunner } from './runner.ts'
 import { S3 } from './s3.ts'
 import { Store } from './store.ts'
@@ -64,6 +65,13 @@ const apps = new Apps(
   },
 )
 if (config.analytics) apps.analytics = new Umami(config.analytics.url, config.analytics.password)
+// The legal facts (ADR 0043), from the owner's details and what this instance is set up with.
+apps.legal = new Legal(config.dataDir, {
+  edge: config.edge,
+  backupEndpoint: config.backup?.endpoint,
+  analytics: Boolean(config.analytics),
+  ...config.retention,
+})
 const app = buildApp({
   token: config.token,
   apps,

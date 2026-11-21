@@ -24,6 +24,7 @@ import {
 } from './backups.ts'
 import { CloudflareError } from './cloudflare.ts'
 import { DomainConflict, type Domains } from './domains.ts'
+import { caddyJson, type Legal, type LegalFacts, type LegalOwner } from './legal.ts'
 import type { Runner, RunResult } from './runner.ts'
 import type { AppFiles, Store } from './store.ts'
 import {
@@ -346,6 +347,11 @@ export class Apps {
    * site carries; without it, sites count nothing. Never a reason for a deploy to fail.
    */
   analytics: Analytics | undefined
+  /**
+   * The owner's details and the instance's legal facts (ADR 0043). With them, every app gets
+   * LEGAL_FACTS and its site serves /_spotcraft/legal.json.
+   */
+  legal: Legal | undefined
   readonly #databases: Databases | undefined
   readonly settings: AgentSettings
   readonly #domains: Domains | undefined
@@ -856,7 +862,10 @@ export class Apps {
     // The new slot is healthy: point the site at it, then commit. A restart before the commit
     // finds the old compose file, rewrites the site back and drops the new slot.
     const websiteId = await this.#ensureWebsite(spec)
-    await this.#store.writeSite(spec.name, renderSite(spec, this.settings, service, websiteId))
+    await this.#store.writeSite(
+      spec.name,
+      renderSite(spec, this.settings, service, websiteId, await this.#legalJson()),
+    )
     await this.#store.commit(spec.name)
     const reload = await this.#reloadCaddy()
     if (reload.code !== 0) {
@@ -1031,6 +1040,7 @@ export class Apps {
 
   async #refreshSites(): Promise<string[]> {
     const pending: { spec: AppSpec; files: AppFiles; site: string }[] = []
+    const legalJson = await this.#legalJson()
     for (const spec of await this.#store.list()) {
       // Compose files carry DATABASE_URL and app.json the env; older ones were written
       // readable by everyone.
@@ -1039,7 +1049,7 @@ export class Apps {
       const service = files && composeService(files.compose)
       if (!files || !service) continue
       const { analyticsId } = await this.#store.readSecrets(spec.name)
-      const site = renderSite(spec, this.settings, service, analyticsId)
+      const site = renderSite(spec, this.settings, service, analyticsId, legalJson)
       if (files.site !== site) pending.push({ spec, files, site })
     }
     // The user pool's own host follows the apps domain and the edge, like the apps' sites.
@@ -1097,6 +1107,7 @@ export class Apps {
       APP_RELEASE: spec.tag,
       APP_SECRET: await this.#appSecret(spec.name),
     }
+    if (this.legal) env.LEGAL_FACTS = JSON.stringify(await this.legal.facts())
     const url = publicUrl(spec, this.settings.appsDomain)
     if (url) env.PUBLIC_URL = url
     if (url && this.settings.authIssuer) {
@@ -1443,6 +1454,42 @@ export class Apps {
     }
     await this.#store.writeBackupStatus(name, status)
     return status
+  }
+
+  /** The legal facts as JSON for Caddy, or undefined without them. */
+  async #legalJson(): Promise<string | undefined> {
+    return this.legal ? caddyJson(await this.legal.facts()) : undefined
+  }
+
+  /** The owner's details and the facts (ADR 0043); 409 when the agent has none. */
+  async legalFacts(): Promise<{ owner: LegalOwner | null; facts: LegalFacts }> {
+    if (!this.legal) throw new AgentError('Legal facts are not set up on this server', 409)
+    return { owner: await this.legal.owner(), facts: await this.legal.facts() }
+  }
+
+  /**
+   * Saves the owner's details. When the facts change, every site serves the new ones at once,
+   * and every app is deployed again, one after the other in the queue, so LEGAL_FACTS follows;
+   * a deploy that fails leaves that app's previous version running, and is logged.
+   */
+  async setLegalOwner(owner: LegalOwner): Promise<{ facts: LegalFacts; redeploying: string[] }> {
+    const legal = this.legal
+    if (!legal) throw new AgentError('Legal facts are not set up on this server', 409)
+    const changed = await this.#exclusive(async () => {
+      const changed = await legal.setOwner(owner)
+      if (changed) await this.#refreshSites()
+      return changed
+    })
+    const redeploying = changed ? (await this.#store.list()).map((spec) => spec.name) : []
+    for (const name of redeploying) {
+      void (async () => {
+        const spec = await this.#store.get(name)
+        if (spec) await this.deploy(spec)
+      })().catch((error: unknown) => {
+        console.warn(`could not deploy ${name} with the new legal facts: ${message(error)}`)
+      })
+    }
+    return { facts: await legal.facts(), redeploying }
   }
 
   /** The pool's database interface, or 409 on a server without Postgres. */

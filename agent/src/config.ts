@@ -46,6 +46,11 @@ export interface Config {
     | undefined
   /** Set together: every app gets an Umami website, and its site counts visits (ADR 0038). */
   analytics: { url: string; password: string } | undefined
+  /**
+   * The user pool's retention, for the legal facts (ADR 0043): the same AUTH_GUEST_DAYS,
+   * AUTH_IP_DAYS and AUTH_BACKUP_DAYS the pool reads.
+   */
+  retention: { guestDays: number; ipDays: number; backupDays: number }
   /** Settings that are present but have no effect, worth a line in the log at startup. */
   notices: string[]
 }
@@ -161,8 +166,21 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     cloudflare: loadCloudflare(env, edge, appsDomain, notices),
     backup: loadBackup(env),
     analytics: loadAnalytics(env),
+    retention: {
+      guestDays: days(env, 'AUTH_GUEST_DAYS', 180),
+      ipDays: days(env, 'AUTH_IP_DAYS', 30),
+      backupDays: days(env, 'AUTH_BACKUP_DAYS', 30),
+    },
     notices,
   }
+}
+
+/** A whole number of days from `name`, or `fallback` when it is unset. */
+function days(env: NodeJS.ProcessEnv, name: string, fallback: number): number {
+  const value = Number(env[name]?.trim() || fallback)
+  if (!Number.isInteger(value) || value < 1)
+    throw new Error(`${name} must be a whole number of days`)
+  return value
 }
 
 /** Umami's address on the `db` network and the password the agent gives its admin account. */

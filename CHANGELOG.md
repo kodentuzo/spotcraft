@@ -26,6 +26,15 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
   deploys it again. Users deleted since the backup stay deleted: the agent puts them back as
   placeholders for the restore, then deletes them with their rows. If it fails, the data is as
   it was. The agent's routes are `GET /apps/:name/backups` and `POST /apps/:name/restore`.
+- **Legal facts for every app** ([ADR 0043](docs/decisions/0043-apps-own-their-ui.md)). On the
+  dashboard's Settings page, **Privacy and legal** takes who runs the apps (name, postal
+  address, email, supervisory authority, hosting provider). The agent adds what the instance
+  does with personal data, each with its purpose, legal basis, retention, processor and any
+  transfer outside the EU. Apps get the facts as `LEGAL_FACTS` and at
+  `/_spotcraft/legal.json`, for their privacy policy and legal notice; saving deploys every app
+  again. The page also lists what the owner still does, and downloads the facts as the record
+  of processing. `spotcraft dev` writes example facts.
+- **A guide for when personal data leaks** ([docs/guides/breach.md](docs/guides/breach.md)).
 - **The pool's retention settings are in the server's Compose file and `.env.example`:**
   `AUTH_GUEST_DAYS`, `AUTH_IP_DAYS`, `AUTH_BACKUP_DAYS`.
 

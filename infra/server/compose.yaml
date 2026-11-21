@@ -148,6 +148,10 @@ services:
       BACKUP_ACCESS_KEY_ID: ${BACKUP_ACCESS_KEY_ID:-}
       BACKUP_SECRET_ACCESS_KEY: ${BACKUP_SECRET_ACCESS_KEY:-}
       POSTGRES_CONTAINER: spotcraft-apps-postgres-1
+      # The user pool's retention, as the pool reads it, for the legal facts (ADR 0043).
+      AUTH_GUEST_DAYS: ${AUTH_GUEST_DAYS:-180}
+      AUTH_IP_DAYS: ${AUTH_IP_DAYS:-30}
+      AUTH_BACKUP_DAYS: ${AUTH_BACKUP_DAYS:-30}
       # Its own Postgres role, to create a database and role per app (ADR 0015).
       POSTGRES_URL: postgres://spotcraft_agent:${POSTGRES_AGENT_PASSWORD:?set POSTGRES_AGENT_PASSWORD in .env}@postgres:5432/postgres
     # Reaches Docker through the socket's group instead of running as root.
