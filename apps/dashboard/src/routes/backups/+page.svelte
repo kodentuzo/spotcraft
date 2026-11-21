@@ -15,8 +15,8 @@
 
 <svelte:head><title>Backups · Spotcraft</title></svelte:head>
 
-<h1 class="mb-1 font-heading text-title-1 font-bold">Backups</h1>
-<p class="mb-6 text-footnote text-muted-foreground">
+<h1 class="mb-1 font-heading text-2xl font-bold">Backups</h1>
+<p class="mb-6 text-sm text-muted-foreground">
   Every night at 03:00 UTC: each app's settings and a dump of its database, kept as long as the bucket keeps them (30 days by default).
 </p>
 
@@ -33,12 +33,12 @@
         <div class="flex min-w-0 flex-1 items-center gap-3">
           <AppTile name={app.name} host={app.host} />
           <div class="min-w-0">
-            <a href="/{app.name}/backups" class="text-headline hover:underline">{app.name}</a>
-            <p class="text-caption-1 {health === 'ok' ? 'text-muted-foreground' : 'text-destructive'}">
+            <a href="/{app.name}/backups" class="text-base font-semibold hover:underline">{app.name}</a>
+            <p class="text-xs {health === 'ok' ? 'text-muted-foreground' : 'text-destructive'}">
               {label[health]}{#if last?.ok}{` · ${ago(last.at)} · ${dateTime(last.at)}`}{#if app.database}{` · ${bytes(last.bytes ?? 0)}`}{/if}{:else if last}{` · ${ago(last.at)}: ${last.error}`}{/if}
             </p>
-            {#if last && !last.ok && last.lastOkAt}<p class="text-caption-1 text-muted-foreground">Last one that worked: {ago(last.lastOkAt)}</p>{/if}
-            {#if form?.name === app.name && form && 'backupError' in form}<p class="text-caption-1 text-destructive">{form.backupError}</p>{/if}
+            {#if last && !last.ok && last.lastOkAt}<p class="text-xs text-muted-foreground">Last one that worked: {ago(last.lastOkAt)}</p>{/if}
+            {#if form?.name === app.name && form && 'backupError' in form}<p class="text-xs text-destructive">{form.backupError}</p>{/if}
           </div>
         </div>
         <form

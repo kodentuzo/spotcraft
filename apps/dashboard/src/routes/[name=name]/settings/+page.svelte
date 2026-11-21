@@ -49,7 +49,7 @@
 
 <section id="settings">
   <h2 class="sr-only">Settings</h2>
-  <div class="border bg-card p-4 text-footnote">
+  <div class="border bg-card p-4 text-sm">
     <dl class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-2">
       <dt class="text-muted-foreground">Image</dt><dd class="truncate font-mono">{app.image}:{app.tag}</dd>
       <dt class="text-muted-foreground">Limits</dt><dd>{app.memory} memory · {app.cpus} CPU</dd>
@@ -71,8 +71,8 @@
   {@const token = form && 'hookToken' in form ? form.hookToken : undefined}
   {@const enabled = token ? true : form && 'hookDeleted' in form ? false : data.hook.enabled}
   <section id="hook" class="mt-8">
-    <h2 class="mb-2 text-headline">Deploy hook</h2>
-    <div class="space-y-3 border bg-card p-4 text-footnote">
+    <h2 class="mb-2 text-base font-semibold">Deploy hook</h2>
+    <div class="space-y-3 border bg-card p-4 text-sm">
       <p class="text-muted-foreground">
         Lets the app's CI deploy a new image tag, with no sign-in. Only the tag changes: the image, environment and limits stay as set here.
         {enabled ? 'On.' : 'Off.'}
@@ -106,8 +106,8 @@
 
 {#if data.ownDatabase || (form && 'moved' in form)}
   <section id="database" class="mt-8">
-    <h2 class="mb-2 text-headline">Own database</h2>
-    <div class="space-y-3 border bg-card p-4 text-footnote">
+    <h2 class="mb-2 text-base font-semibold">Own database</h2>
+    <div class="space-y-3 border bg-card p-4 text-sm">
       {#if form && 'moved' in form && form.moved}
         {@const tables = Object.entries(form.moved.tables)}
         <p>
@@ -143,8 +143,8 @@
 {/if}
 
 <section id="danger" class="mt-8">
-  <h2 class="mb-2 text-headline">Remove</h2>
-  <div class="flex flex-wrap items-center justify-between gap-4 border border-destructive/50 bg-card p-4 text-footnote">
+  <h2 class="mb-2 text-base font-semibold">Remove</h2>
+  <div class="flex flex-wrap items-center justify-between gap-4 border border-destructive/50 bg-card p-4 text-sm">
     <p class="text-muted-foreground">Stops the app and removes its settings and its site. The image stays on Docker Hub{app.database ? '; its database is kept unless you choose otherwise' : ''}.</p>
 <AlertDialog.Root>
       <AlertDialog.Trigger class={buttonVariants({ variant: 'destructive' })}>Remove</AlertDialog.Trigger>

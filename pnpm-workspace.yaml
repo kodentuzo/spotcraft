@@ -14,10 +14,6 @@ trustPolicy: no-downgrade
 # versions had; excepted by exact version only, so a newer one is checked again.
 trustPolicyExclude:
   - chokidar@4.0.3
-# Our own package, published from CI with provenance (trustPolicy still checks it); releases are
-# needed the same day.
-minimumReleaseAgeExclude:
-  - "@kodentuzo/spotstrap"
 blockExoticSubdeps: true
 strictDepBuilds: true
 engineStrict: true

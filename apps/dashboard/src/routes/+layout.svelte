@@ -45,10 +45,10 @@
   <!-- The instance, where Vercel shows the team: one instance, so nothing to switch. -->
   <div class="flex h-14 shrink-0 items-center gap-2 border-b border-sidebar-border px-4">
     <img src={favicon} alt="" width="24" height="24" class="size-6" />
-    <a href="/" class="min-w-0 truncate text-footnote font-medium" onclick={closeAll}>
+    <a href="/" class="min-w-0 truncate text-sm font-medium" onclick={closeAll}>
       {#await data.settings}Spotcraft{:then settings}{settings?.dashboardDomain ?? 'Spotcraft'}{/await}
     </a>
-    <a href={RELEASE_URL} rel="noopener noreferrer" class="ml-auto shrink-0 border border-sidebar-border px-1.5 text-caption-1 text-muted-foreground hover:text-sidebar-foreground" title="Release notes">v{VERSION}</a>
+    <a href={RELEASE_URL} rel="noopener noreferrer" class="ml-auto shrink-0 border border-sidebar-border px-1.5 text-xs text-muted-foreground hover:text-sidebar-foreground" title="Release notes">v{VERSION}</a>
   </div>
 
   <nav aria-label="Main" class="min-h-0 flex-1 overflow-y-auto p-2">
@@ -64,7 +64,7 @@
                   href={hrefFor(item.id, app)}
                   onclick={closeAll}
                   aria-current={current ? 'page' : undefined}
-                  class="flex min-h-9 items-center gap-3 px-2.5 text-footnote {current ? 'bg-sidebar-accent font-medium text-sidebar-accent-foreground' : 'text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground'}"
+                  class="flex min-h-9 items-center gap-3 px-2.5 text-sm {current ? 'bg-sidebar-accent font-medium text-sidebar-accent-foreground' : 'text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground'}"
                 ><Icon name={item.icon} class="size-4" />{item.label}</a>
               </li>
             {/if}
@@ -76,19 +76,19 @@
 
   <!-- Who is signed in: the Access email and its Gravatar, or the password. -->
   <div class="flex min-h-11 items-center gap-3 border-t border-sidebar-border px-4 pt-2" title={data.accessEmail ?? 'Signed in with the dashboard password'}>
-    <span class="relative flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-sidebar-accent text-caption-1 font-medium uppercase">
+    <span class="relative flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-sidebar-accent text-xs font-medium uppercase">
       {(data.accessEmail ?? 'Admin').charAt(0)}
       {#if data.avatar && !avatarFailed}
         <img src={data.avatar} alt="" width="28" height="28" class="absolute inset-0 size-full object-cover" referrerpolicy="no-referrer" onerror={() => (avatarFailed = true)} {@attach checkAvatar} />
       {/if}
     </span>
     <span class="min-w-0">
-      <span class="block truncate text-footnote">{data.accessEmail ?? 'Admin'}</span>
-      {#if !data.accessEmail}<span class="block text-caption-1 text-muted-foreground">Signed in with the password</span>{/if}
+      <span class="block truncate text-sm">{data.accessEmail ?? 'Admin'}</span>
+      {#if !data.accessEmail}<span class="block text-xs text-muted-foreground">Signed in with the password</span>{/if}
     </span>
   </div>
   <form method="POST" action="/logout" class="p-2">
-    <button type="submit" class="flex min-h-9 w-full items-center gap-3 px-2.5 text-footnote text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground">
+    <button type="submit" class="flex min-h-9 w-full items-center gap-3 px-2.5 text-sm text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground">
       <Icon name="logout" class="size-4" />Log out
     </button>
   </form>
@@ -111,14 +111,14 @@
             type="button"
             bind:this={switcherButton}
             popovertarget="switcher"
-            class="flex min-h-11 min-w-0 items-center gap-2 px-2 text-footnote font-medium hover:bg-raised"
+            class="flex min-h-11 min-w-0 items-center gap-2 px-2 text-sm font-medium hover:bg-muted"
           >
             <span class="truncate">{app ?? 'All apps'}</span><Icon name="updown" class="size-4 shrink-0 text-muted-foreground" />
           </button>
         </div>
-        <p class="hidden text-footnote font-medium sm:block">{title}</p>
+        <p class="hidden text-sm font-medium sm:block">{title}</p>
         <div class="col-start-3 flex justify-end">
-          <a href="/new" class="flex min-h-11 items-center gap-2 px-2 text-footnote hover:bg-raised" aria-label="Add app">
+          <a href="/new" class="flex min-h-11 items-center gap-2 px-2 text-sm hover:bg-muted" aria-label="Add app">
             <Icon name="plus" class="size-4" /><span class="hidden sm:inline">Add app</span>
           </a>
         </div>
@@ -141,7 +141,7 @@
     <a
       href={switchHref(path)}
       onclick={closeAll}
-      class="flex min-h-9 items-center px-2.5 text-footnote {app ? 'text-muted-foreground hover:bg-raised' : 'bg-raised font-medium'}"
+      class="flex min-h-9 items-center px-2.5 text-sm {app ? 'text-muted-foreground hover:bg-muted' : 'bg-muted font-medium'}"
     >All apps</a>
     {#await data.apps then apps}
       {#if apps?.length}<hr class="my-1" />{/if}
@@ -151,11 +151,11 @@
           href={switchHref(path, item.name)}
           onclick={closeAll}
           aria-current={app === item.name ? 'page' : undefined}
-          class="flex min-h-9 items-center gap-3 px-2.5 text-footnote {app === item.name ? 'bg-raised font-medium' : 'hover:bg-raised'}"
+          class="flex min-h-9 items-center gap-3 px-2.5 text-sm {app === item.name ? 'bg-muted font-medium' : 'hover:bg-muted'}"
         >
           <span class="size-2 shrink-0 rounded-full {view.bad ? 'bg-destructive' : 'bg-muted-foreground/70'}" aria-hidden="true"></span>
           <span class="truncate">{item.name}</span>
-          {#if view.bad}<span class="ml-auto shrink-0 text-caption-1 text-destructive">{view.label}</span>{:else}<span class="sr-only">, {view.label}</span>{/if}
+          {#if view.bad}<span class="ml-auto shrink-0 text-xs text-destructive">{view.label}</span>{:else}<span class="sr-only">, {view.label}</span>{/if}
         </a>
       {/each}
     {/await}

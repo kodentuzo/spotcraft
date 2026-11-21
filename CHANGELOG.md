@@ -10,6 +10,14 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
 
 ## [Unreleased]
 
+### Changed
+
+- **The theme is back in `@spotcraft/ui`; spotstrap is removed**
+  ([ADR 0041](docs/decisions/0041-all-ui-from-shadcn-svelte.md), superseding ADR 0033). The
+  colors, square corners and Space Grotesk stay. Buttons, fields, labels and dialogs are stock
+  shadcn-svelte again: controls are 36px tall, body text is 16px, and the confirmation dialog
+  opens in the middle of the screen. Light and dark still follow the system setting.
+
 ## [0.8.1] - 2026-11-20
 
 ### Fixed

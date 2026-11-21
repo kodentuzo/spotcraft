@@ -44,8 +44,8 @@
     <AppTile name={app.name} host={app.domain ?? app.hostnames[0]} size="xl" />
   </div>
   <div class="p-4">
-    <h2 id="deployment" class="mb-3 text-headline">Deployment</h2>
-    <dl class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-3 text-footnote">
+    <h2 id="deployment" class="mb-3 text-base font-semibold">Deployment</h2>
+    <dl class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-3 text-sm">
       <dt class="text-muted-foreground">Status</dt>
       <dd class="flex flex-wrap items-center gap-2"><StatusBadge state={app.state} health={app.health} />{#if app.status}<span class="text-muted-foreground">{runningFor(app.status)}</span>{/if}</dd>
       <dt class="text-muted-foreground">Version</dt>
@@ -69,7 +69,7 @@
             {@const status = domain?.hosts.find((h) => h.host === host)}
             <span class="flex min-w-0 items-center gap-2">
               <a href="https://{host}" class="truncate hover:underline" target="_blank" rel="noopener noreferrer">{host}</a>
-              {#if status && status.state !== 'active'}<a href="/{app.name}/domains" class="shrink-0 text-caption-1 text-destructive underline">Not live yet</a>{/if}
+              {#if status && status.state !== 'active'}<a href="/{app.name}/domains" class="shrink-0 text-xs text-destructive underline">Not live yet</a>{/if}
             </span>
           {/each}
         {/await}
@@ -104,7 +104,7 @@
 <section aria-labelledby="usage" class="mt-3">
   <h2 id="usage" class="sr-only">Usage</h2>
   {#await data.usage}
-    <p class="text-footnote text-muted-foreground">Counting…</p>
+    <p class="text-sm text-muted-foreground">Counting…</p>
   {:then usage}
     {@const visits = usage.visits}
     {@const accounts = usage.accounts}

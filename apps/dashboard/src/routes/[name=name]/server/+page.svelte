@@ -39,8 +39,8 @@
   </Stat>
 </div>
 
-<section class="mt-3 border bg-card p-4 text-footnote" aria-labelledby="container">
-  <h2 id="container" class="mb-3 text-headline">Container</h2>
+<section class="mt-3 border bg-card p-4 text-sm" aria-labelledby="container">
+  <h2 id="container" class="mb-3 text-base font-semibold">Container</h2>
   <dl class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-8 gap-y-2">
     <dt class="text-muted-foreground">State</dt><dd>{app.state}{#if app.status} · {runningFor(app.status)}{/if}</dd>
     <dt class="text-muted-foreground">Image</dt><dd class="truncate font-mono">{app.image}:{app.tag}</dd>

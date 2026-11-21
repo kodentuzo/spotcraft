@@ -22,8 +22,8 @@
 
 <svelte:head><title>Usage · Spotcraft</title></svelte:head>
 
-<h1 class="mb-1 font-heading text-title-1 font-bold">Usage</h1>
-<p class="mb-6 text-footnote text-muted-foreground">Every app together, over the last 7 days. Each app's page breaks its own down.</p>
+<h1 class="mb-1 font-heading text-2xl font-bold">Usage</h1>
+<p class="mb-6 text-sm text-muted-foreground">Every app together, over the last 7 days. Each app's page breaks its own down.</p>
 
 {#if data.agentError}
   <Alert variant="destructive"><AlertTitle>Can't reach the agent</AlertTitle><AlertDescription>{data.agentError}.</AlertDescription></Alert>
@@ -60,32 +60,32 @@
   />
 
   <div class="mt-3 border bg-card">
-    <div class="hidden gap-6 border-b px-4 py-2 text-caption-1 text-muted-foreground md:flex" aria-hidden="true">
+    <div class="hidden gap-6 border-b px-4 py-2 text-xs text-muted-foreground md:flex" aria-hidden="true">
       <span class="flex-1">App</span>
       <span class="grid w-96 shrink-0 grid-cols-3 gap-4 text-right"><span>Visitors</span><span>Page views</span><span>Requests</span></span>
     </div>
     <ul class="divide-y">
       {#each data.apps as app (app.name)}
         {@const visitorsChange = change(app.visits?.visitors, app.visits?.previous.visitors)}
-        <li class="relative flex flex-col gap-3 p-4 hover:bg-raised md:flex-row md:items-center md:gap-6">
+        <li class="relative flex flex-col gap-3 p-4 hover:bg-muted md:flex-row md:items-center md:gap-6">
           <div class="flex min-w-0 flex-1 items-center gap-3">
             <AppTile name={app.name} host={app.host} />
-            <a href="/{app.name}/usage" class="truncate text-headline after:absolute after:inset-0">{app.name}</a>
+            <a href="/{app.name}/usage" class="truncate text-base font-semibold after:absolute after:inset-0">{app.name}</a>
           </div>
           <dl class="grid grid-cols-3 gap-4 md:w-96 md:shrink-0 md:text-right">
             <div>
-              <dt class="text-caption-1 text-muted-foreground md:sr-only">Visitors</dt>
-              <dd class="text-headline tabular-nums">
-                {count(app.visits?.visitors)}{#if visitorsChange !== null}<span class="ml-1 text-caption-1 {visitorsChange < 0 ? 'text-destructive' : 'text-muted-foreground'}">{visitorsChange > 0 ? '+' : ''}{visitorsChange}%</span>{/if}
+              <dt class="text-xs text-muted-foreground md:sr-only">Visitors</dt>
+              <dd class="text-base font-semibold tabular-nums">
+                {count(app.visits?.visitors)}{#if visitorsChange !== null}<span class="ml-1 text-xs {visitorsChange < 0 ? 'text-destructive' : 'text-muted-foreground'}">{visitorsChange > 0 ? '+' : ''}{visitorsChange}%</span>{/if}
               </dd>
             </div>
             <div>
-              <dt class="text-caption-1 text-muted-foreground md:sr-only">Page views</dt>
-              <dd class="text-headline tabular-nums">{count(app.visits?.views)}</dd>
+              <dt class="text-xs text-muted-foreground md:sr-only">Page views</dt>
+              <dd class="text-base font-semibold tabular-nums">{count(app.visits?.views)}</dd>
             </div>
             <div>
-              <dt class="text-caption-1 text-muted-foreground md:sr-only">Requests</dt>
-              <dd class="text-headline tabular-nums">{count(app.requests.week)}</dd>
+              <dt class="text-xs text-muted-foreground md:sr-only">Requests</dt>
+              <dd class="text-base font-semibold tabular-nums">{count(app.requests.week)}</dd>
             </div>
           </dl>
         </li>

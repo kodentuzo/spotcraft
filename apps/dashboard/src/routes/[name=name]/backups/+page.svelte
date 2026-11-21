@@ -23,7 +23,7 @@
   {@const health = backupHealth(last)}
   <section>
     <h2 class="sr-only">Backups</h2>
-    <div class="space-y-3 border bg-card p-4 text-footnote">
+    <div class="space-y-3 border bg-card p-4 text-sm">
       <p class="text-muted-foreground">
         Every night at 03:00 UTC: {app.database ? 'a dump of its database and ' : ''}its settings, kept as long as the bucket keeps them (30 days by default).
       </p>

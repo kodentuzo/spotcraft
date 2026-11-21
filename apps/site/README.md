@@ -1,9 +1,10 @@
 # @spotcraft/site
 
 The Spotcraft website, [spotcraft.dev](https://spotcraft.dev): a home page, the
-documentation and a showcase of apps running on Spotcraft. Plain [Astro](https://astro.build)
-with no UI framework and no client-side JavaScript, published on GitHub Pages
-([ADR 0024](../../docs/decisions/0024-website-on-pages.md)).
+documentation and a showcase of apps running on Spotcraft. [Astro](https://astro.build)
+with no client-side JavaScript, published on GitHub Pages
+([ADR 0024](../../docs/decisions/0024-website-on-pages.md)). Svelte components from `@spotcraft/ui`
+render at build time ([ADR 0041](../../docs/decisions/0041-all-ui-from-shadcn-svelte.md)).
 
 ## How it works
 
@@ -27,7 +28,9 @@ with no UI framework and no client-side JavaScript, published on GitHub Pages
   path links to GitHub at the release tag.
 - **Styling**: Tailwind v4 through `@tailwindcss/vite`, with the theme from
   `@spotcraft/ui/styles.css`, so it matches the dashboard. Dark mode follows the system.
-  Button links (`src/components/ButtonLink.astro`) use spotstrap's `btn` classes.
+  `@astrojs/svelte` renders `@spotcraft/ui` components into the HTML; no page uses a
+  `client:` directive, so none ships JavaScript. Button links (`src/components/ButtonLink.astro`)
+  use the shared button's `buttonVariants`.
 - **Content-Security-Policy**: a meta tag with `script-src 'none'` (`src/layouts/Base.astro`).
 - **Static files** (`public/`): `CNAME`, `robots.txt`, the favicon, the dashboard screenshots
   (1280×800, light and dark, from the dashboard running on made-up demo apps) and the

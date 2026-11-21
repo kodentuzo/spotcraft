@@ -11,14 +11,14 @@
 
 <svelte:head><title>Settings · Spotcraft</title></svelte:head>
 
-<h1 class="mb-1 font-heading text-title-1 font-bold">Settings</h1>
-<p class="mb-6 text-footnote text-muted-foreground">How this instance is set up. They come from the server's <span class="font-mono">.env</span> and change with a deploy.</p>
+<h1 class="mb-1 font-heading text-2xl font-bold">Settings</h1>
+<p class="mb-6 text-sm text-muted-foreground">How this instance is set up. They come from the server's <span class="font-mono">.env</span> and change with a deploy.</p>
 
 {#if data.agentError}
   <Alert variant="destructive" class="mb-6"><AlertTitle>Can't reach the agent</AlertTitle><AlertDescription>{data.agentError}.</AlertDescription></Alert>
 {/if}
 
-<div class="border bg-card p-4 text-footnote">
+<div class="border bg-card p-4 text-sm">
   <dl class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-8 gap-y-3">
     <dt class="text-muted-foreground">Version</dt>
     <dd><a href={RELEASE_URL} class="hover:underline" rel="noopener noreferrer">Spotcraft v{VERSION}</a></dd>

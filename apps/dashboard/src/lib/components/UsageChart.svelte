@@ -63,17 +63,17 @@
         id="{id}-tab-{i}"
         aria-selected={current === i}
         aria-controls="{id}-panel"
-        class="flex min-h-11 flex-col items-start gap-1 border-b-2 p-4 text-left transition-colors {current === i ? 'border-foreground bg-raised' : 'border-transparent hover:bg-raised/60'} {i > 0 ? 'md:border-l md:border-l-border' : ''}"
+        class="flex min-h-11 flex-col items-start gap-1 border-b-2 p-4 text-left transition-colors {current === i ? 'border-foreground bg-muted' : 'border-transparent hover:bg-muted/60'} {i > 0 ? 'md:border-l md:border-l-border' : ''}"
         onclick={() => {
           current = i
           hover = null
         }}
       >
-        <span class="text-footnote text-muted-foreground">{t.label}</span>
+        <span class="text-sm text-muted-foreground">{t.label}</span>
         <span class="flex items-center gap-2">
-          <span class="font-heading text-title-1 font-semibold tabular-nums">{t.value}</span>
+          <span class="font-heading text-2xl font-semibold tabular-nums">{t.value}</span>
           {#if t.change !== null}
-            <span class="px-1.5 py-0.5 text-caption-1 font-medium tabular-nums {t.change < 0 ? 'bg-destructive/15 text-destructive' : 'bg-muted text-foreground'}">
+            <span class="px-1.5 py-0.5 text-xs font-medium tabular-nums {t.change < 0 ? 'bg-destructive/15 text-destructive' : 'bg-muted text-foreground'}">
               {t.change > 0 ? '+' : ''}{t.change}%
             </span>
           {/if}
@@ -83,11 +83,11 @@
   </div>
 
   <div role="tabpanel" id="{id}-panel" aria-labelledby="{id}-tab-{current}" class="p-4">
-    <p class="mb-3 h-4 text-caption-1 text-muted-foreground tabular-nums" aria-live="polite">
+    <p class="mb-3 h-4 text-xs text-muted-foreground tabular-nums" aria-live="polite">
       {#if hover !== null && tab.points[hover]}{dayLabel(tab.points[hover].day)} · {tab.format(tab.points[hover].value)}{:else}{tab.note}{/if}
     </p>
     <div class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3">
-      <div class="relative h-56 text-caption-1 text-muted-foreground tabular-nums" aria-hidden="true">
+      <div class="relative h-56 text-xs text-muted-foreground tabular-nums" aria-hidden="true">
         {#each ticks as tick (tick)}
           <span class="absolute right-0 -translate-y-1/2" style="top: {(1 - tick / scale.top) * 100}%">{tick}</span>
         {/each}
@@ -126,7 +126,7 @@
       </div>
       <span></span>
       <!-- Each label sits under its point; the first and last keep inside the chart. -->
-      <div class="relative mt-2 h-4 text-caption-1 text-muted-foreground" aria-hidden="true">
+      <div class="relative mt-2 h-4 text-xs text-muted-foreground" aria-hidden="true">
         {#each tab.points as point, i (point.day)}
           {@const at = (x(i) / W) * 100}
           <span

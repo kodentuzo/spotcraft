@@ -9,7 +9,7 @@
 
 <ul class="space-y-3">
   {#each hosts as host (host.host)}
-    <li class="border bg-card p-4 text-footnote">
+    <li class="border bg-card p-4 text-sm">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <span class="font-mono">{host.host}</span>
         <span class={['text-xs', host.state === 'active' ? 'text-muted-foreground' : 'text-destructive']}>

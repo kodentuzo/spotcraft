@@ -8,5 +8,5 @@
 <svelte:head><title>Logs · {data.app.name} · Spotcraft</title></svelte:head>
 
 <AppHeading title="Logs" app={data.app} />
-<p class="mb-2 text-caption-1 text-muted-foreground">The last 200 lines, newest at the bottom. Reload the page for newer lines.</p>
+<p class="mb-2 text-xs text-muted-foreground">The last 200 lines, newest at the bottom. Reload the page for newer lines.</p>
 <pre class="max-h-[70dvh] overflow-auto border bg-muted p-4 text-xs leading-relaxed whitespace-pre-wrap">{data.logs || 'No logs yet.'}</pre>

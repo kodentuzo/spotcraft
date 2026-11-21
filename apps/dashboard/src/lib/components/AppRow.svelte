@@ -42,21 +42,21 @@
 
 </script>
 
-<li class="relative flex flex-col gap-3 p-4 transition-colors hover:bg-raised md:flex-row md:items-center md:gap-6">
+<li class="relative flex flex-col gap-3 p-4 transition-colors hover:bg-muted md:flex-row md:items-center md:gap-6">
   <div class="flex min-w-0 flex-1 items-center gap-3">
     <AppTile name={app.name} {host} />
     <div class="min-w-0 flex-1">
       <div class="flex items-center gap-2">
-        <h2 class="truncate text-headline">
+        <h2 class="truncate text-base font-semibold">
           <!-- The whole row opens the app; the host link sits above it. -->
           <a href="/{app.name}" class="after:absolute after:inset-0 focus-visible:outline-none">{app.name}</a>
         </h2>
         <StatusBadge state={app.state} health={app.health} />
       </div>
       {#if host}
-        <a href="https://{host}" class="relative z-10 block truncate text-footnote text-muted-foreground hover:text-foreground hover:underline" rel="noopener noreferrer" target="_blank">{host}</a>
+        <a href="https://{host}" class="relative z-10 block truncate text-sm text-muted-foreground hover:text-foreground hover:underline" rel="noopener noreferrer" target="_blank">{host}</a>
       {/if}
-      <p class="truncate text-caption-1 text-muted-foreground">
+      <p class="truncate text-xs text-muted-foreground">
         {#if deploy && !deploy.ok}
           <span class="text-destructive">Deploy of <span class="font-mono">{deploy.tag}</span> failed {ago(deploy.at)}</span>{` · running `}<span class="font-mono">{app.tag}</span>
         {:else if deploy}
@@ -66,22 +66,22 @@
         {/if}
       </p>
       <!-- Only what needs a look: nothing when all is well. -->
-      {#if backupState !== 'ok'}<p class="truncate text-caption-1 text-destructive">{backupLabel[backupState]}</p>{/if}
+      {#if backupState !== 'ok'}<p class="truncate text-xs text-destructive">{backupLabel[backupState]}</p>{/if}
       {#await domains then notLive}
-        {#if notLive?.[app.name]}<p class="truncate text-caption-1 text-destructive">Not live yet: {notLive[app.name].join(', ')}</p>{/if}
+        {#if notLive?.[app.name]}<p class="truncate text-xs text-destructive">Not live yet: {notLive[app.name].join(', ')}</p>{/if}
       {/await}
     </div>
   </div>
 
   <dl class="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-4 md:w-[26rem] md:shrink-0 md:grid-cols-[10rem_8rem_minmax(0,1fr)]">
     <div>
-      <dt class="text-caption-1 text-muted-foreground md:sr-only">Uptime, 24 hours</dt>
+      <dt class="text-xs text-muted-foreground md:sr-only">Uptime, 24 hours</dt>
       <dd><UptimeBars series={uptimeHourly} {ratio} {now} /></dd>
     </div>
     <div>
-      <dt class="text-caption-1 text-muted-foreground md:sr-only">Memory</dt>
+      <dt class="text-xs text-muted-foreground md:sr-only">Memory</dt>
       <dd>
-        <p class="text-footnote tabular-nums {share !== null && share >= MEMORY_TIGHT ? 'text-destructive' : ''}">
+        <p class="text-sm tabular-nums {share !== null && share >= MEMORY_TIGHT ? 'text-destructive' : ''}">
           {memory === undefined ? '—' : bytes(memory)}<span class="text-muted-foreground">{` / ${limit ? bytes(limit) : app.memory}`}</span>
         </p>
         <div class="mt-1"><MemoryBar {share} /></div>
@@ -89,15 +89,15 @@
     </div>
     <div class="text-right">
       {#await details}
-        <dt class="text-caption-1 text-muted-foreground">Visitors</dt>
-        <dd class="text-headline text-muted-foreground">…</dd>
+        <dt class="text-xs text-muted-foreground">Visitors</dt>
+        <dd class="text-base font-semibold text-muted-foreground">…</dd>
       {:then d}
         {#if d?.visitors[app.name] !== undefined}
-          <dt class="text-caption-1 text-muted-foreground">Visitors 7d</dt>
-          <dd class="text-headline tabular-nums">{count(d.visitors[app.name])}</dd>
+          <dt class="text-xs text-muted-foreground">Visitors 7d</dt>
+          <dd class="text-base font-semibold tabular-nums">{count(d.visitors[app.name])}</dd>
         {:else}
-          <dt class="text-caption-1 text-muted-foreground">Requests 24h</dt>
-          <dd class="text-headline tabular-nums">{count(d?.requests[app.name])}</dd>
+          <dt class="text-xs text-muted-foreground">Requests 24h</dt>
+          <dd class="text-base font-semibold tabular-nums">{count(d?.requests[app.name])}</dd>
         {/if}
       {/await}
     </div>

@@ -6,7 +6,7 @@
     $props()
 
   const box = { sm: 'size-12', lg: 'size-16', xl: 'size-32' }
-  const letter = { sm: 'text-title-3', lg: 'text-title-1', xl: 'text-7xl' }
+  const letter = { sm: 'text-lg', lg: 'text-2xl', xl: 'text-7xl' }
   const icon = { sm: 32, lg: 40, xl: 80 }
 
   let iconFailed = $state(false)

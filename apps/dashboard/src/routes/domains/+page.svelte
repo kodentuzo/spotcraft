@@ -9,13 +9,13 @@
 
 <svelte:head><title>Domains · Spotcraft</title></svelte:head>
 
-<h1 class="mb-1 font-heading text-title-1 font-bold">Domains</h1>
-<p class="mb-6 text-footnote text-muted-foreground">Every address an app answers on. Change an app's domain from its Edit page.</p>
+<h1 class="mb-1 font-heading text-2xl font-bold">Domains</h1>
+<p class="mb-6 text-sm text-muted-foreground">Every address an app answers on. Change an app's domain from its Edit page.</p>
 
 {#if data.agentError}
   <Alert variant="destructive"><AlertTitle>Can't reach the agent</AlertTitle><AlertDescription>{data.agentError}.</AlertDescription></Alert>
 {:else if data.apps.length === 0}
-  <p class="text-footnote text-muted-foreground">No apps yet.</p>
+  <p class="text-sm text-muted-foreground">No apps yet.</p>
 {:else}
   <div class="space-y-6">
     {#each data.apps as app (app.name)}
@@ -23,11 +23,11 @@
       <section aria-labelledby="domain-{app.name}">
         <div class="mb-2 flex items-center gap-3">
           <AppTile name={app.name} host={app.domain ?? app.hostnames[0]} />
-          <h2 id="domain-{app.name}" class="text-headline"><a href="/{app.name}/domains" class="hover:underline">{app.name}</a></h2>
+          <h2 id="domain-{app.name}" class="text-base font-semibold"><a href="/{app.name}/domains" class="hover:underline">{app.name}</a></h2>
         </div>
         <ul class="space-y-3">
           {#each app.own as host (host)}
-            <li class="flex flex-wrap items-center justify-between gap-2 border bg-card p-4 text-footnote">
+            <li class="flex flex-wrap items-center justify-between gap-2 border bg-card p-4 text-sm">
               <a href="https://{host}" class="font-mono hover:underline" target="_blank" rel="noopener noreferrer">{host}</a>
               <span class="text-xs text-muted-foreground">Spotcraft subdomain</span>
             </li>
@@ -35,12 +35,12 @@
         </ul>
         {#if custom}
           {#await custom}
-            <p class="mt-3 text-footnote text-muted-foreground">Checking {app.domain}…</p>
+            <p class="mt-3 text-sm text-muted-foreground">Checking {app.domain}…</p>
           {:then status}
             {#if status?.hosts.length}
               <div class="mt-3"><DomainHosts hosts={status.hosts} /></div>
             {:else}
-              <p class="mt-3 text-footnote text-muted-foreground">{app.domain}: status unavailable</p>
+              <p class="mt-3 text-sm text-muted-foreground">{app.domain}: status unavailable</p>
             {/if}
           {/await}
         {/if}

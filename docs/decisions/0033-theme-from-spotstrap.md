@@ -1,11 +1,11 @@
 ---
 title: The theme and plain-CSS components come from spotstrap
 number: 33
-status: accepted
+status: superseded
 implementation: done
 date: 2026-11-19
 supersedes: [6, 24]
-superseded_by: []
+superseded_by: [41]
 notes: "The dashboard keeps its shadcn-svelte components for now; the site's button links use btn."
 ---
 

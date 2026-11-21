@@ -85,16 +85,16 @@
   {#if listError}
     <Alert variant="destructive"><AlertTitle>{listError}</AlertTitle></Alert>
   {:else if !page}
-    <div class="border bg-card p-10 text-center text-footnote text-muted-foreground">This server has no Postgres, so it has no user pool.</div>
+    <div class="border bg-card p-10 text-center text-sm text-muted-foreground">This server has no Postgres, so it has no user pool.</div>
   {:else if !page.available}
-    <div class="border bg-card p-10 text-center text-footnote text-muted-foreground">The user pool isn't set up yet. It appears once the auth service has started.</div>
+    <div class="border bg-card p-10 text-center text-sm text-muted-foreground">The user pool isn't set up yet. It appears once the auth service has started.</div>
   {:else if page.users.length === 0}
-    <div class="border bg-card p-10 text-center text-footnote text-muted-foreground">
+    <div class="border bg-card p-10 text-center text-sm text-muted-foreground">
       {#if app}No one has used this app yet.{:else}No users yet. Apps add guests through <span class="font-mono">/_spotcraft/auth</span>.{/if}
     </div>
   {:else}
     <div class="border bg-card">
-      <div class="hidden gap-6 border-b px-4 py-2 text-caption-1 text-muted-foreground md:flex" aria-hidden="true">
+      <div class="hidden gap-6 border-b px-4 py-2 text-xs text-muted-foreground md:flex" aria-hidden="true">
         <span class="flex-1">User</span>
         <span class="w-28 shrink-0">Kind</span>
         <span class="w-44 shrink-0">Created</span>
@@ -103,8 +103,8 @@
       </div>
       <ul class="divide-y">
         {#each page.users as user (user.id)}
-          <li class="flex flex-wrap items-center gap-x-6 gap-y-1 px-4 py-3 text-footnote">
-            <span class="min-w-0 flex-1 truncate font-mono text-caption-1" title={user.id}>{user.id.slice(0, 8)}…</span>
+          <li class="flex flex-wrap items-center gap-x-6 gap-y-1 px-4 py-3 text-sm">
+            <span class="min-w-0 flex-1 truncate font-mono text-xs" title={user.id}>{user.id.slice(0, 8)}…</span>
             <span class="w-28 shrink-0"><Badge variant={user.guest ? 'secondary' : 'default'}>{user.guest ? 'Guest' : 'Registered'}</Badge></span>
             <span class="hidden w-44 shrink-0 text-muted-foreground md:inline">{dateTime(user.createdAt)}</span>
             <span class="w-32 shrink-0 text-muted-foreground" title={user.lastSeen ? dateTime(user.lastSeen) : 'No active session'}>{ago(user.lastSeen)}</span>

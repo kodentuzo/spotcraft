@@ -1,18 +1,19 @@
 ---
 name: astro-site
-description: How Spotcraft's website (apps/site, spotcraft.dev) is built with Astro — static output, no UI framework, docs rendered from the repository's Markdown, Tailwind v4, GitHub Pages. Use when creating, editing or debugging anything in apps/site, its build, its link check or its Pages deployment.
+description: How Spotcraft's website (apps/site, spotcraft.dev) is built with Astro — static output, Svelte components rendered at build time, docs rendered from the repository's Markdown, Tailwind v4, GitHub Pages. Use when creating, editing or debugging anything in apps/site, its build, its link check or its Pages deployment.
 ---
 
 # Astro site (apps/site)
 
-The website is plain **Astro with no UI framework integration** (no React, Vue or Svelte) and
-**no client-side JavaScript**. Everything is rendered at build time and served by GitHub Pages
+The website is **Astro with `@astrojs/svelte`**, used only to render `@spotcraft/ui` components
+at build time, and **no client-side JavaScript** (ADR 0041). Everything is rendered at build time and served by GitHub Pages
 at the domain root (`public/CNAME` = `spotcraft.dev`).
 
 ## Rules
 
-- **`.astro` components only.** Don't add `@astrojs/svelte`/`react`/… or `client:*`
-  directives. If something seems to need JavaScript, ask first: the CSP has no `script-src`
+- **Svelte at build time only.** Use `@spotcraft/ui` components in `.astro` pages, but never a
+  `client:*` directive, and no other framework integration. Interactive components (menus,
+  dialogs) don't work without scripts. If something seems to need JavaScript, ask first: the CSP has no `script-src`
   allowances for it.
 - **Static output:** `output: 'static'`, `site: 'https://spotcraft.dev'`,
   `build.format: 'file'` (`/docs/x` → `dist/docs/x.html`, which Pages serves at `/docs/x`
@@ -29,9 +30,7 @@ at the domain root (`public/CNAME` = `spotcraft.dev`).
   rewritten to `/docs/<page>`, other repo paths to GitHub at the release tag
   (`GITHUB_AT_VERSION` in `src/lib/site.ts`).
 - **Styling:** Tailwind v4 through `@tailwindcss/vite` in `vite.plugins`, and the global CSS
-  imports `@spotcraft/ui/styles.css` (plain CSS: theme tokens), so the site matches the
-  dashboard. Components from `@spotcraft/ui` are Svelte and can't be used; copy their Tailwind
-  classes onto plain elements instead.
+  imports `@spotcraft/ui/styles.css` (the theme), so the site matches the dashboard.
 - **CSP:** a static `<meta http-equiv="Content-Security-Policy">` in the base layout. Pages can't
   send headers, so `frame-ancestors` isn't possible (a meta CSP ignores it). Keep the build free
   of `<script>` tags; check with `grep -rl '<script' dist/`.
