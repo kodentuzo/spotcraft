@@ -71,8 +71,8 @@ from every app, with what each app kept for them.
 
 ## Settings
 
-For all apps, how this instance is set up: its domains, edge, DNS, Access, backups and user
-pool. These come from the server's configuration and change with a deploy.
+For all apps, how this instance is set up: its domains, edge, DNS, Access, backups, analytics
+mode and user pool. These come from the server's configuration and change with a deploy.
 
 **Privacy and legal** holds who runs the apps: your name, postal address, email for requests,
 supervisory authority and hosting provider. Apps get them, with what the instance does with
