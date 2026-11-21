@@ -267,6 +267,8 @@ describe('app name and spotcraft.json', () => {
       assert.equal(env.get('AUTH_JWKS_URL'), 'http://localhost:50002/_spotcraft/auth/jwks')
       assert.equal(env.get('AUTH_ISSUER'), LOCAL_ISSUER)
       assert.equal(env.get('SMTP_URL'), 'smtp://localhost:50003')
+      const facts = JSON.parse(env.get('LEGAL_FACTS')?.slice(1, -1) ?? '')
+      assert.match(facts.controller.email, /\.invalid$/)
       assert.equal(env.get('MAIL_FROM'), 'demo@localhost')
       assert.match(env.get('APP_SECRET') ?? '', /^[A-Za-z0-9_-]{43}$/)
     })
