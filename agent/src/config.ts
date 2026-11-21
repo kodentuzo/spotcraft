@@ -1,4 +1,4 @@
-import { DOMAIN, type Edge } from './app-spec.ts'
+import { ANALYTICS_MODES, type AnalyticsMode, DOMAIN, type Edge } from './app-spec.ts'
 
 export interface Config {
   host: string
@@ -44,8 +44,13 @@ export interface Config {
         postgresContainer: string
       }
     | undefined
-  /** Set together: every app gets an Umami website, and its site counts visits (ADR 0038). */
-  analytics: { url: string; password: string } | undefined
+  /**
+   * Set together: every app gets an Umami website, and its site counts visits (ADR 0038). Events
+   * older than `days` are deleted every night, in the Postgres container (ADR 0043).
+   */
+  analytics: { url: string; password: string; days: number; postgresContainer: string } | undefined
+  /** How visits are counted (ADR 0043); `server` when there is no Umami. */
+  analyticsMode: AnalyticsMode
   /**
    * The user pool's retention, for the legal facts (ADR 0043): the same AUTH_GUEST_DAYS,
    * AUTH_IP_DAYS and AUTH_BACKUP_DAYS the pool reads.
@@ -166,6 +171,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     cloudflare: loadCloudflare(env, edge, appsDomain, notices),
     backup: loadBackup(env),
     analytics: loadAnalytics(env),
+    analyticsMode: loadAnalyticsMode(env),
     retention: {
       guestDays: days(env, 'AUTH_GUEST_DAYS', 180),
       ipDays: days(env, 'AUTH_IP_DAYS', 30),
@@ -192,5 +198,19 @@ function loadAnalytics(env: NodeJS.ProcessEnv): Config['analytics'] {
   if (password.length < 32) {
     throw new Error('UMAMI_ADMIN_PASSWORD must be set with UMAMI_URL, at least 32 characters')
   }
-  return { url, password }
+  return {
+    url,
+    password,
+    days: days(env, 'ANALYTICS_DAYS', 395),
+    postgresContainer: env.POSTGRES_CONTAINER?.trim() || 'spotcraft-apps-postgres-1',
+  }
+}
+
+/** ANALYTICS_MODE, `opt-out` by default; `server` when there is no Umami to count with. */
+function loadAnalyticsMode(env: NodeJS.ProcessEnv): AnalyticsMode {
+  const mode = env.ANALYTICS_MODE?.trim() || 'opt-out'
+  if (!ANALYTICS_MODES.includes(mode as AnalyticsMode)) {
+    throw new Error('ANALYTICS_MODE must be server, opt-out or opt-in')
+  }
+  return env.UMAMI_URL?.trim() ? (mode as AnalyticsMode) : 'server'
 }

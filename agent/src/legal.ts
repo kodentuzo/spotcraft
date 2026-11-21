@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { readFile, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { Edge } from './app-spec.ts'
+import type { AnalyticsMode, Edge } from './app-spec.ts'
 
 /*
  * The legal facts (ADR 0043): who runs the instance, and what the platform does with personal
@@ -35,13 +35,14 @@ export interface Processing {
    * - `accounts`: the user pool's accounts and their data in apps;
    * - `sessions`: the IP address and user agent of each session, against abuse;
    * - `backups`: nightly copies of every app's data and the accounts;
-   * - `analytics`: page views and events, counted without cookies or ids.
+   * - `analytics`: page views and events, counted without cookies or ids, by a script in the
+   *   browser. Absent in `server` mode, which counts nothing personal.
    */
   id: 'hosting' | 'edge' | 'accounts' | 'sessions' | 'backups' | 'analytics'
   basis: LegalBasis
   /**
-   * How long the data is kept, in days: after it was last used, or for `backups`, after the
-   * backup was made. Null when it isn't limited.
+   * How long the data is kept, in days: after it was last used, or for `backups` and
+   * `analytics`, after the backup or event was made. Null when it isn't limited.
    */
   retentionDays: number | null
   /** Who processes it for the owner; absent when the instance does it itself. */
@@ -67,7 +68,8 @@ export interface PlatformFacts {
   backupEndpoint?: string
   /** How long backups are kept (AUTH_BACKUP_DAYS, like backup_retention_days). */
   backupDays: number
-  analytics: boolean
+  /** How visits are counted, and how long Umami's events are kept (ANALYTICS_DAYS). */
+  analytics: { mode: AnalyticsMode; days: number }
   /** Idle guests are deleted after this many days (AUTH_GUEST_DAYS). */
   guestDays: number
   /** Sessions' IP addresses and user agents are cleared after this many days (AUTH_IP_DAYS). */
@@ -123,9 +125,12 @@ export function buildFacts(
         : {}),
     })
   }
-  if (platform.analytics) {
-    // Umami's own retention is checked and set with the analytics modes (ADR 0043, step 4).
-    processing.push({ id: 'analytics', basis: 'legitimate-interests', retentionDays: null })
+  if (platform.analytics.mode !== 'server') {
+    processing.push({
+      id: 'analytics',
+      basis: platform.analytics.mode === 'opt-in' ? 'consent' : 'legitimate-interests',
+      retentionDays: platform.analytics.days,
+    })
   }
   const controller = owner && {
     name: owner.name,

@@ -207,7 +207,16 @@ export interface AgentSettings {
   backups?: boolean
   /** The user pool's `iss`; with it, apps get the AUTH_* env (ADR 0035). */
   authIssuer?: string
+  /**
+   * How visits are counted (ADR 0043): `opt-out` adds Umami's script to pages, `opt-in` leaves
+   * it to the app after the visitor agrees, `server` counts requests and accounts only.
+   * Default `opt-out`.
+   */
+  analyticsMode?: AnalyticsMode
 }
+
+export type AnalyticsMode = 'server' | 'opt-out' | 'opt-in'
+export const ANALYTICS_MODES: readonly AnalyticsMode[] = ['server', 'opt-out', 'opt-in']
 
 /** The custom-domain hosts the agent sets up: the domain, and `www.` for a root domain. */
 export function customHosts(app: Pick<AppSpec, 'domain'>): string[] {
