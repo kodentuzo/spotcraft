@@ -33,7 +33,7 @@ export interface BackupTarget {
  * Puts one app's schema back from a dump (ADR 0043). Throws if it can't; the schema is then as
  * it was.
  */
-export type Restore = (schema: string, dump: Buffer) => Promise<void>
+export type Restore = (app: string, dump: Buffer) => Promise<void>
 
 /** Dumps one app's schema (or its own database, from before ADR 0034), in pg_dump's custom format. */
 export type Dump = (app: string) => Promise<Buffer>
@@ -190,6 +190,8 @@ function execIn(
 export function dockerRestore(
   postgresContainer: string,
   database: string,
+  /** The app's role, which is also its schema's name (ADR 0034). */
+  schemaOf: (app: string) => string,
   timeoutMs = (DUMP_SECONDS + 15) * 1000,
 ): Restore {
   const psql = (sql: string) =>
@@ -207,7 +209,8 @@ export function dockerRestore(
     UPDATE auth.deletions d SET deleted_at = p.deleted_at FROM placeholders p
       WHERE d.user_id = p.user_id;`
 
-  return async (schema, dump) => {
+  return async (app, dump) => {
+    const schema = schemaOf(app)
     if (!/^[a-z][a-z0-9_]*$/.test(schema)) throw new Error(`${schema} is not a schema name`)
     const name = `"${schema}"`
     await psql(`

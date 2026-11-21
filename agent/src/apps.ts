@@ -1,5 +1,4 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
-import { appRoleName } from '@kodentuzo/spotcraft/provision'
 import type { AccessApps } from './access.ts'
 import type { Analytics } from './analytics.ts'
 import {
@@ -1352,7 +1351,7 @@ export class Apps {
       const before = await this.#backup(name)
       if (!before.ok) throw new AgentError(`Could not back ${name} up first`, 502, before.error)
       try {
-        await backups.restore(appRoleName(name), dump)
+        await backups.restore(name, dump)
       } catch (error) {
         throw new AgentError(`Could not restore ${name} from ${key}`, 502, message(error))
       }

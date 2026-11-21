@@ -45,7 +45,7 @@ const apps = new Apps(
     ),
     // Only into a schema of the instance database (ADR 0043), so only with Postgres.
     ...(databases && {
-      restore: dockerRestore(config.backup.postgresContainer, INSTANCE.database),
+      restore: dockerRestore(config.backup.postgresContainer, INSTANCE.database, appRoleName),
     }),
     platform: [
       // The user pool's schema in the apps database (ADR 0035).

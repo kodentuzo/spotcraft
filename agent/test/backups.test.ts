@@ -171,7 +171,7 @@ describe('backups', () => {
   let apps: Apps
   let app: ReturnType<typeof buildApp>
   const dumped: string[] = []
-  const restored: { schema: string; dump: string }[] = []
+  const restored: { name: string; dump: string }[] = []
   let restoreFails = false
   let layout: 'schema' | 'database' = 'schema'
   let clock = new Date('2026-11-14T03:00:00Z')
@@ -211,9 +211,9 @@ describe('backups', () => {
         dumped.push(name)
         return Buffer.from(`dump of ${name}`)
       },
-      restore: async (schema, dump) => {
+      restore: async (name, dump) => {
         if (restoreFails) throw new Error('pg_restore: error: violates foreign key constraint')
-        restored.push({ schema, dump: dump.toString() })
+        restored.push({ name, dump: dump.toString() })
       },
       now: () => clock,
     })
@@ -378,7 +378,7 @@ describe('backups', () => {
     assert.equal(res.json().restored, 'sokobanko/20261114T030000Z/')
     assert.equal(res.json().before, 'sokobanko/20261116T100000Z/')
     assert.ok(bucket.objects.has('sokobanko/20261116T100000Z/database.dump'), 'backed up first')
-    assert.deepEqual(restored, [{ schema: 'app_sokobanko', dump: 'dump of sokobanko' }])
+    assert.deepEqual(restored, [{ name: 'sokobanko', dump: 'dump of sokobanko' }])
     assert.ok(
       commands.some((command) => command.includes(' up ')),
       'deployed again, running its migrations',
