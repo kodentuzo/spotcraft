@@ -10,6 +10,8 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-11-21
+
 ### Fixed
 
 - **Deploys failed on 0.9.0, and the legal facts weren't served.** The agent kept the facts'
@@ -693,7 +695,8 @@ handful of server-rendered apps from Docker Hub images behind HTTPS.
 - Servers: key-only SSH as a `deploy` user with modern algorithms only, root login refused,
   two firewalls, automatic security updates.
 
-[Unreleased]: https://github.com/kodentuzo/spotcraft/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/kodentuzo/spotcraft/compare/v0.9.1...HEAD
+[0.9.1]: https://github.com/kodentuzo/spotcraft/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/kodentuzo/spotcraft/compare/v0.8.2...v0.9.0
 [0.8.2]: https://github.com/kodentuzo/spotcraft/compare/v0.8.1...v0.8.2
 [0.8.1]: https://github.com/kodentuzo/spotcraft/compare/v0.8.0...v0.8.1
