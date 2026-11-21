@@ -39,7 +39,8 @@ On the server, the image's `dev.spotcraft.migrate` label does that job instead
 `.env` gets the names the server uses, pointing at the local stack: `DATABASE_URL`,
 `DATABASE_SCHEMA`, `APP_NAME`, `APP_SECRET` (random, kept), `PUBLIC_URL`
 (`http://localhost:3000`; change it to your dev server's), `AUTH_URL`, `AUTH_ISSUER`,
-`AUTH_JWKS_URL`, `SMTP_URL` and `MAIL_FROM`. Existing lines are never changed.
+`AUTH_JWKS_URL`, `SMTP_URL`, `MAIL_FROM` and `LEGAL_FACTS` (example facts, in single quotes,
+with `.invalid` addresses). Existing lines are never changed.
 
 An app set up by the old `spotcraft` CLI keeps its own database and gets only `DATABASE_URL`
 and `AUTH_SECRET`; `dev db reset` moves it to a schema.

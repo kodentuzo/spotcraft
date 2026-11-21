@@ -74,6 +74,13 @@ from every app, with what each app kept for them.
 For all apps, how this instance is set up: its domains, edge, DNS, Access, backups and user
 pool. These come from the server's configuration and change with a deploy.
 
+**Privacy and legal** holds who runs the apps: your name, postal address, email for requests,
+supervisory authority and hosting provider. Apps get them, with what the instance does with
+personal data, as their legal facts (see [the contract](contracts.md#legal-facts)). Saving
+deploys every app again so they get them. Below are the facts, a download of them (your
+record of processing), and what you still do yourself; see also
+[When personal data leaks](guides/breach.md).
+
 For one app: its settings, its deploy hook (see [Deploy from CI](guides/deploy-from-ci.md)), the
 move into the user pool for an app made before it (see
 [Moving an app into the user pool](guides/move-into-the-pool.md)), and **Remove**.

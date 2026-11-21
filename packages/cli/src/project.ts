@@ -146,7 +146,35 @@ export async function localEnv(
     ['AUTH_JWKS_URL', `${poolUrl(stack)}/jwks`],
     ['SMTP_URL', smtpUrl(stack)],
     ['MAIL_FROM', `${app.name}@localhost`],
+    // Single quotes keep the JSON whole for dotenv and Node's --env-file.
+    ['LEGAL_FACTS', `'${JSON.stringify(PLACEHOLDER_FACTS)}'`],
   ])
+}
+
+/**
+ * Example legal facts (ADR 0043), shaped like the server's, so an app's privacy page renders
+ * locally. On a server, the owner's details come from the dashboard.
+ */
+export const PLACEHOLDER_FACTS = {
+  version: 1,
+  updated: '2026-11-21',
+  controller: {
+    name: 'Example Owner (spotcraft dev)',
+    address: ['Example Street 1', '10000 Example City'],
+    email: 'privacy@example.invalid',
+    authority: { name: 'Example Data Protection Authority', url: 'https://example.invalid' },
+  },
+  processing: [
+    {
+      id: 'hosting',
+      basis: 'contract',
+      retentionDays: null,
+      processor: { name: 'Example Hosting', country: 'DE' },
+    },
+    { id: 'accounts', basis: 'contract', retentionDays: 180 },
+    { id: 'sessions', basis: 'legitimate-interests', retentionDays: 30 },
+    { id: 'analytics', basis: 'legitimate-interests', retentionDays: null },
+  ],
 }
 
 /**

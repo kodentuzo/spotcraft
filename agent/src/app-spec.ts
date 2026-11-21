@@ -106,6 +106,7 @@ export const PLATFORM_ENV = [
   'AUTH_JWKS_URL',
   'SMTP_URL',
   'MAIL_FROM',
+  'LEGAL_FACTS',
 ] as const
 
 /** Where the pool answers on every app's domain (ADR 0035). */

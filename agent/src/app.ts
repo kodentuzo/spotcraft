@@ -12,6 +12,7 @@ import {
   TAG,
 } from './app-spec.ts'
 import { AgentError, type Apps } from './apps.ts'
+import { parseOwner } from './legal.ts'
 
 export interface BuildOptions {
   token: string
@@ -233,6 +234,15 @@ export function buildApp({ token, apps, allowedIps = [], logger = false }: Build
       return deleted ? reply.code(204).send() : reply.code(404).send({ error: 'No such user' })
     },
   )
+
+  // The owner's details and the instance's legal facts (ADR 0043).
+  app.get('/legal', async () => apps.legalFacts())
+
+  app.put('/legal', async (request, reply) => {
+    const owner = parseOwner(request.body)
+    if (typeof owner === 'string') return reply.code(400).send({ error: owner })
+    return apps.setLegalOwner(owner)
+  })
 
   // Backups (ADR 0030): every app's last one, one app's, and a backup now.
   app.get('/backups', async () => {

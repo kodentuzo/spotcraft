@@ -20,6 +20,8 @@ The files it writes are the only record of which apps exist:
 | ------ | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | GET    | `/health`                | `{ ok: true }`, no token needed                                                                                                                                    |
 | GET    | `/settings`              | `{ appsDomain?, edge, dns, access }`: what is set up                                                                                                               |
+| GET    | `/legal`                 | `{ owner, facts }`: the owner's details (null until set) and the legal facts (ADR 0043)                                                                            |
+| PUT    | `/legal`                 | the owner's details; `{ facts, redeploying }`, every app deployed again if the facts changed                                                                       |
 | GET    | `/apps`                  | settings plus `state`, `health`, `status`, `hostnames`, `lastDeploy`                                                                                               |
 | GET    | `/apps/:name`            | one app, or 404                                                                                                                                                    |
 | PUT    | `/apps/:name`            | create or update, then deploy; returns the app with status                                                                                                         |
@@ -265,6 +267,22 @@ to `/apps/:name/release` ([ADR 0029](../docs/decisions/0029-deploy-hook.md), gui
   removed, or the dashboard deploys it. Without a record, `GET` answers `live` with the app's
   tag once startup recovery has finished, and 503 before. Without one since the agent started, `GET`
   answers `live` with the app's tag.
+
+## Legal facts
+
+`src/legal.ts` ([ADR 0043](../docs/decisions/0043-apps-own-their-ui.md), the shape is in
+[the contract](../docs/contracts.md#legal-facts)). The facts are built from the owner's details
+(`PUT /legal`, kept in `legal.json` in `DATA_DIR`) and from the agent's settings: the edge, the
+backup bucket's endpoint (R2 with `.eu.` in it is in the EU), whether analytics is set up, and
+the pool's `AUTH_GUEST_DAYS`, `AUTH_IP_DAYS` and `AUTH_BACKUP_DAYS`, which Compose passes to both.
+`updated` moves to the day the facts last changed; a hash of them is kept with it.
+
+- Every container app gets them as `LEGAL_FACTS`, and every site serves them at
+  `/_spotcraft/legal.json`, written into the site with backticks and `{ }` in strings as `\u`
+  escapes, which Caddy would otherwise read.
+- When the owner's details change the facts, the sites are rewritten and Caddy reloaded in the
+  queue, then every app is deployed again, one after the other. A failed deploy is logged and
+  leaves that app's previous version running.
 
 ## Backups
 

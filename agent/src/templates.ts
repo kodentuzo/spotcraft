@@ -96,6 +96,8 @@ export function renderSite(
   service: string,
   /** The app's Umami website (ADR 0038); without one, nothing is counted. */
   websiteId?: string,
+  /** The instance's legal facts as `caddyJson` (ADR 0043), served at /_spotcraft/legal.json. */
+  legalJson?: string,
 ): string {
   const scheme = settings.edge === 'cloudflare' ? 'http://' : ''
   const hosts = hostnames(app, settings.appsDomain)
@@ -129,7 +131,7 @@ ${hosts.map((host) => scheme + host).join(', ')} {
 \thandle ${POOL_PATH}/* {
 ${poolProxy('\t\t')}
 \t}
-${analyticsRoutes(app, websiteId)}
+${analyticsRoutes(app, websiteId)}${legalRoute(legalJson)}
 \thandle {
 \t\treverse_proxy ${upstreamAlias(service)}:${app.port} {
 \t\t\t# The visitor's address (Cloudflare's CF-Connecting-IP when behind the tunnel), not a hop's.
@@ -137,6 +139,21 @@ ${analyticsRoutes(app, websiteId)}
 \t}
 }
 ${www}`
+}
+
+/**
+ * The instance's legal facts (ADR 0043), for clients without a server of their own. They are
+ * the same on every app's domain, and change when the owner's details or the instance do.
+ */
+function legalRoute(legalJson: string | undefined): string {
+  if (!legalJson) return ''
+  return `
+\thandle /_spotcraft/legal.json {
+\t\theader Content-Type "application/json"
+\t\theader Cache-Control "public, max-age=300"
+\t\theader Access-Control-Allow-Origin "*"
+\t\trespond \`${legalJson}\` 200
+\t}`
 }
 
 /** Analytics' container on the `web` network, where Caddy reaches it (ADR 0038). */
