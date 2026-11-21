@@ -38,7 +38,6 @@
         points: sumDays(week, data.apps.map((a) => (a.visits?.perDay ?? []).map((d) => ({ day: d.day, value: d.visitors })))),
         format: (v) => plural(v, 'visitor', 'visitors'),
         note: 'Visitors per day, all apps (UTC); today is still counting',
-        partialLast: true,
       },
       {
         label: 'Page views',
@@ -47,7 +46,6 @@
         points: sumDays(week, data.apps.map((a) => (a.visits?.perDay ?? []).map((d) => ({ day: d.day, value: d.views })))),
         format: (v) => plural(v, 'view', 'views'),
         note: 'Pages and app screens per day, all apps',
-        partialLast: true,
       },
       {
         label: 'Requests',

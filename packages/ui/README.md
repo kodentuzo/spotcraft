@@ -35,11 +35,12 @@ variant follows it too, and there is no toggle.
 | `./components/<name>` | a component (`button`, `card`)          |
 | `./utils`             | `cn` and the shadcn-svelte helper types |
 
-Components: `alert`, `alert-dialog`, `avatar`, `badge`, `button`, `card`, `checkbox`,
+Components: `alert`, `alert-dialog`, `avatar`, `badge`, `button`, `card`, `chart`, `checkbox`,
 `dropdown-menu`, `input`, `label`, `progress`, `separator`, `sheet`, `sidebar`, `skeleton`,
 `table`, `tabs`, `textarea`, `tooltip`.
 They are as the CLI writes them; change a component's look with classes where it is used, not by
-editing it. Icons come from `@lucide/svelte`; an app that uses icons itself depends on it too.
+editing it. Icons come from `@lucide/svelte` and charts from `layerchart`; an app that uses either itself
+depends on it too.
 
 Inside the package, files import each other through `#ui/*` (package `imports`).
 

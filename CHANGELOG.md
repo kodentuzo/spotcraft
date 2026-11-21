@@ -23,6 +23,9 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
 - **The dashboard's pages use shadcn-svelte's Card, Table, Tabs, Checkbox and Progress** instead
   of hand-made boxes, lists and inputs. The Users list is a table, and the memory bars are progress
   bars. Forms post the same values as before.
+- **The dashboard's charts use shadcn-svelte's Chart (LayerChart).** The usage chart has axes and
+  a tooltip; the small CPU, memory and response-time lines show their value on hover. Today's
+  point is no longer drawn dashed: the note under the chart says it is still counting.
 
 ## [0.8.1] - 2026-11-20
 

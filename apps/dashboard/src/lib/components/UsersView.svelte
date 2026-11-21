@@ -69,7 +69,6 @@
           note: app
             ? 'Accounts whose first session on this app was that day (UTC), last 30 days'
             : 'Accounts whose first session was that day (UTC), last 30 days',
-          partialLast: true,
         },
       ]}
     />

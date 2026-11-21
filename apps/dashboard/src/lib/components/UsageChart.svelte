@@ -1,4 +1,9 @@
 <script lang="ts">
+  import { Badge } from '@spotcraft/ui/components/badge'
+  import * as Card from '@spotcraft/ui/components/card'
+  import * as Chart from '@spotcraft/ui/components/chart'
+  import * as Tabs from '@spotcraft/ui/components/tabs'
+  import { AreaChart } from 'layerchart'
   import { axis, type DayPoint, dayLabel } from '#lib/usage.ts'
 
   interface Tab {
@@ -12,136 +17,68 @@
     format: (value: number) => string
     /** What the line shows, under the chart. */
     note: string
-    /** The last point is today, still counting: its segment is dashed. */
-    partialLast?: boolean
   }
 
   let { tabs }: { tabs: Tab[] } = $props()
 
-  let current = $state(0)
-  let hover = $state<number | null>(null)
-  const tab = $derived(tabs[current])
-  const id = $props.id()
+  let current = $state('0')
+  const tab = $derived(tabs[Number(current)])
 
-  // About seven labels on a wide chart and three on a phone; the last day always has one.
-  const wide = $derived(Math.max(1, Math.ceil(tab.points.length / 7)))
-  const narrow = $derived(Math.max(1, Math.ceil(tab.points.length / 3)))
-  const labelled = (i: number, every: number) => i % every === 0 || i === tab.points.length - 1
-
-  const W = 800
-  const H = 220
-  const scale = $derived(axis(Math.max(0, ...tab.points.map((p) => p.value))))
-  const ticks = $derived(
-    Array.from({ length: Math.round(scale.top / scale.step) + 1 }, (_, i) => i * scale.step).reverse(),
-  )
-  const x = (i: number) => (tab.points.length > 1 ? (i / (tab.points.length - 1)) * W : W / 2)
-  const y = (v: number) => H - (v / scale.top) * H
-  const coords = $derived(tab.points.map((p, i) => [x(i), y(p.value)] as const))
-  const path = (pts: ReadonlyArray<readonly [number, number]>) =>
-    pts.map(([px, py], i) => `${i ? 'L' : 'M'}${px.toFixed(1)},${py.toFixed(1)}`).join('')
-  const solid = $derived(tab.partialLast && coords.length > 2 ? coords.slice(0, -1) : coords)
-  const dashed = $derived(tab.partialLast && coords.length > 2 ? coords.slice(-2) : [])
-  const area = $derived(coords.length > 1 ? `${path(coords)}L${W},${H}L0,${H}Z` : '')
+  const data = $derived(tab.points.map((p) => ({ date: new Date(`${p.day}T00:00:00Z`), value: p.value })))
+  const config = $derived({ value: { label: tab.label, color: 'var(--primary)' } } satisfies Chart.ChartConfig)
+  const top = $derived(axis(Math.max(0, ...tab.points.map((p) => p.value))).top)
   const summary = $derived(
     `${tab.label}: ${tab.points.map((p) => `${dayLabel(p.day)} ${tab.format(p.value)}`).join(', ')}`,
   )
-
-  function onpointermove(event: PointerEvent) {
-    if (tab.points.length === 0) return
-    const box = (event.currentTarget as SVGElement).getBoundingClientRect()
-    const share = (event.clientX - box.left) / box.width
-    hover = Math.max(0, Math.min(tab.points.length - 1, Math.round(share * (tab.points.length - 1))))
-  }
 </script>
 
-<section class="border bg-card" aria-label="Usage over the last 7 days">
-  <div role="tablist" class="tabs grid grid-cols-2 border-b" style="--tabs: {tabs.length}">
-    {#each tabs as t, i (t.label)}
-      <button
-        type="button"
-        role="tab"
-        id="{id}-tab-{i}"
-        aria-selected={current === i}
-        aria-controls="{id}-panel"
-        class="flex min-h-11 flex-col items-start gap-1 border-b-2 p-4 text-left transition-colors {current === i ? 'border-foreground bg-muted' : 'border-transparent hover:bg-muted/60'} {i > 0 ? 'md:border-l md:border-l-border' : ''}"
-        onclick={() => {
-          current = i
-          hover = null
-        }}
-      >
-        <span class="text-sm text-muted-foreground">{t.label}</span>
-        <span class="flex items-center gap-2">
-          <span class="font-heading text-2xl font-semibold tabular-nums">{t.value}</span>
-          {#if t.change !== null}
-            <span class="px-1.5 py-0.5 text-xs font-medium tabular-nums {t.change < 0 ? 'bg-destructive/15 text-destructive' : 'bg-muted text-foreground'}">
-              {t.change > 0 ? '+' : ''}{t.change}%
-            </span>
-          {/if}
-        </span>
-      </button>
-    {/each}
-  </div>
+<Card.Root class="gap-0 py-0">
+  <Tabs.Root bind:value={current} class="gap-0" aria-label="Usage over the last 7 days">
+    <Tabs.List variant="line" class="usage-tabs grid w-full group-data-horizontal/tabs:h-auto grid-cols-2 gap-0 border-b p-0" style="--tabs: {tabs.length}">
+      {#each tabs as t, i (t.label)}
+        <Tabs.Trigger value={String(i)} class="h-auto flex-col items-start gap-1 rounded-none p-4 text-left data-active:bg-muted {i > 0 ? 'md:border-l md:border-l-border' : ''}">
+          <span class="text-sm font-normal text-muted-foreground">{t.label}</span>
+          <span class="flex items-center gap-2">
+            <span class="font-heading text-2xl font-semibold text-foreground tabular-nums">{t.value}</span>
+            {#if t.change !== null}
+              <Badge variant={t.change < 0 ? 'destructive' : 'secondary'} class="tabular-nums">{t.change > 0 ? '+' : ''}{t.change}%</Badge>
+            {/if}
+          </span>
+        </Tabs.Trigger>
+      {/each}
+    </Tabs.List>
 
-  <div role="tabpanel" id="{id}-panel" aria-labelledby="{id}-tab-{current}" class="p-4">
-    <p class="mb-3 h-4 text-xs text-muted-foreground tabular-nums" aria-live="polite">
-      {#if hover !== null && tab.points[hover]}{dayLabel(tab.points[hover].day)} · {tab.format(tab.points[hover].value)}{:else}{tab.note}{/if}
-    </p>
-    <div class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3">
-      <div class="relative h-56 text-xs text-muted-foreground tabular-nums" aria-hidden="true">
-        {#each ticks as tick (tick)}
-          <span class="absolute right-0 -translate-y-1/2" style="top: {(1 - tick / scale.top) * 100}%">{tick}</span>
-        {/each}
-        <span class="invisible">{scale.top}</span>
-      </div>
-      <div class="relative">
-      <svg
-        viewBox="0 0 {W} {H}"
-        preserveAspectRatio="none"
-        class="h-56 w-full overflow-visible text-foreground"
-        role="img"
-        aria-label={summary}
-        {onpointermove}
-        onpointerleave={() => (hover = null)}
-      >
-        {#each ticks as tick (tick)}
-          <line x1="0" x2={W} y1={y(tick)} y2={y(tick)} class="stroke-border" stroke-width="1" vector-effect="non-scaling-stroke" />
-        {/each}
-        {#if area}<path d={area} fill="currentColor" fill-opacity="0.06" />{/if}
-        <path d={path(solid)} fill="none" stroke="currentColor" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round" />
-        {#if dashed.length}
-          <path d={path(dashed)} fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="4 5" vector-effect="non-scaling-stroke" />
-        {/if}
-        {#if hover !== null && coords[hover]}
-          <line x1={coords[hover][0]} x2={coords[hover][0]} y1="0" y2={H} class="stroke-muted-foreground" stroke-width="1" vector-effect="non-scaling-stroke" />
-        {/if}
-      </svg>
-      <!-- In HTML, not the stretched SVG, so the dot stays round. -->
-      {#if hover !== null && coords[hover]}
-        <span
-          class="pointer-events-none absolute size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-card bg-foreground"
-          style="left: {(coords[hover][0] / W) * 100}%; top: {(coords[hover][1] / H) * 100}%"
-          aria-hidden="true"
-        ></span>
-      {/if}
-      </div>
-      <span></span>
-      <!-- Each label sits under its point; the first and last keep inside the chart. -->
-      <div class="relative mt-2 h-4 text-xs text-muted-foreground" aria-hidden="true">
-        {#each tab.points as point, i (point.day)}
-          {@const at = (x(i) / W) * 100}
-          <span
-            class="absolute whitespace-nowrap {i === 0 ? '' : i === tab.points.length - 1 ? '-translate-x-full' : '-translate-x-1/2'} {labelled(i, wide) ? (labelled(i, narrow) ? '' : 'hidden sm:inline') : 'hidden'}"
-            style="left: {at}%"
-          >{dayLabel(point.day)}</span>
-        {/each}
-      </div>
-    </div>
-  </div>
-</section>
+    <Tabs.Content value={current} class="p-4">
+      <p class="mb-3 text-xs text-muted-foreground">{tab.note}</p>
+      <p class="sr-only">{summary}</p>
+      <Chart.Container config={config} class="aspect-auto h-56 w-full" aria-hidden="true">
+        <AreaChart
+          {data}
+          x="date"
+          yDomain={[0, top]}
+          series={[{ key: 'value', label: tab.label, color: 'var(--color-value)' }]}
+          props={{
+            area: { fillOpacity: 0.08, line: { class: 'stroke-2' } },
+            xAxis: { format: (d: Date) => dayLabel(d.toISOString().slice(0, 10)), ticks: data.length > 7 ? 7 : data.length },
+            yAxis: { ticks: 3 },
+          }}
+        >
+          {#snippet tooltip()}
+            <Chart.Tooltip hideIndicator labelFormatter={(d: Date) => dayLabel(d.toISOString().slice(0, 10))}>
+              {#snippet formatter({ value })}
+                <span class="font-medium tabular-nums">{tab.format(Number(value))}</span>
+              {/snippet}
+            </Chart.Tooltip>
+          {/snippet}
+        </AreaChart>
+      </Chart.Container>
+    </Tabs.Content>
+  </Tabs.Root>
+</Card.Root>
 
 <style>
   @media (width >= 48rem) {
-    .tabs {
+    :global(.usage-tabs) {
       grid-template-columns: repeat(var(--tabs), minmax(0, 1fr));
     }
   }

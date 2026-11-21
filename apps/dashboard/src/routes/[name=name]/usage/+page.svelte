@@ -54,7 +54,6 @@
           points: fillDays(week, daily.map((d) => ({ day: d.day, value: d.visitors }))),
           format: (v) => `${count(v)} ${v === 1 ? 'visitor' : 'visitors'}`,
           note: visits ? 'Visitors per day, last 7 days (UTC); today is still counting' : app.analytics === false ? 'Analytics is off for this app' : 'Not counted yet',
-          partialLast: true,
         },
         {
           label: 'Page views',
@@ -63,7 +62,6 @@
           points: fillDays(week, daily.map((d) => ({ day: d.day, value: d.views }))),
           format: (v) => `${count(v)} ${v === 1 ? 'view' : 'views'}`,
           note: visits ? `Pages and app screens per day · ${count(visits.visits)} visits in all` : 'Pages and app screens',
-          partialLast: true,
         },
         {
           label: 'Active accounts',
@@ -72,7 +70,6 @@
           points: fillDays(week, (accounts?.newPerDay ?? []).map((d) => ({ day: d.day, value: d.count }))),
           format: (v) => `${count(v)} new`,
           note: accounts ? `New accounts per day · ${count(accounts.active.day)} active today, ${count(accounts.active.month)} in 30 days` : 'Accounts in the user pool that use this app',
-          partialLast: true,
         },
         {
           label: 'Requests',
