@@ -10,6 +10,8 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-21
+
 ### Added
 
 - **Guests can export and delete their data** ([ADR 0043](docs/decisions/0043-apps-own-their-ui.md)).
@@ -48,6 +50,18 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
 
 ### Changed
 
+- **`LEGAL_FACTS` is a reserved env name** (breaking, unlikely to matter): Spotcraft sets it for
+  every container app, so an app's own env can't. To upgrade, rename an env variable of that
+  name in any app first.
+- **Umami's events older than `ANALYTICS_DAYS` (395) are deleted** every night from this
+  version on. To keep older ones, set `ANALYTICS_DAYS` higher in the server's `.env` before
+  deploying.
+- **The agent reads `AUTH_GUEST_DAYS`, `AUTH_IP_DAYS` and `AUTH_BACKUP_DAYS`** too, for the legal
+  facts; Compose passes the same values to it and to the pool.
+- **`/_spotcraft/config.json` carries the analytics `mode`**, and `/_spotcraft/privacy` says
+  what each mode counts.
+- **One long-lived branch, `main`** ([ADR 0042](docs/decisions/0042-one-branch.md)): releases
+  are tags, and the website updates from them.
 - **Server images:** Umami 3.5.0 (also in the local stack), node-exporter 1.13.1 and cAdvisor
   0.61.1.
 
@@ -670,7 +684,8 @@ handful of server-rendered apps from Docker Hub images behind HTTPS.
 - Servers: key-only SSH as a `deploy` user with modern algorithms only, root login refused,
   two firewalls, automatic security updates.
 
-[Unreleased]: https://github.com/kodentuzo/spotcraft/compare/v0.8.2...HEAD
+[Unreleased]: https://github.com/kodentuzo/spotcraft/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/kodentuzo/spotcraft/compare/v0.8.2...v0.9.0
 [0.8.2]: https://github.com/kodentuzo/spotcraft/compare/v0.8.1...v0.8.2
 [0.8.1]: https://github.com/kodentuzo/spotcraft/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/kodentuzo/spotcraft/compare/v0.7.0...v0.8.0
