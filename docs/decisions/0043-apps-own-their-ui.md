@@ -2,11 +2,11 @@
 title: Apps own their UI; Spotcraft offers services, Spotstrap blocks
 number: 43
 status: accepted
-implementation: planned
+implementation: skeleton
 date: 2026-11-21
 supersedes: [38]
 superseded_by: []
-notes: "Partly supersedes 0038: Caddy no longer injects the analytics script, and /_spotcraft/privacy goes away. Nothing is built yet. Already there: idle guests are deleted (ADR 0035). Sokobanko is the first app to follow it."
+notes: "Partly supersedes 0038: Caddy no longer injects the analytics script, and /_spotcraft/privacy goes away. Built in step 2: the pool's export (GET /_spotcraft/auth/export, without tokens or hashes); self-delete is Better Auth's anonymous plugin (POST /_spotcraft/auth/delete-anonymous-user), on by default; the deletion log (auth.deletions, filled by a SECURITY DEFINER trigger so every way of deleting counts, kept AUTH_BACKUP_DAYS); the daily job that deletes expired sessions and clears IP addresses and user agents after AUTH_IP_DAYS. Found while building: Spotcraft keeps no access logs (Caddy has no log directive, the dashboard's login lockout is in memory), so the 30-day rule for logs binds apps; Docker caps container logs by size (3 x 10 MB), not age. Not built yet: replaying the log on a restore, the legal facts, analytics modes, spotkit, Spotstrap. Sokobanko is the first app to follow it."
 ---
 
 # Apps own their UI; Spotcraft offers services, Spotstrap blocks

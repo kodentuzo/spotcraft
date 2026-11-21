@@ -7,10 +7,11 @@ from the Spotcraft image as the `auth` service.
 
 ## What it serves
 
-| Path                 | What                                                                                  |
-| -------------------- | ------------------------------------------------------------------------------------- |
-| `/_spotcraft/auth/*` | Better Auth's API: `sign-in/anonymous`, `get-session`, `sign-out`, `token`, `jwks`, … |
-| `/health`            | 200 once the `auth` schema is migrated and Postgres answers                           |
+| Path                      | What                                                                                  |
+| ------------------------- | ------------------------------------------------------------------------------------- |
+| `/_spotcraft/auth/*`      | Better Auth's API: `sign-in/anonymous`, `get-session`, `sign-out`, `token`, `jwks`, … |
+| `/_spotcraft/auth/export` | `GET`: everything the pool holds about the signed-in user, as a JSON download         |
+| `/health`                 | 200 once the `auth` schema is migrated and Postgres answers                           |
 
 Caddy will route `/_spotcraft/auth/*` on every app's domain here. Nothing routes to it yet.
 
@@ -59,7 +60,8 @@ Postgres may still be starting, so it retries every 5 seconds for 3 minutes; `/h
 503 until then.
 
 Tables: `users`, `sessions`, `accounts`, `verifications` (Better Auth's), `jwks` (signing
-keys, private keys encrypted with `AUTH_SECRET`) and `former_secrets` (moved apps' old secrets). Plural snake_case names, `uuid` ids,
+keys, private keys encrypted with `AUTH_SECRET`), `former_secrets` (moved apps' old secrets) and
+`deletions` (deleted users' ids). Plural snake_case names, `uuid` ids,
 `timestamptz` times. `src/schema.ts` mirrors Better Auth's for its Drizzle adapter, and a test
 checks the two agree.
 
@@ -69,9 +71,27 @@ Better Auth's session hooks. Renewals happen at most once a day. The agent count
 accounts from these ([ADR 0038](../docs/decisions/0038-analytics.md)); CORS allows the header
 for bearer clients.
 
-Once a day, guests created and unused for `AUTH_GUEST_DAYS` are deleted, one at a time. Their
-rows in apps go with them through the apps' `on delete cascade` keys. A guest an app's key
-blocks is skipped and logged.
+## Data rights and retention
+
+[ADR 0043](../docs/decisions/0043-apps-own-their-ui.md).
+
+- **A guest deletes themselves** with `POST /_spotcraft/auth/delete-anonymous-user` (Better
+  Auth's anonymous plugin, with the origin check). Their sessions go first, then the user, and
+  their rows in apps go with them through the apps' `on delete cascade` keys. If an app's key
+  blocks it, the request fails with 500 and the error, naming the table, is logged.
+- **Export:** `GET /_spotcraft/auth/export` answers the user, their sessions (times, IP address,
+  user agent, host, client) and their accounts, as `account.json`. Session tokens, password
+  hashes and OAuth tokens are left out. Apps export their own rows.
+- **Every deletion is logged** in `auth.deletions`, the user's id and the time only, by a trigger
+  on `auth.users`. So a guest deleting themselves, the dashboard and the cleanup below all
+  count. It is kept for `AUTH_BACKUP_DAYS`, as long as backups, so a restore can delete those
+  users again. The agent's role can delete users but not read or change the log.
+- **Once a day:**
+  - guests created and unused for `AUTH_GUEST_DAYS` are deleted, one at a time. A guest an
+    app's key blocks is skipped and logged;
+  - expired sessions are deleted;
+  - the IP address and user agent of sessions unused for `AUTH_IP_DAYS` are cleared;
+  - deletion records older than `AUTH_BACKUP_DAYS` are deleted.
 
 ## Settings
 
@@ -86,6 +106,8 @@ blocks is skipped and logged.
 | `AUTH_APP_GROUP`       | the app group, default `spotcraft_app`                             |
 | `AUTH_ADMIN_ROLE`      | the agent's role, default `spotcraft_agent`                        |
 | `AUTH_GUEST_DAYS`      | idle guests are deleted after this many days, default 180          |
+| `AUTH_IP_DAYS`         | sessions' IP address and user agent are cleared after, default 30  |
+| `AUTH_BACKUP_DAYS`     | deleted users' ids are kept this long, like backups; default 30    |
 | `PORT`, `HOST`         | default `3000`, `0.0.0.0`                                          |
 
 On the server, the deploy script generates `AUTH_SECRET` and the role's password on the first

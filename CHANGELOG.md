@@ -10,6 +10,20 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
 
 ## [Unreleased]
 
+### Added
+
+- **Guests can export and delete their data** ([ADR 0043](docs/decisions/0043-apps-own-their-ui.md)).
+  `GET /_spotcraft/auth/export` answers what the pool holds about the signed-in user as JSON,
+  without tokens or hashes. Self-delete (`POST /_spotcraft/auth/delete-anonymous-user`, Better
+  Auth's) is now documented in the contract; it cascades through every app.
+- **The pool forgets what it no longer needs,** once a day: expired sessions are deleted, and a
+  session's IP address and user agent are cleared after 30 days unused (`AUTH_IP_DAYS`).
+- **Every deleted user's id is logged** in `auth.deletions` for as long as backups are kept
+  (`AUTH_BACKUP_DAYS`, 30 days), so a restore can delete them again. A trigger fills it, so the
+  dashboard's deletes and the idle-guest cleanup count too.
+- **The pool's retention settings are in the server's Compose file and `.env.example`:**
+  `AUTH_GUEST_DAYS`, `AUTH_IP_DAYS`, `AUTH_BACKUP_DAYS`.
+
 ### Changed
 
 - **Server images:** Umami 3.5.0 (also in the local stack), node-exporter 1.13.1 and cAdvisor

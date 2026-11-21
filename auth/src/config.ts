@@ -23,6 +23,10 @@ export interface Config {
   adminRole: string
   /** Guests unused for this many days are deleted. */
   guestDays: number
+  /** A session's IP address and user agent are cleared once it is unused for this many days. */
+  ipDays: number
+  /** How long backups are kept; deleted users' ids are kept as long, to delete them again. */
+  backupDays: number
 }
 
 function required(env: NodeJS.ProcessEnv, name: string): string {
@@ -52,9 +56,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       throw new Error(`AUTH_TRUSTED_ORIGINS: ${origin} is not an origin like https://example.com`)
     }
   }
-  const guestDays = Number(env.AUTH_GUEST_DAYS ?? 180)
-  if (!Number.isInteger(guestDays) || guestDays < 1) {
-    throw new Error('AUTH_GUEST_DAYS must be a whole number of days')
+  const days = (name: string, fallback: number) => {
+    const value = Number(env[name]?.trim() || fallback)
+    if (!Number.isInteger(value) || value < 1) {
+      throw new Error(`${name} must be a whole number of days`)
+    }
+    return value
   }
   return {
     host: env.HOST ?? '0.0.0.0',
@@ -68,6 +75,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     localOrigins: env.AUTH_LOCAL_ORIGINS === '1',
     appGroup: env.AUTH_APP_GROUP?.trim() || 'spotcraft_app',
     adminRole: env.AUTH_ADMIN_ROLE?.trim() || 'spotcraft_agent',
-    guestDays,
+    guestDays: days('AUTH_GUEST_DAYS', 180),
+    ipDays: days('AUTH_IP_DAYS', 30),
+    backupDays: days('AUTH_BACKUP_DAYS', 30),
   }
 }

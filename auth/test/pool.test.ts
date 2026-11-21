@@ -9,7 +9,7 @@ import { after, before, describe, it } from 'node:test'
 import { getTableConfig, type PgTable } from 'drizzle-orm/pg-core'
 import { createRemoteJWKSet, jwtVerify } from 'jose'
 import pg from 'pg'
-import { deleteIdleGuests } from '../src/cleanup.ts'
+import { deleteIdleGuests, forget } from '../src/cleanup.ts'
 import type { Config } from '../src/config.ts'
 import { formerSecrets } from '../src/former.ts'
 import { loadMigrations, migrate } from '../src/migrate.ts'
@@ -71,6 +71,8 @@ describe('the user pool', { skip: !SUPERUSER_URL && 'KIT_TEST_POSTGRES_URL is no
     appGroup: GROUP,
     adminRole: ADMIN,
     guestDays: 180,
+    ipDays: 30,
+    backupDays: 30,
   }
   let db: pg.Pool
   let port: number
@@ -188,7 +190,7 @@ describe('the user pool', { skip: !SUPERUSER_URL && 'KIT_TEST_POSTGRES_URL is no
     }>(
       urlFor(POOL_ROLE, PASSWORD),
       `SELECT table_name, column_name, data_type, is_nullable FROM information_schema.columns
-       WHERE table_schema = 'auth' AND table_name NOT IN ('migrations', 'former_secrets')
+       WHERE table_schema = 'auth' AND table_name NOT IN ('migrations', 'former_secrets', 'deletions')
        ORDER BY table_name, column_name`,
     )
     const fromDrizzle = [users, sessions, accounts, verifications, jwks]
@@ -482,5 +484,104 @@ describe('the user pool', { skip: !SUPERUSER_URL && 'KIT_TEST_POSTGRES_URL is no
       left.rows.map((row) => row.user_id),
       [recent.rows[0].id],
     )
+  })
+
+  it('lets a guest export what the pool holds about them, without secrets', async () => {
+    const host = 'lifts.example.test'
+    const guest = await signIn(host, '203.0.113.20')
+    const cookie = String(guest.headers['set-cookie']).split(';')[0]
+    const { user } = JSON.parse(guest.body)
+
+    const res = await send('GET', '/_spotcraft/auth/export', { host, headers: { cookie } })
+    assert.equal(res.status, 200, res.body)
+    assert.match(String(res.headers['content-disposition']), /attachment/)
+    const data = JSON.parse(res.body)
+    assert.equal(data.user.id, user.id)
+    assert.equal(data.user.isAnonymous, true)
+    assert.equal(data.sessions.length, 1)
+    assert.equal(data.sessions[0].ipAddress, '203.0.113.20')
+    assert.equal(data.sessions[0].host, host)
+    assert.doesNotMatch(res.body, /token|password/i)
+
+    const anonymous = await send('GET', '/_spotcraft/auth/export', { host })
+    assert.equal(anonymous.status, 401)
+  })
+
+  it('lets a guest delete themselves and their rows in apps, and logs every deletion', async () => {
+    const host = 'bars.example.test'
+    const app = urlFor(APP, PASSWORD)
+    const pool = urlFor(POOL_ROLE, PASSWORD)
+    const guest = await signIn(host, '203.0.113.21')
+    const cookie = String(guest.headers['set-cookie']).split(';')[0]
+    const { user } = JSON.parse(guest.body)
+    await query(app, 'INSERT INTO notes (user_id) VALUES ($1)', [user.id])
+
+    const res = await send('POST', '/_spotcraft/auth/delete-anonymous-user', {
+      host,
+      headers: { cookie, origin: `https://${host}` },
+      body: {},
+    })
+    assert.equal(res.status, 200, res.body)
+    const notes = await query(app, 'SELECT 1 FROM notes WHERE user_id = $1', [user.id])
+    assert.equal(notes.rowCount, 0)
+    const after = await send('GET', '/_spotcraft/auth/export', { host, headers: { cookie } })
+    assert.equal(after.status, 401)
+
+    // The dashboard deletes as the agent's role, which has no rights on the log itself.
+    const other = await signIn(host, '203.0.113.22')
+    const otherId = JSON.parse(other.body).user.id
+    await query(urlFor(ADMIN, PASSWORD), 'DELETE FROM auth.users WHERE id = $1', [otherId])
+    await assert.rejects(
+      query(urlFor(ADMIN, PASSWORD), 'SELECT * FROM auth.deletions'),
+      /permission denied/,
+    )
+
+    const logged = await query<{ user_id: string }>(
+      pool,
+      'SELECT user_id FROM auth.deletions WHERE user_id = ANY($1)',
+      [[user.id, otherId]],
+    )
+    assert.deepEqual(logged.rows.map((row) => row.user_id).sort(), [user.id, otherId].sort())
+  })
+
+  it('forgets expired sessions, old addresses and old deletion records', async () => {
+    const pool = urlFor(POOL_ROLE, PASSWORD)
+    const { rows } = await query<{ id: string }>(
+      pool,
+      `INSERT INTO auth.users (email, is_anonymous) VALUES ('forget@guest.test', true) RETURNING id`,
+    )
+    const id = rows[0].id
+    await query(
+      pool,
+      `INSERT INTO auth.sessions (user_id, token, expires_at, updated_at, ip_address, user_agent)
+       VALUES ($1, 'expired', now() - interval '1 day', now() - interval '2 days', '203.0.113.30', 'ua'),
+              ($1, 'old', now() + interval '300 days', now() - interval '40 days', '203.0.113.31', 'ua'),
+              ($1, 'recent', now() + interval '300 days', now() - interval '1 day', '203.0.113.32', 'ua')`,
+      [id],
+    )
+    await query(
+      pool,
+      `INSERT INTO auth.deletions (user_id, deleted_at)
+       VALUES (gen_random_uuid(), now() - interval '40 days'), (gen_random_uuid(), now())`,
+    )
+    const before = await query<{ n: number }>(pool, 'SELECT count(*)::int AS n FROM auth.deletions')
+
+    const forgotten = await forget(db, { ipDays: 30, backupDays: 30 })
+    assert.equal(forgotten.deletions, 1)
+    const sessions = await query<{
+      token: string
+      ip_address: string | null
+      user_agent: string | null
+    }>(
+      pool,
+      'SELECT token, ip_address, user_agent FROM auth.sessions WHERE user_id = $1 ORDER BY token',
+      [id],
+    )
+    assert.deepEqual(sessions.rows, [
+      { token: 'old', ip_address: null, user_agent: null },
+      { token: 'recent', ip_address: '203.0.113.32', user_agent: 'ua' },
+    ])
+    const left = await query<{ n: number }>(pool, 'SELECT count(*)::int AS n FROM auth.deletions')
+    assert.equal(left.rows[0].n, before.rows[0].n - 1)
   })
 })

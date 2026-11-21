@@ -1,5 +1,5 @@
 import pg from 'pg'
-import { deleteIdleGuests } from './cleanup.ts'
+import { deleteIdleGuests, forget } from './cleanup.ts'
 import { loadConfig } from './config.ts'
 import { formerSecrets } from './former.ts'
 import { migrate } from './migrate.ts'
@@ -48,7 +48,8 @@ for (let attempt = 1; ; attempt++) {
   await new Promise((resolve) => setTimeout(resolve, 5000))
 }
 
-// Once a day, delete guests nobody has used for AUTH_GUEST_DAYS.
+// Once a day, delete guests nobody has used for AUTH_GUEST_DAYS, then drop what the pool no
+// longer needs: expired sessions, old IP addresses and user agents, and old deletion records.
 const cleanUp = async () => {
   try {
     const { deleted, blocked } = await deleteIdleGuests(db, config.guestDays)
@@ -56,6 +57,12 @@ const cleanUp = async () => {
       log(blocked.length ? 'warn' : 'info', 'idle guests', { deleted, blocked })
   } catch (error) {
     log('error', 'could not delete idle guests', { error: String(error) })
+  }
+  try {
+    const forgotten = await forget(db, config)
+    if (Object.values(forgotten).some(Boolean)) log('info', 'forgot old data', forgotten)
+  } catch (error) {
+    log('error', 'could not forget old data', { error: String(error) })
   }
 }
 await cleanUp()

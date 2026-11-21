@@ -194,6 +194,11 @@ services:
       AUTH_ISSUER: https://${DASHBOARD_DOMAIN}/pools/main
       # Optional: origins (comma-separated) of clients on other sites, with bearer tokens.
       AUTH_TRUSTED_ORIGINS: ${AUTH_TRUSTED_ORIGINS:-}
+      # Retention (ADR 0043): idle guests, sessions' IP addresses, and deleted users' ids, which
+      # are kept as long as backups (backup_retention_days in infra/cloudflare).
+      AUTH_GUEST_DAYS: ${AUTH_GUEST_DAYS:-180}
+      AUTH_IP_DAYS: ${AUTH_IP_DAYS:-30}
+      AUTH_BACKUP_DAYS: ${AUTH_BACKUP_DAYS:-30}
     # `web`: Caddy in front. `db`: Postgres. Never on `edge`, which hosted apps share.
     networks: [web, db]
     healthcheck:
