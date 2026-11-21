@@ -45,3 +45,4 @@ that supersedes the old one; old records are never rewritten.
 | 0039 | [Deploys are recorded, and the dashboard fetches app icons](0039-app-status-at-a-glance.md)    | accepted                                     |
 | 0040 | [The dashboard lists which users use an app](0040-admin-sees-app-users.md)                     | accepted                                     |
 | 0041 | [All UI is shadcn-svelte, with its own theme](0041-all-ui-from-shadcn-svelte.md)               | accepted                                     |
+| 0042 | [One long-lived branch, main; a tag is a release](0042-one-branch.md)                          | accepted                                     |

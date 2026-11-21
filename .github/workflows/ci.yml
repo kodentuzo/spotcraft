@@ -1,8 +1,9 @@
 name: CI
 
-# Pull requests: verify, and build the image (not pushed) so a broken Dockerfile shows before
-# merging. main and v* tags: verify, then publish the image to Docker Hub; v* tags also publish
-# the CLI. kit-v* tags: verify, then publish @spotcraft/kit alone (ADR 0027).
+# Pull requests: check the branch's name, verify, and build the image (not pushed) so a broken
+# Dockerfile shows before merging. main: verify, then publish the image as sha-<short>. v* tags:
+# the same, tagged X.Y.Z, X.Y and latest, then publish the CLI. kit-v* tags: verify, then publish
+# @spotcraft/kit alone (ADR 0027).
 on:
   push:
     branches: [main]
@@ -17,6 +18,28 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Work happens on short-lived branches cut from main and merged back into it: feature/,
+  # bugfix/ or chore/, then lowercase letters, digits, dots and hyphens (CONTRIBUTING.md,
+  # ADR 0042). Dependabot names its own branches.
+  branch-name:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Check the branch and its target
+        env:
+          HEAD: ${{ github.head_ref }}
+          BASE: ${{ github.base_ref }}
+        run: |
+          if [ "$BASE" != main ]; then
+            echo "::error::Open the pull request against main, not $BASE."
+            exit 1
+          fi
+          if ! echo "$HEAD" | grep -Eq '^((feature|bugfix|chore)/[a-z0-9][a-z0-9.-]*|dependabot/.+)$'; then
+            echo "::error::Name the branch feature/<name>, bugfix/<name> or chore/<name> (lowercase letters, digits, dots and hyphens), not $HEAD."
+            exit 1
+          fi
+
   verify:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -136,14 +159,14 @@ jobs:
           username: ${{ vars.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # main → latest; v1.2.3 → 1.2.3, 1.2 and 1 (no major tag for v0.x); every build → sha-abc1234.
+      # v1.2.3 → 1.2.3, 1.2, 1 (no major tag for v0.x) and latest; every build → sha-abc1234.
+      # main holds unreleased work, so it gets sha-abc1234 only.
       - id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ${{ vars.DOCKERHUB_USERNAME || 'vindotski' }}/spotcraft
           tags: |
-            # main holds the production version; dev is the default branch, so not is_default_branch.
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             # No bare major tag before 1.0 (a "0" tag would mean nothing stable).

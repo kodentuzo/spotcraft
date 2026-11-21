@@ -1,20 +1,12 @@
 name: Pages
 
-# The website, spotcraft.dev: built from main (the released docs) and published on GitHub Pages
-# (ADR 0024). The repository's Pages source is "GitHub Actions", its custom domain spotcraft.dev,
-# and the github-pages environment allows deploys from main.
+# The website, spotcraft.dev: built from each release tag, so it shows the released docs, and
+# published on GitHub Pages (ADR 0024, ADR 0042). Run it by hand to rebuild from main. The
+# repository's Pages source is "GitHub Actions", its custom domain spotcraft.dev, and the
+# github-pages environment allows deploys from v* tags and main.
 on:
   push:
-    branches: [main]
-    paths:
-      - apps/site/**
-      - docs/**
-      - CHANGELOG.md
-      - packages/*/CHANGELOG.md
-      - packages/ui/**
-      - package.json
-      - pnpm-lock.yaml
-      - .github/workflows/pages.yml
+    tags: ["v*.*.*"]
   workflow_dispatch:
 
 permissions:

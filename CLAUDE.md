@@ -32,12 +32,14 @@ user's checkout without asking; they leave orphaned processes on 3000/5173.
 
 ## Conventions
 
-- **Branches:** `dev` is the default; branch from it and open PRs into it. `main` is production;
-  releases are `vX.Y.Z` tags on `main` (`docs/releasing.md`, skill `release`).
+- **Branches:** `main` is the only long-lived branch (ADR 0042, `CONTRIBUTING.md`). Branch from
+  `origin/main` as `feature/<name>`, `bugfix/<name>` or `chore/<name>` (lowercase letters,
+  digits, dots, hyphens; CI checks it). Releases are signed `vX.Y.Z` tags on `main`
+  (`docs/releasing.md`, skill `release`).
 - **Commits and PRs:** commit each finished, verified step with a Conventional Commits message
-  (skill `commit-message`), push the branch and open a PR into `dev`. Never force-push or push
-  to `dev` or `main` directly. Merge and tag only when the user asks; tags are signed
-  (`git tag -s`) and point at the commit (`<ref>^{commit}`).
+  (skill `commit-message`), push the branch and open a PR into `main`; it merges with a merge
+  commit once the checks pass. Never force-push or push to `main` directly. Merge and tag only
+  when the user asks; tags are signed (`git tag -s`) and point at the commit (`<ref>^{commit}`).
 - **Decisions** get an ADR in `docs/decisions/` (skill `adr`); a changed decision gets a new ADR
   that supersedes the old one.
 - **Docs move with the code:** update the package README and the `Unreleased` section of

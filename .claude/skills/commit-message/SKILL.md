@@ -5,7 +5,7 @@ description: Write a Conventional Commits message and commit the current changes
 
 # Commit
 
-You commit finished, verified work with this message and push the feature branch. Never force-push or push to `dev` or `main`. Merge and tag only when the user asks (signed tags, `git tag -s`).
+You commit finished, verified work with this message and push the feature branch. Never force-push or push to `main`; the branch is `feature/`, `bugfix/` or `chore/` from `origin/main`, and its PR goes into `main`. Merge and tag only when the user asks (signed tags, `git tag -s`).
 
 ## Steps
 

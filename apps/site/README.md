@@ -51,8 +51,8 @@ doesn't resolve, or a page contains a `<script>` (`scripts/check-links.ts`).
 
 ## Deploy
 
-`.github/workflows/pages.yml` builds `dist/` on every push to `main` that touches the site,
-the docs or the changelogs, and deploys it with GitHub Pages. In the repository's settings,
+`.github/workflows/pages.yml` builds `dist/` on every `v*.*.*` tag (or by hand) and deploys it
+with GitHub Pages, so the site shows the released docs. In the repository's settings,
 Pages uses "GitHub Actions" as its source and `spotcraft.dev` as its custom domain, and the
-`github-pages` environment allows deploys from `main`. DNS: the apex has GitHub Pages' A and
+`github-pages` environment allows deploys from `v*` tags and `main`. DNS: the apex has GitHub Pages' A and
 AAAA records and `www` is a CNAME to `kodentuzo.github.io`, all DNS-only in Cloudflare.
