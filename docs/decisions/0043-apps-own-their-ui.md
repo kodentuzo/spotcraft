@@ -49,9 +49,17 @@ which keeps its own theme.
 
 - **The owner's identity** (name, postal address, contact email) is set once in the dashboard,
   never in a repository.
-- **The platform adds what it knows:** the hosting provider and location, the edge, backups and
-  how long they are kept, SMTP, analytics and what it collects, and the pool's cookie and
-  retention.
+- **The owner picks their supervisory authority** in the dashboard, for the right to complain.
+- **The platform adds what it knows,** as one entry per processing: the hosting provider and
+  location, the edge, backups, SMTP, analytics, the pool's cookie and sessions, and logs. Each
+  entry says:
+  - what data it covers and its purpose;
+  - its legal basis (GDPR Art. 6), such as running the service or a legitimate interest;
+  - how long the data is kept;
+  - the processor, if any, and any transfer outside the EU with its basis, such as Cloudflare
+    under the EU–US Data Privacy Framework.
+- **The core's copy holds what every policy says the same way:** the user's rights, how to use
+  them, and the right to complain.
 - **The facts are one JSON document** with an `updated` date, which changes whenever any fact
   does. A policy shows it as its "last changed" date.
 - **Apps get the facts in two ways:**
@@ -68,17 +76,46 @@ which keeps its own theme.
 ### Data rights and retention live in the pool
 
 - **A signed-in user can delete themselves** through the pool. Deleting a user cascades through
-  apps' foreign keys (ADR 0035), so an app needs no delete code.
+  apps' foreign keys (ADR 0035), so an app needs no delete code. If an app's foreign key blocks
+  the delete, the user sees an error, and the dashboard names the table, as it does for idle
+  guests.
+- **Deletions survive a restore.** The pool keeps a deletion log, the user's id and the time
+  only, for as long as backups are kept (30 days). A restore deletes those users again. The
+  policy says how long backups keep data.
 - **Export is split:** the pool exports what it holds (the user and their sessions), and each
   app exports its own rows. The your-data block puts both in one download.
 - **Retention:**
   - expired sessions are deleted every day, next to the job that deletes idle guests;
   - a session's IP address and user agent are cleared 30 days after it was last used, an
     instance setting;
-  - guests unused for 180 days are deleted, as now.
-- **No consent banner by design:** nothing the platform offers sets a cookie that needs
-  consent. The pool's cookie is set on a user's first save and is needed for the app to work,
-  and analytics uses no cookies.
+  - guests unused for 180 days are deleted, as now;
+  - logs (Caddy's and the apps' container logs) keep a client's IP address for 30 days at most.
+
+### Consent depends on the analytics mode
+
+The pool's cookie is set on a user's first save and is needed for the app to work, so it needs no
+consent. Analytics may need it, depending on the country: ePrivacy rules may count a script that
+reads the device as access to it. So analytics has three modes, set for the instance:
+
+- **server** counts requests (Caddy) and accounts (the pool) only. No script runs and nothing
+  reads the device, so no consent is needed anywhere.
+- **opt-out** is the default: Umami's script, cookieless, aggregated, kept 13 months, with an
+  opt-out. This fits audience-measurement exemptions such as France's.
+- **opt-in** loads Umami's script only after the user agrees, through a consent block the app
+  shows. Use it where no exemption applies, such as Germany.
+
+`config.json` says the mode, and spotkit's tracker follows it. The per-app Analytics switch of
+ADR 0038 stays.
+
+### What the owner still does
+
+Spotcraft can't do these for the owner, so the dashboard's legal page lists them:
+
+- data processing agreements with the processors (Hetzner and Cloudflare in their consoles, and
+  the SMTP provider);
+- the record of processing (GDPR Art. 30): the facts are that record, and the page exports them;
+- answering requests sent by email within a month (GDPR Art. 12);
+- reporting a breach within 72 hours (GDPR Art. 33), with a guide in `docs/guides/`.
 
 ### spotkit is the bridge
 
@@ -107,7 +144,7 @@ Spotstrap is never a runtime dependency on Spotcraft. It has three layers:
   | Vanilla      | Basecoat                |
 
 - **Blocks** are the repeated pieces: sign-in, privacy policy, legal notice, your data, legal
-  links and the analytics opt-out. Each block has two parts:
+  links, and the analytics opt-out and consent prompt. Each block has two parts:
   - **a core**, published on npm, in framework-free TypeScript. It holds the data access, through
     a small client interface that spotkit implements; the state, such as the steps of deleting;
     the copy, with translations; and document models, such as the policy as sections. It never
@@ -135,8 +172,12 @@ test.
 
 - An app can leave Spotcraft without losing a page. Outside Spotcraft, its owner runs the same
   published pieces and sets the env vars.
-- Apps that relied on the injected script must add the tracker. The release that removes the
-  injection gives the steps.
+- Apps that relied on the injected script must add the tracker, and those with analytics on must
+  show the opt-out block. The release that removes the injection, and with it the opt-out at
+  `/_spotcraft/privacy`, comes after they do, and gives the steps.
+- The deletion log is itself personal data. It holds ids only, and only for 30 days.
+- The owner still signs the processors' agreements and answers requests. Spotcraft lists what
+  to do, but can't do it.
 - Apps have more code in them, but they own it, and the core keeps the logic in one place.
 - Views for five platforms are a maintenance cost. Building them only when an app needs one
   keeps it down.
@@ -144,7 +185,8 @@ test.
   with updated views in the registry, and its changelog says to add them again.
 - Changing a fact redeploys every container app. Apps that start slowly take longer to show it.
 - A policy built from the facts is only as accurate as the owner's settings, and still needs one
-  legal review.
+  legal review. The consent rules for analytics differ between EU countries; the mode is the
+  owner's choice.
 - It isn't checked yet whether Basecoat and react-native-reusables install from a custom
   registry. If not, their views ship as npm exports instead.
 - The dashboard keeps its own theme ([ADR 0041](0041-all-ui-from-shadcn-svelte.md)).
