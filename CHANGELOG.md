@@ -10,6 +10,13 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
 
 ## [Unreleased]
 
+### Fixed
+
+- **App icons and the Gravatar** no longer break the dashboard's Content Security Policy. Their
+  `onerror` handler was rendered as an inline attribute, which the CSP blocks, so the browser
+  console logged an error on every page with app tiles. The error listener is now attached on
+  the client, and the letter tile still shows when an icon fails.
+
 ## [0.8.1] - 2026-11-20
 
 ### Fixed
