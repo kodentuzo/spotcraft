@@ -11,7 +11,7 @@
 <svelte:head><title>Users · {app.name} · Spotcraft</title></svelte:head>
 
 <AppHeading title="Users" {app} />
-<p class="-mt-3 mb-6 text-footnote text-muted-foreground">
+<p class="-mt-3 mb-6 text-sm text-muted-foreground">
   The users with a session on {app.name}'s addresses. Every app shares one user pool (<a href="/users" class="underline">all users</a>).
 </p>
 

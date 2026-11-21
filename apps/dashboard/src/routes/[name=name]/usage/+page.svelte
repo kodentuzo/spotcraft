@@ -13,22 +13,22 @@
 </script>
 
 {#snippet noReferrers()}
-  <p class="text-headline">No referrers yet</p>
-  <p class="mt-1 text-footnote text-muted-foreground">Sites that link here show up once visitors follow their links.</p>
+  <p class="text-base font-semibold">No referrers yet</p>
+  <p class="mt-1 text-sm text-muted-foreground">Sites that link here show up once visitors follow their links.</p>
 {/snippet}
 
 {#snippet noEvents()}
-  <p class="text-headline">No custom events</p>
-  <p class="mt-1 text-footnote text-muted-foreground">
+  <p class="text-base font-semibold">No custom events</p>
+  <p class="mt-1 text-sm text-muted-foreground">
     Count button clicks, sign-ups and other actions: the tracker is already on every page, so the app calls
-    <code class="font-mono text-caption-1">umami.track('signup')</code>.
+    <code class="font-mono text-xs">umami.track('signup')</code>.
   </p>
 {/snippet}
 
 {#snippet noClients()}
-  <p class="text-headline">No app versions yet</p>
-  <p class="mt-1 text-footnote text-muted-foreground">
-    Native and desktop apps show up here once they send <code class="font-mono text-caption-1">Spotcraft-Client: &lt;platform&gt;/&lt;version&gt;</code>.
+  <p class="text-base font-semibold">No app versions yet</p>
+  <p class="mt-1 text-sm text-muted-foreground">
+    Native and desktop apps show up here once they send <code class="font-mono text-xs">Spotcraft-Client: &lt;platform&gt;/&lt;version&gt;</code>.
   </p>
 {/snippet}
 
@@ -38,7 +38,7 @@
 
 <section>
   {#await data.usage}
-    <p class="text-footnote text-muted-foreground">Counting…</p>
+    <p class="text-sm text-muted-foreground">Counting…</p>
   {:then usage}
     {@const visits = usage.visits}
     {@const accounts = usage.accounts}
@@ -54,7 +54,6 @@
           points: fillDays(week, daily.map((d) => ({ day: d.day, value: d.visitors }))),
           format: (v) => `${count(v)} ${v === 1 ? 'visitor' : 'visitors'}`,
           note: visits ? 'Visitors per day, last 7 days (UTC); today is still counting' : app.analytics === false ? 'Analytics is off for this app' : 'Not counted yet',
-          partialLast: true,
         },
         {
           label: 'Page views',
@@ -63,7 +62,6 @@
           points: fillDays(week, daily.map((d) => ({ day: d.day, value: d.views }))),
           format: (v) => `${count(v)} ${v === 1 ? 'view' : 'views'}`,
           note: visits ? `Pages and app screens per day · ${count(visits.visits)} visits in all` : 'Pages and app screens',
-          partialLast: true,
         },
         {
           label: 'Active accounts',
@@ -72,7 +70,6 @@
           points: fillDays(week, (accounts?.newPerDay ?? []).map((d) => ({ day: d.day, value: d.count }))),
           format: (v) => `${count(v)} new`,
           note: accounts ? `New accounts per day · ${count(accounts.active.day)} active today, ${count(accounts.active.month)} in 30 days` : 'Accounts in the user pool that use this app',
-          partialLast: true,
         },
         {
           label: 'Requests',

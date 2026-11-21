@@ -33,7 +33,7 @@
       ></span>
     {/each}
   </div>
-  <p class="mt-1 whitespace-nowrap text-caption-1 text-muted-foreground tabular-nums" aria-hidden="true">
+  <p class="mt-1 whitespace-nowrap text-xs text-muted-foreground tabular-nums" aria-hidden="true">
     {#if showRatio}{uptime(ratio)}{/if}{#if down > 0}<span class="text-destructive">{`${showRatio ? ' · ' : ''}${down} h down`}</span>{/if}
   </p>
 </div>

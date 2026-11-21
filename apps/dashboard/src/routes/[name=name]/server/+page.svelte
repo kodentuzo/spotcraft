@@ -1,4 +1,5 @@
 <script lang="ts">
+  import * as Card from '@spotcraft/ui/components/card'
   import AppHeading from '#lib/components/AppHeading.svelte'
   import MemoryBar from '#lib/components/MemoryBar.svelte'
   import Sparkline from '#lib/components/Sparkline.svelte'
@@ -39,8 +40,8 @@
   </Stat>
 </div>
 
-<section class="mt-3 border bg-card p-4 text-footnote" aria-labelledby="container">
-  <h2 id="container" class="mb-3 text-headline">Container</h2>
+<section aria-labelledby="container" class="mt-3"><Card.Root size="sm"><Card.Content class="text-sm">
+  <h2 id="container" class="mb-3 text-base font-semibold">Container</h2>
   <dl class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-8 gap-y-2">
     <dt class="text-muted-foreground">State</dt><dd>{app.state}{#if app.status} · {runningFor(app.status)}{/if}</dd>
     <dt class="text-muted-foreground">Image</dt><dd class="truncate font-mono">{app.image}:{app.tag}</dd>
@@ -48,4 +49,4 @@
     <dt class="text-muted-foreground">Port</dt><dd class="tabular-nums">{app.port}</dd>
     <dt class="text-muted-foreground">Filesystem</dt><dd>{app.readOnly ? 'Read-only, with a writable /tmp' : 'Writable'}</dd>
   </dl>
-</section>
+</Card.Content></Card.Root></section>

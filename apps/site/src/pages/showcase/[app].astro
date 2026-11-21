@@ -1,6 +1,7 @@
 ---
 import { getCollection, render } from 'astro:content'
-import ButtonLink from '../../components/ButtonLink.astro'
+import { Button } from '@spotcraft/ui/components/button'
+import * as Card from '@spotcraft/ui/components/card'
 import GitHubIcon from '../../components/GitHubIcon.astro'
 import Screenshot from '../../components/Screenshot.astro'
 import Base from '../../layouts/Base.astro'
@@ -44,8 +45,8 @@ const dated = numbers.date?.toLocaleDateString('en-GB', {
     <h1 class="mt-3 font-heading text-4xl font-bold tracking-tight sm:text-5xl">{data.name}</h1>
     <p class="mt-4 max-w-2xl text-lg text-pretty text-muted-foreground">{data.oneLiner}</p>
     <div class="mt-8 flex flex-wrap gap-3">
-      <ButtonLink href={data.url} rel="noopener noreferrer">Visit {new URL(data.url).host}</ButtonLink>
-      <ButtonLink href={data.source} variant="outline" rel="noopener noreferrer"><GitHubIcon /> Source</ButtonLink>
+      <Button href={data.url} size="lg" rel="noopener noreferrer">Visit {new URL(data.url).host}</Button>
+      <Button href={data.source} size="lg" variant="outline" rel="noopener noreferrer"><GitHubIcon data-icon="inline-start" /> Source</Button>
     </div>
     <Screenshot {...hero} class="mt-12 shadow-sm" eager />
 
@@ -58,17 +59,21 @@ const dated = numbers.date?.toLocaleDateString('en-GB', {
     <!-- What Spotcraft does for it -->
     <section class="mt-16 grid gap-6 border-t pt-12 sm:grid-cols-[1fr_2fr]">
       <h2 class="font-heading text-2xl font-bold">What Spotcraft does for it</h2>
-      <ul class="grid gap-px border bg-border">
+      <ul class="grid gap-3">
         {
           data.features.map((feature) => (
-            <li class="flex gap-4 bg-background p-5">
-              <svg class="mt-0.5 size-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                <path d="M20 6 9 17l-5-5" />
-              </svg>
-              <div>
-                <h3 class="font-heading font-semibold">{feature.name}</h3>
-                <p class="mt-1 text-sm leading-6 text-muted-foreground">{feature.text}</p>
-              </div>
+            <li>
+              <Card.Root size="sm">
+                <Card.Content class="flex flex-row gap-4">
+                  <svg class="mt-0.5 size-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <path d="M20 6 9 17l-5-5" />
+                  </svg>
+                  <div>
+                    <h3 class="font-heading font-semibold">{feature.name}</h3>
+                    <p class="mt-1 text-sm leading-6 text-muted-foreground">{feature.text}</p>
+                  </div>
+                </Card.Content>
+              </Card.Root>
             </li>
           ))
         }
@@ -81,17 +86,21 @@ const dated = numbers.date?.toLocaleDateString('en-GB', {
       <p class="mt-2 text-sm text-muted-foreground">
         {dated ? `From the Spotcraft dashboard on ${dated}.` : 'From the Spotcraft dashboard.'}
       </p>
-      <dl class="mt-8 grid gap-px border bg-border sm:grid-cols-2 lg:grid-cols-4">
+      <div class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {
           figures.map((figure) => (
-            <div class="bg-background p-6">
-              <dt class="text-sm text-muted-foreground">{figure.label}</dt>
-              <dd class="mt-2 font-heading text-3xl font-bold tabular-nums">{figure.value}</dd>
-              {figure.note && <dd class="mt-1 text-sm text-muted-foreground">{figure.note}</dd>}
-            </div>
+            <Card.Root>
+              <Card.Content>
+                <dl>
+                  <dt class="text-sm text-muted-foreground">{figure.label}</dt>
+                  <dd class="mt-2 font-heading text-3xl font-bold tabular-nums">{figure.value}</dd>
+                  {figure.note && <dd class="mt-1 text-sm text-muted-foreground">{figure.note}</dd>}
+                </dl>
+              </Card.Content>
+            </Card.Root>
           ))
         }
-      </dl>
+      </div>
     </section>
 
     <!-- The story -->

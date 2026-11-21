@@ -27,7 +27,7 @@ that supersedes the old one; old records are never rewritten.
 | 0021 | [Apps get a default subdomain; Cloudflare can sit in front](0021-cloudflare-edge.md)           | accepted, partly superseded by 0022 and 0023 |
 | 0022 | [Taking over a custom domain's DNS records is an app setting](0022-takeover-setting.md)        | accepted                                     |
 | 0023 | [A Cloudflare Access sign-in also signs in to the dashboard](0023-access-sign-in.md)           | accepted                                     |
-| 0024 | [The website is plain Astro, published on GitHub Pages](0024-website-on-pages.md)              | accepted, partly superseded by 0033          |
+| 0024 | [The website is plain Astro, published on GitHub Pages](0024-website-on-pages.md)              | accepted, partly superseded by 0033, 0041    |
 | 0025 | [One image runs the agent and the dashboard as two containers](0025-one-image.md)              | accepted                                     |
 | 0026 | [Spotcraft runs on one server](0026-one-server.md)                                             | accepted                                     |
 | 0027 | [The kit has its own version](0027-kit-version.md)                                             | superseded by 0036                           |
@@ -36,7 +36,7 @@ that supersedes the old one; old records are never rewritten.
 | 0030 | [Nightly dumps of every app to a bucket, and Hetzner backups of the server](0030-backups.md)   | accepted, partly superseded by 0034          |
 | 0031 | [The kit holds the server glue every app repeated](0031-kit-app-glue.md)                       | superseded by 0036                           |
 | 0032 | [An older app starts on a database a newer one migrated](0032-rollback-on-a-newer-database.md) | accepted                                     |
-| 0033 | [The theme and plain-CSS components come from spotstrap](0033-theme-from-spotstrap.md)         | accepted                                     |
+| 0033 | [The theme and plain-CSS components come from spotstrap](0033-theme-from-spotstrap.md)         | superseded by 0041                           |
 | 0034 | [Every app gets the same small contract, with no switches](0034-app-contract.md)               | accepted                                     |
 | 0035 | [Each instance runs one user pool, starting with guests](0035-auth-pool.md)                    | accepted                                     |
 | 0036 | [The kit becomes spotkit, outside this repository](0036-spotkit.md)                            | accepted                                     |
@@ -44,3 +44,4 @@ that supersedes the old one; old records are never rewritten.
 | 0038 | [Every app gets usage numbers, collected by the platform with Umami](0038-analytics.md)        | accepted, partly superseded by 0040          |
 | 0039 | [Deploys are recorded, and the dashboard fetches app icons](0039-app-status-at-a-glance.md)    | accepted                                     |
 | 0040 | [The dashboard lists which users use an app](0040-admin-sees-app-users.md)                     | accepted                                     |
+| 0041 | [All UI is shadcn-svelte, with its own theme](0041-all-ui-from-shadcn-svelte.md)               | accepted                                     |

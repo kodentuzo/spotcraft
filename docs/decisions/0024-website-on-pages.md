@@ -5,7 +5,7 @@ status: accepted
 implementation: done
 date: 2026-11-13
 supersedes: [14]
-superseded_by: [33]
+superseded_by: [33, 41]
 notes: "Partly supersedes ADR 0014: how the site is built and where it is hosted. Its content rules (home page plus docs, docs from the repository, dark mode from the system) stand. Built: Astro site, link check, Pages workflow; the DNS switch happens at go-live."
 ---
 

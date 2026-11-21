@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Alert, AlertDescription, AlertTitle } from '@spotcraft/ui/components/alert'
   import { Button } from '@spotcraft/ui/components/button'
+  import { Checkbox } from '@spotcraft/ui/components/checkbox'
   import { Input } from '@spotcraft/ui/components/input'
   import { Label } from '@spotcraft/ui/components/label'
   import { Textarea } from '@spotcraft/ui/components/textarea'
@@ -124,8 +125,8 @@
     </div>
 
     {#if dns}
-      <label class="flex items-start gap-3 sm:col-span-2">
-        <input type="checkbox" name="takeOver" checked={values.takeOver} class="mt-1 size-4 accent-foreground" />
+      <label for="takeOver" class="flex items-start gap-3 sm:col-span-2">
+        <Checkbox id="takeOver" name="takeOver" checked={values.takeOver} class="mt-0.5" />
         <span class="text-sm">
           Take over existing DNS records
           <span class="block text-xs text-muted-foreground">
@@ -162,16 +163,16 @@
       </p>
     </div>
 
-    <label class="flex items-start gap-3 sm:col-span-2">
-      <input type="checkbox" name="readOnly" checked={values.readOnly} class="mt-1 size-4 accent-foreground" />
+    <label for="readOnly" class="flex items-start gap-3 sm:col-span-2">
+      <Checkbox id="readOnly" name="readOnly" checked={values.readOnly} class="mt-0.5" />
       <span class="text-sm">
         Read-only filesystem
         <span class="block text-xs text-muted-foreground">Recommended. The app can still write to a small /tmp.</span>
       </span>
     </label>
 
-    <label class="flex items-start gap-3 sm:col-span-2">
-      <input type="checkbox" name="analytics" checked={values.analytics} class="mt-1 size-4 accent-foreground" />
+    <label for="analytics" class="flex items-start gap-3 sm:col-span-2">
+      <Checkbox id="analytics" name="analytics" checked={values.analytics} class="mt-0.5" />
       <span class="text-sm">
         Analytics
         <span class="block text-xs text-muted-foreground">
@@ -180,8 +181,8 @@
       </span>
     </label>
 
-    <label class={['flex items-start gap-3 sm:col-span-2', !access && 'opacity-60']}>
-      <input type="checkbox" name="protected" checked={values.protected} disabled={!access} class="mt-1 size-4 accent-foreground" />
+    <label for="protected" class={['flex items-start gap-3 sm:col-span-2', !access && 'opacity-60']}>
+      <Checkbox id="protected" name="protected" checked={values.protected} disabled={!access} class="mt-0.5" />
       <span class="text-sm">
         Require sign-in (Cloudflare Access)
         <span class="block text-xs text-muted-foreground">

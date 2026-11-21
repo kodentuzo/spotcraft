@@ -1,4 +1,6 @@
 <script lang="ts">
+  import * as Chart from '@spotcraft/ui/components/chart'
+  import { LineChart } from 'layerchart'
   import { clock } from '#lib/format.ts'
 
   interface Props {
@@ -7,74 +9,45 @@
     format: (value: number) => string
     /** What the line shows, for screen readers. */
     label: string
-    /** The period under the line when no point is picked. */
+    /** The period under the line. */
     period?: string
   }
 
   let { series, format, label, period = 'Last hour' }: Props = $props()
 
-  const WIDTH = 240
-  const HEIGHT = 48
-  const PAD = 3
-
-  let hover = $state<number | null>(null)
-
-  const geometry = $derived.by(() => {
-    if (series.length < 2) return null
-    const t0 = series[0][0]
-    const t1 = series[series.length - 1][0]
-    const max = Math.max(...series.map(([, v]) => v))
-    const top = max > 0 ? max * 1.1 : 1
-    const x = (t: number) => PAD + ((t - t0) / (t1 - t0 || 1)) * (WIDTH - 2 * PAD)
-    const y = (v: number) => HEIGHT - PAD - (v / top) * (HEIGHT - 2 * PAD)
-    const points = series.map(([t, v]) => [x(t), y(v)] as const)
-    const line = points.map(([px, py], i) => `${i === 0 ? 'M' : 'L'}${px.toFixed(1)},${py.toFixed(1)}`).join('')
-    return { points, line }
-  })
-
+  const data = $derived(series.map(([t, value]) => ({ time: new Date(t * 1000), value })))
+  const config = $derived({ value: { label, color: 'var(--primary)' } } satisfies Chart.ChartConfig)
   const summary = $derived(
     series.length
       ? `${label}: now ${format(series[series.length - 1][1])}, peak ${format(Math.max(...series.map(([, v]) => v)))}`
       : `${label}: no data`,
   )
-
-  function onpointermove(event: PointerEvent) {
-    if (!geometry) return
-    const box = (event.currentTarget as SVGElement).getBoundingClientRect()
-    const px = ((event.clientX - box.left) / box.width) * WIDTH
-    let nearest = 0
-    for (let i = 1; i < geometry.points.length; i++) {
-      if (Math.abs(geometry.points[i][0] - px) < Math.abs(geometry.points[nearest][0] - px)) nearest = i
-    }
-    hover = nearest
-  }
 </script>
 
-<div class="relative">
-  {#if geometry}
-    <svg
-      viewBox="0 0 {WIDTH} {HEIGHT}"
-      class="h-12 w-full overflow-visible text-foreground"
-      preserveAspectRatio="none"
-      role="img"
-      aria-label={summary}
-      {onpointermove}
-      onpointerleave={() => (hover = null)}
-    >
-      <path d={geometry.line} fill="none" stroke="currentColor" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round" />
-      {#if hover !== null}
-        {@const [hx, hy] = geometry.points[hover]}
-        <line x1={hx} x2={hx} y1="0" y2={HEIGHT} class="stroke-muted-foreground" stroke-width="1" vector-effect="non-scaling-stroke" />
-        <circle cx={hx} cy={hy} r="3" class="fill-foreground stroke-background" stroke-width="2" vector-effect="non-scaling-stroke" />
-      {/if}
-    </svg>
-    <p class="mt-1 h-4 text-xs text-muted-foreground tabular-nums" aria-hidden="true">
-      {#if hover !== null}
-        {clock(series[hover][0])} · {format(series[hover][1])}
-      {:else}
-        {period}
-      {/if}
-    </p>
+<div>
+  {#if series.length >= 2}
+    <p class="sr-only">{summary}</p>
+    <Chart.Container {config} class="aspect-auto h-12 w-full" aria-hidden="true">
+      <LineChart
+        {data}
+        x="time"
+        series={[{ key: 'value', label, color: 'var(--color-value)' }]}
+        axis={false}
+        grid={false}
+        rule={false}
+        padding={{ top: 3, bottom: 3 }}
+        props={{ spline: { class: 'stroke-2' } }}
+      >
+        {#snippet tooltip()}
+          <Chart.Tooltip hideIndicator labelFormatter={(d: Date) => clock(d.getTime() / 1000)}>
+            {#snippet formatter({ value })}
+              <span class="font-medium tabular-nums">{format(Number(value))}</span>
+            {/snippet}
+          </Chart.Tooltip>
+        {/snippet}
+      </LineChart>
+    </Chart.Container>
+    <p class="mt-1 text-xs text-muted-foreground" aria-hidden="true">{period}</p>
   {:else}
     <p class="flex h-12 items-center text-xs text-muted-foreground">No data yet</p>
   {/if}

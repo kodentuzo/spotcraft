@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Alert, AlertDescription, AlertTitle } from '@spotcraft/ui/components/alert'
   import { Button } from '@spotcraft/ui/components/button'
+  import * as Card from '@spotcraft/ui/components/card'
   import { backupHealth } from '#lib/backup.ts'
   import AppHeading from '#lib/components/AppHeading.svelte'
   import { ago, bytes, dateTime } from '#lib/format.ts'
@@ -23,7 +24,7 @@
   {@const health = backupHealth(last)}
   <section>
     <h2 class="sr-only">Backups</h2>
-    <div class="space-y-3 border bg-card p-4 text-footnote">
+    <Card.Root size="sm"><Card.Content class="space-y-3 text-sm">
       <p class="text-muted-foreground">
         Every night at 03:00 UTC: {app.database ? 'a dump of its database and ' : ''}its settings, kept as long as the bucket keeps them (30 days by default).
       </p>
@@ -56,7 +57,7 @@
       >
         <Button type="submit" variant="outline" disabled={backingUp}>{backingUp ? 'Backing up…' : 'Back up now'}</Button>
       </form>
-    </div>
+    </Card.Content></Card.Root>
   </section>
 {:else}
   <Alert><AlertTitle>Backups are off</AlertTitle><AlertDescription>Set the backup bucket in the server's <span class="font-mono">.env</span> to turn them on.</AlertDescription></Alert>
