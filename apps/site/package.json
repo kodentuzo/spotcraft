@@ -1,6 +1,6 @@
 {
   "name": "@spotcraft/site",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "private": true,
   "license": "Apache-2.0",
   "type": "module",
@@ -12,11 +12,13 @@
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.12",
+    "@astrojs/svelte": "^9.1.6",
     "@spotcraft/ui": "workspace:*",
     "@tailwindcss/vite": "catalog:",
     "@types/node": "catalog:",
     "astro": "^7.4.12",
     "marked": "^18.2.1",
+    "svelte": "catalog:",
     "tailwindcss": "catalog:",
     "typescript": "catalog:"
   }

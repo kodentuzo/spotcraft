@@ -10,6 +10,35 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
 
 ## [Unreleased]
 
+## [0.8.2] - 2026-11-21
+
+### Changed
+
+- **The theme is back in `@spotcraft/ui`; spotstrap is removed**
+  ([ADR 0041](docs/decisions/0041-all-ui-from-shadcn-svelte.md), superseding ADR 0033). The
+  colors, square corners and Space Grotesk stay. Buttons, fields, labels and dialogs are stock
+  shadcn-svelte again: controls are 36px tall, body text is 16px, and the confirmation dialog
+  opens in the middle of the screen. Light and dark still follow the system setting.
+- **The dashboard's sidebar and app switcher are shadcn-svelte components** (Sidebar, Dropdown
+  Menu, Avatar), with lucide icons. The header's button hides the sidebar on wide screens too;
+  on a phone it opens as a sheet.
+- **The dashboard's pages use shadcn-svelte's Card, Table, Tabs, Checkbox and Progress** instead
+  of hand-made boxes, lists and inputs. The Users list is a table, and the memory bars are progress
+  bars. Forms post the same values as before.
+- **The dashboard's charts use shadcn-svelte's Chart (LayerChart).** The usage chart has axes and
+  a tooltip; the small CPU, memory and response-time lines show their value on hover. Today's
+  point is no longer drawn dashed: the note under the chart says it is still counting.
+- **The website renders the shared components at build time** (`@astrojs/svelte`, no client
+  JavaScript). Its buttons, cards and tags are `Button`, `Card` and `Badge`; the tiles are
+  separate cards instead of one bordered grid.
+
+### Fixed
+
+- **App icons and the Gravatar** no longer break the dashboard's Content Security Policy. Their
+  `onerror` handler was rendered as an inline attribute, which the CSP blocks, so the browser
+  console logged an error on every page with app tiles. The error listener is now attached on
+  the client, and the letter tile still shows when an icon fails.
+
 ## [0.8.1] - 2026-11-20
 
 ### Fixed
@@ -600,7 +629,8 @@ handful of server-rendered apps from Docker Hub images behind HTTPS.
 - Servers: key-only SSH as a `deploy` user with modern algorithms only, root login refused,
   two firewalls, automatic security updates.
 
-[Unreleased]: https://github.com/kodentuzo/spotcraft/compare/v0.8.1...HEAD
+[Unreleased]: https://github.com/kodentuzo/spotcraft/compare/v0.8.2...HEAD
+[0.8.2]: https://github.com/kodentuzo/spotcraft/compare/v0.8.1...v0.8.2
 [0.8.1]: https://github.com/kodentuzo/spotcraft/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/kodentuzo/spotcraft/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/kodentuzo/spotcraft/compare/v0.6.1...v0.7.0

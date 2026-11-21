@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Alert, AlertDescription, AlertTitle } from '@spotcraft/ui/components/alert'
   import { Button } from '@spotcraft/ui/components/button'
+  import * as Card from '@spotcraft/ui/components/card'
   import { backupHealth } from '#lib/backup.ts'
   import AppRow from '#lib/components/AppRow.svelte'
   import OverviewTile from '#lib/components/OverviewTile.svelte'
@@ -20,7 +21,7 @@
 
 <svelte:head><title>Apps · Spotcraft</title></svelte:head>
 
-<h1 class="mb-6 font-heading text-title-1 font-bold">Apps</h1>
+<h1 class="mb-6 font-heading text-2xl font-bold">Apps</h1>
 
 <section aria-label="Overview" class="mb-8 grid grid-cols-2 gap-3 {backups ? 'md:grid-cols-4' : 'md:grid-cols-3'}">
   {#if !data.agentError}
@@ -49,17 +50,19 @@
     <AlertDescription>{data.agentError}. Apps keep running; this page can't show or change them until the agent answers.</AlertDescription>
   </Alert>
 {:else if data.apps.length === 0}
-  <div class="border p-10 text-center">
-    <p class="text-headline">No apps yet</p>
-    <p class="mt-1 text-footnote text-muted-foreground">Add a Docker image and Spotcraft runs it behind HTTPS, on its own subdomain or your domain.</p>
-    <Button href="/new" class="mt-4">Add your first app</Button>
-  </div>
+  <Card.Root>
+    <Card.Content class="py-4 text-center">
+      <p class="text-base font-semibold">No apps yet</p>
+      <p class="mt-1 text-sm text-muted-foreground">Add a Docker image and Spotcraft runs it behind HTTPS, on its own subdomain or your domain.</p>
+      <Button href="/new" class="mt-4">Add your first app</Button>
+    </Card.Content>
+  </Card.Root>
 {:else}
   {#if data.backups === 'unavailable'}
     <Alert variant="destructive" class="mb-4"><AlertTitle>Backup status unavailable</AlertTitle><AlertDescription>The agent couldn't say how the backups went. Check its log.</AlertDescription></Alert>
   {/if}
-  <div class="border bg-card">
-    <div class="hidden gap-6 border-b px-4 py-2 text-caption-1 text-muted-foreground md:flex" aria-hidden="true">
+  <Card.Root class="gap-0 py-0">
+    <div class="hidden gap-6 border-b px-4 py-2 text-xs text-muted-foreground md:flex" aria-hidden="true">
       <span class="flex-1">App</span>
       <span class="grid w-[26rem] shrink-0 grid-cols-[10rem_8rem_minmax(0,1fr)] gap-4"><span>Uptime, 24 hours</span><span>Memory</span><span class="text-right">Traffic</span></span>
     </div>
@@ -68,5 +71,5 @@
         <AppRow {app} uptime={data.uptime[app.name]} uptimeHourly={data.uptimeHourly[app.name] ?? []} memory={data.memory[app.name]} backup={backups ? (backups[app.name] ?? null) : undefined} details={data.details} domains={data.domains} now={data.now} />
       {/each}
     </ul>
-  </div>
+  </Card.Root>
 {/if}

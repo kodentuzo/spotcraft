@@ -2,6 +2,8 @@
   import { Alert, AlertDescription, AlertTitle } from '@spotcraft/ui/components/alert'
   import * as AlertDialog from '@spotcraft/ui/components/alert-dialog'
   import { Button, buttonVariants } from '@spotcraft/ui/components/button'
+  import * as Card from '@spotcraft/ui/components/card'
+  import { Checkbox } from '@spotcraft/ui/components/checkbox'
   import { Input } from '@spotcraft/ui/components/input'
   import { Label } from '@spotcraft/ui/components/label'
   import AppHeading from '#lib/components/AppHeading.svelte'
@@ -49,7 +51,7 @@
 
 <section id="settings">
   <h2 class="sr-only">Settings</h2>
-  <div class="border bg-card p-4 text-footnote">
+  <Card.Root size="sm"><Card.Content class="text-sm">
     <dl class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-2">
       <dt class="text-muted-foreground">Image</dt><dd class="truncate font-mono">{app.image}:{app.tag}</dd>
       <dt class="text-muted-foreground">Limits</dt><dd>{app.memory} memory · {app.cpus} CPU</dd>
@@ -63,7 +65,7 @@
       <dt class="text-muted-foreground">Analytics</dt><dd>{app.analytics === false ? 'Off' : 'On'}</dd>
       <dt class="text-muted-foreground">Environment</dt><dd>{Object.keys(app.env).length === 1 ? '1 variable' : `${Object.keys(app.env).length} variables`}</dd>
     </dl>
-  </div>
+  </Card.Content></Card.Root>
 </section>
 
 
@@ -71,8 +73,8 @@
   {@const token = form && 'hookToken' in form ? form.hookToken : undefined}
   {@const enabled = token ? true : form && 'hookDeleted' in form ? false : data.hook.enabled}
   <section id="hook" class="mt-8">
-    <h2 class="mb-2 text-headline">Deploy hook</h2>
-    <div class="space-y-3 border bg-card p-4 text-footnote">
+    <h2 class="mb-2 text-base font-semibold">Deploy hook</h2>
+    <Card.Root size="sm"><Card.Content class="space-y-3 text-sm">
       <p class="text-muted-foreground">
         Lets the app's CI deploy a new image tag, with no sign-in. Only the tag changes: the image, environment and limits stay as set here.
         {enabled ? 'On.' : 'Off.'}
@@ -100,14 +102,14 @@
         <p class="text-muted-foreground">A step for the app's GitHub Actions workflow, after it pushes the image. It deploys the commit's <span class="font-mono">sha-…</span> tag and waits until it is live:</p>
         <pre class="overflow-x-auto border bg-muted p-3 text-xs leading-relaxed">{hookStep}</pre>
       {/if}
-    </div>
+    </Card.Content></Card.Root>
   </section>
 {/if}
 
 {#if data.ownDatabase || (form && 'moved' in form)}
   <section id="database" class="mt-8">
-    <h2 class="mb-2 text-headline">Own database</h2>
-    <div class="space-y-3 border bg-card p-4 text-footnote">
+    <h2 class="mb-2 text-base font-semibold">Own database</h2>
+    <Card.Root size="sm"><Card.Content class="space-y-3 text-sm">
       {#if form && 'moved' in form && form.moved}
         {@const tables = Object.entries(form.moved.tables)}
         <p>
@@ -138,13 +140,14 @@
           <Button type="submit" variant="outline" disabled={moving}>{moving ? 'Moving…' : 'Move'}</Button>
         </form>
       {/if}
-    </div>
+    </Card.Content></Card.Root>
   </section>
 {/if}
 
 <section id="danger" class="mt-8">
-  <h2 class="mb-2 text-headline">Remove</h2>
-  <div class="flex flex-wrap items-center justify-between gap-4 border border-destructive/50 bg-card p-4 text-footnote">
+  <h2 class="mb-2 text-base font-semibold">Remove</h2>
+  <Card.Root size="sm" class="ring-destructive/50">
+    <Card.Content class="flex flex-row flex-wrap items-center justify-between gap-4 text-sm">
     <p class="text-muted-foreground">Stops the app and removes its settings and its site. The image stays on Docker Hub{app.database ? '; its database is kept unless you choose otherwise' : ''}.</p>
 <AlertDialog.Root>
       <AlertDialog.Trigger class={buttonVariants({ variant: 'destructive' })}>Remove</AlertDialog.Trigger>
@@ -160,8 +163,8 @@
         </AlertDialog.Header>
         <form id="remove-app" method="POST" action="?/remove">
           {#if app.database}
-            <label class="flex items-start gap-3 text-sm">
-              <input type="checkbox" name="purge" bind:checked={purge} class="mt-1 size-4 accent-destructive" />
+            <label for="purge" class="flex items-start gap-3 text-sm">
+              <Checkbox id="purge" name="purge" bind:checked={purge} class="mt-0.5" />
               <span>
                 Also delete its database
                 <span class="block text-xs text-muted-foreground">Every row in app_{app.name.replaceAll('-', '_')} is lost. This cannot be undone.</span>
@@ -177,5 +180,6 @@
         </AlertDialog.Footer>
       </AlertDialog.Content>
     </AlertDialog.Root>
-  </div>
+    </Card.Content>
+  </Card.Root>
 </section>

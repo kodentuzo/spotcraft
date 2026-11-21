@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Alert, AlertDescription, AlertTitle } from '@spotcraft/ui/components/alert'
+  import * as Card from '@spotcraft/ui/components/card'
   import { backupHealth } from '#lib/backup.ts'
   import AppTile from '#lib/components/AppTile.svelte'
   import MemoryBar from '#lib/components/MemoryBar.svelte'
@@ -39,13 +40,14 @@
   </Alert>
 {/if}
 
-<section aria-labelledby="deployment" class="mb-6 grid border bg-card md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+<section aria-labelledby="deployment" class="mb-6">
+<Card.Root class="grid gap-0 py-0 md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
   <div class="flex items-center justify-center border-b p-8 md:border-r md:border-b-0">
     <AppTile name={app.name} host={app.domain ?? app.hostnames[0]} size="xl" />
   </div>
   <div class="p-4">
-    <h2 id="deployment" class="mb-3 text-headline">Deployment</h2>
-    <dl class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-3 text-footnote">
+    <h2 id="deployment" class="mb-3 text-base font-semibold">Deployment</h2>
+    <dl class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-3 text-sm">
       <dt class="text-muted-foreground">Status</dt>
       <dd class="flex flex-wrap items-center gap-2"><StatusBadge state={app.state} health={app.health} />{#if app.status}<span class="text-muted-foreground">{runningFor(app.status)}</span>{/if}</dd>
       <dt class="text-muted-foreground">Version</dt>
@@ -69,7 +71,7 @@
             {@const status = domain?.hosts.find((h) => h.host === host)}
             <span class="flex min-w-0 items-center gap-2">
               <a href="https://{host}" class="truncate hover:underline" target="_blank" rel="noopener noreferrer">{host}</a>
-              {#if status && status.state !== 'active'}<a href="/{app.name}/domains" class="shrink-0 text-caption-1 text-destructive underline">Not live yet</a>{/if}
+              {#if status && status.state !== 'active'}<a href="/{app.name}/domains" class="shrink-0 text-xs text-destructive underline">Not live yet</a>{/if}
             </span>
           {/each}
         {/await}
@@ -78,6 +80,7 @@
       <dd>{limit ? bytes(limit) : app.memory} memory · {app.cpus} CPU</dd>
     </dl>
   </div>
+</Card.Root>
 </section>
 
 <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -104,7 +107,7 @@
 <section aria-labelledby="usage" class="mt-3">
   <h2 id="usage" class="sr-only">Usage</h2>
   {#await data.usage}
-    <p class="text-footnote text-muted-foreground">Counting…</p>
+    <p class="text-sm text-muted-foreground">Counting…</p>
   {:then usage}
     {@const visits = usage.visits}
     {@const accounts = usage.accounts}

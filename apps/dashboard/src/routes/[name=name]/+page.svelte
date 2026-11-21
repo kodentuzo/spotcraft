@@ -17,18 +17,18 @@
 
 <svelte:head><title>{app.name} · Spotcraft</title></svelte:head>
 
-<a href="/" class="text-footnote text-muted-foreground hover:text-foreground">← Apps</a>
+<a href="/" class="text-sm text-muted-foreground hover:text-foreground">← Apps</a>
 
 <header class="mt-3 mb-6 flex flex-wrap items-center justify-between gap-4">
   <div class="flex min-w-0 items-center gap-4">
     <AppTile name={app.name} {host} size="lg" />
     <div class="min-w-0">
       <div class="flex flex-wrap items-center gap-3">
-        <h1 class="font-heading text-title-1 font-bold">{app.name}</h1>
+        <h1 class="font-heading text-2xl font-bold">{app.name}</h1>
         <StatusBadge state={app.state} health={app.health} />
       </div>
       {#if host}
-        <a href="https://{host}" class="block truncate text-footnote text-muted-foreground hover:text-foreground hover:underline" target="_blank" rel="noopener noreferrer">{host}</a>
+        <a href="https://{host}" class="block truncate text-sm text-muted-foreground hover:text-foreground hover:underline" target="_blank" rel="noopener noreferrer">{host}</a>
       {/if}
     </div>
   </div>

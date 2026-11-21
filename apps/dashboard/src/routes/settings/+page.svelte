@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Alert, AlertDescription, AlertTitle } from '@spotcraft/ui/components/alert'
+  import * as Card from '@spotcraft/ui/components/card'
   import { RELEASE_URL, VERSION } from '#lib/version.ts'
   import type { PageProps } from './$types'
 
@@ -11,14 +12,14 @@
 
 <svelte:head><title>Settings · Spotcraft</title></svelte:head>
 
-<h1 class="mb-1 font-heading text-title-1 font-bold">Settings</h1>
-<p class="mb-6 text-footnote text-muted-foreground">How this instance is set up. They come from the server's <span class="font-mono">.env</span> and change with a deploy.</p>
+<h1 class="mb-1 font-heading text-2xl font-bold">Settings</h1>
+<p class="mb-6 text-sm text-muted-foreground">How this instance is set up. They come from the server's <span class="font-mono">.env</span> and change with a deploy.</p>
 
 {#if data.agentError}
   <Alert variant="destructive" class="mb-6"><AlertTitle>Can't reach the agent</AlertTitle><AlertDescription>{data.agentError}.</AlertDescription></Alert>
 {/if}
 
-<div class="border bg-card p-4 text-footnote">
+<Card.Root size="sm"><Card.Content class="text-sm">
   <dl class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-8 gap-y-3">
     <dt class="text-muted-foreground">Version</dt>
     <dd><a href={RELEASE_URL} class="hover:underline" rel="noopener noreferrer">Spotcraft v{VERSION}</a></dd>
@@ -34,4 +35,4 @@
       <dt class="text-muted-foreground">User pool</dt><dd>{#if s.authIssuer}<span class="font-mono">{s.authIssuer}</span>{:else}Off{/if}</dd>
     {/if}
   </dl>
-</div>
+</Card.Content></Card.Root>

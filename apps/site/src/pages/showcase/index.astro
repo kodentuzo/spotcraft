@@ -1,5 +1,7 @@
 ---
 import { getCollection } from 'astro:content'
+import { Badge } from '@spotcraft/ui/components/badge'
+import * as Card from '@spotcraft/ui/components/card'
 import Screenshot from '../../components/Screenshot.astro'
 import Base from '../../layouts/Base.astro'
 
@@ -14,10 +16,11 @@ const description = 'Apps running on Spotcraft today, and what Spotcraft does fo
       These apps run on Spotcraft today, on one server their owner rents. Each page says what the
       app is, which parts of Spotcraft it uses, and how it got there.
     </p>
-    <ul class="mt-12 grid gap-px border bg-border md:grid-cols-2">
+    <ul class="mt-12 grid gap-4 md:grid-cols-2">
       {
         apps.map(({ id, data }) => (
-          <li class="flex flex-col bg-background">
+          <li>
+            <Card.Root class="h-full gap-0 py-0">
             <a href={`/showcase/${id}`} class="group block p-6 pb-0 hover:bg-muted">
               <Screenshot {...data.screenshots[0]} />
               <h2 class="mt-6 font-heading text-xl font-semibold group-hover:underline group-hover:underline-offset-4">
@@ -27,7 +30,7 @@ const description = 'Apps running on Spotcraft today, and what Spotcraft does fo
             </a>
             <ul class="mt-4 flex flex-wrap gap-2 px-6" aria-label="Spotcraft features it uses">
               {data.features.slice(0, 4).map((feature) => (
-                <li class="border px-2 py-0.5 font-mono text-xs text-muted-foreground">{feature.name}</li>
+                <li><Badge variant="outline" class="font-mono">{feature.name}</Badge></li>
               ))}
             </ul>
             <p class="mt-auto flex flex-wrap gap-x-5 gap-y-2 px-6 pt-6 pb-6 text-sm">
@@ -41,6 +44,7 @@ const description = 'Apps running on Spotcraft today, and what Spotcraft does fo
                 Source
               </a>
             </p>
+            </Card.Root>
           </li>
         ))
       }

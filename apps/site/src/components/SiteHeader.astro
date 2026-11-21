@@ -1,4 +1,5 @@
 ---
+import { Badge } from '@spotcraft/ui/components/badge'
 import { pagePath } from '../lib/path.ts'
 import { GITHUB, VERSION } from '../lib/site.ts'
 import GitHubIcon from './GitHubIcon.astro'
@@ -18,11 +19,7 @@ const current = (href: string) =>
 <header class="sticky top-0 z-10 border-b bg-background/90 backdrop-blur">
   <div class="mx-auto flex h-14 max-w-6xl items-center gap-6 px-4">
     <a href="/" class="font-heading text-lg font-bold tracking-tight" translate="no">Spotcraft</a>
-    <a
-      href="/docs/changelog"
-      class="hidden border px-1.5 py-0.5 font-mono text-xs text-muted-foreground hover:text-foreground sm:inline"
-      >v{VERSION}</a
-    >
+    <Badge href="/docs/changelog" variant="outline" class="hidden font-mono text-muted-foreground sm:inline-flex">v{VERSION}</Badge>
     <nav class="ml-auto flex items-center gap-5 text-sm">
       {
         links.map((link) => (
