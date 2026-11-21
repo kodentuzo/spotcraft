@@ -8,7 +8,9 @@ VictoriaMetrics. It has no database: the agent's files are the app list.
 
 Signed-in pages share a sidebar (the instance's domain and version, the sections below, who is
 signed in, and Log out) and a header bar (a switcher for the app the page is about, the section's title, Add app).
-On a phone the sidebar opens as a drawer from the header's menu button.
+The shell is `@spotcraft/ui`'s Sidebar (`src/lib/components/AppSidebar.svelte`), with lucide
+icons; the header's button hides it, and on a phone it opens as a sheet. The switcher is a
+dropdown menu (`AppSwitcher.svelte`).
 
 Every section has two scopes, chosen in the switcher: every app (`/usage`) or one, the app
 first (`/<app>/usage`). Sidebar links keep the app picked; the switcher keeps the section. An

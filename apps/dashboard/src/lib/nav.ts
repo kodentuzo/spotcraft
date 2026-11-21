@@ -4,16 +4,16 @@
  */
 export const SECTIONS = [
   [
-    { id: 'overview', label: 'Overview', icon: 'apps' },
-    { id: 'usage', label: 'Usage', icon: 'usage' },
-    { id: 'logs', label: 'Logs', icon: 'logs' },
-    { id: 'server', label: 'Server', icon: 'server' },
+    { id: 'overview', label: 'Overview' },
+    { id: 'usage', label: 'Usage' },
+    { id: 'logs', label: 'Logs' },
+    { id: 'server', label: 'Server' },
   ],
   [
-    { id: 'domains', label: 'Domains', icon: 'globe' },
-    { id: 'backups', label: 'Backups', icon: 'archive' },
-    { id: 'users', label: 'Users', icon: 'users' },
-    { id: 'settings', label: 'Settings', icon: 'settings' },
+    { id: 'domains', label: 'Domains' },
+    { id: 'backups', label: 'Backups' },
+    { id: 'users', label: 'Users' },
+    { id: 'settings', label: 'Settings' },
   ],
 ] as const
 

@@ -17,6 +17,9 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
   colors, square corners and Space Grotesk stay. Buttons, fields, labels and dialogs are stock
   shadcn-svelte again: controls are 36px tall, body text is 16px, and the confirmation dialog
   opens in the middle of the screen. Light and dark still follow the system setting.
+- **The dashboard's sidebar and app switcher are shadcn-svelte components** (Sidebar, Dropdown
+  Menu, Avatar), with lucide icons. The header's button hides the sidebar on wide screens too;
+  on a phone it opens as a sheet.
 
 ## [0.8.1] - 2026-11-20
 

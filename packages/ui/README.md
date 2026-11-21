@@ -35,8 +35,9 @@ variant follows it too, and there is no toggle.
 | `./components/<name>` | a component (`button`, `card`)          |
 | `./utils`             | `cn` and the shadcn-svelte helper types |
 
-Components: `alert`, `alert-dialog`, `badge`, `button`, `card`, `input`, `label`, `separator`,
-`table`, `textarea`. They are as the CLI writes them; change a component's look with classes
+Components: `alert`, `alert-dialog`, `avatar`, `badge`, `button`, `card`, `dropdown-menu`,
+`input`, `label`, `separator`, `sheet`, `sidebar`, `skeleton`, `table`, `textarea`, `tooltip`.
+Icons come from `@lucide/svelte`; an app that uses icons itself depends on it too. They are as the CLI writes them; change a component's look with classes
 where it is used, not by editing it.
 
 Inside the package, files import each other through `#ui/*` (package `imports`).
@@ -51,7 +52,8 @@ pnpm exec shadcn-svelte add <component> -y --no-deps-install
 The CLI may change dependency ranges in `package.json` (it pins `tailwind-variants` to an older
 major): keep the existing ones. Move any new dependency it added from `devDependencies` to
 `dependencies` (the apps need it installed), run `pnpm install` from the root, then `pnpm fix`
-to format the new files.
+to format the new files. Biome lints nothing under `src/components` or `src/hooks`: the code is
+the CLI's, not ours.
 
 ```sh
 pnpm --filter @spotcraft/ui typecheck
