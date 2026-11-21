@@ -38,7 +38,7 @@ export const SPOTCRAFT_IMAGE = 'vindotski/spotcraft'
 
 /** Analytics (ADR 0038), the same image and version as on the server. */
 export const UMAMI_IMAGE =
-  'ghcr.io/umami-software/umami:3.4.1@sha256:e69d1a7932e9dab0fc523edc7be1f3a53f3c261f57856fc2167ae74a8fc022e8'
+  'ghcr.io/umami-software/umami:3.5.0@sha256:b64f40400d77bcadd39cf5c62a1e368c99524ca442024f96e1133355a19a5dbc'
 
 /** The local pool's `iss`; it names the pool, it is not an address. */
 export const LOCAL_ISSUER = 'http://localhost/pools/main'
