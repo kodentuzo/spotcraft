@@ -20,6 +20,9 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
 - **The dashboard's sidebar and app switcher are shadcn-svelte components** (Sidebar, Dropdown
   Menu, Avatar), with lucide icons. The header's button hides the sidebar on wide screens too;
   on a phone it opens as a sheet.
+- **The dashboard's pages use shadcn-svelte's Card, Table, Tabs, Checkbox and Progress** instead
+  of hand-made boxes, lists and inputs. The Users list is a table, and the memory bars are progress
+  bars. Forms post the same values as before.
 
 ## [0.8.1] - 2026-11-20
 

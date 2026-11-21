@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Alert, AlertDescription, AlertTitle } from '@spotcraft/ui/components/alert'
+  import * as Card from '@spotcraft/ui/components/card'
   import AppTile from '#lib/components/AppTile.svelte'
   import DomainHosts from '#lib/components/DomainHosts.svelte'
   import type { PageProps } from './$types'
@@ -27,10 +28,10 @@
         </div>
         <ul class="space-y-3">
           {#each app.own as host (host)}
-            <li class="flex flex-wrap items-center justify-between gap-2 border bg-card p-4 text-sm">
+            <li><Card.Root size="sm"><Card.Content class="flex flex-wrap items-center justify-between gap-2 text-sm">
               <a href="https://{host}" class="font-mono hover:underline" target="_blank" rel="noopener noreferrer">{host}</a>
               <span class="text-xs text-muted-foreground">Spotcraft subdomain</span>
-            </li>
+            </Card.Content></Card.Root></li>
           {/each}
         </ul>
         {#if custom}

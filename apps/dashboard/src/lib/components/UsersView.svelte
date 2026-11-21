@@ -3,7 +3,9 @@
   import { Alert, AlertTitle } from '@spotcraft/ui/components/alert'
   import * as AlertDialog from '@spotcraft/ui/components/alert-dialog'
   import { Badge } from '@spotcraft/ui/components/badge'
-  import { Button, buttonVariants } from '@spotcraft/ui/components/button'
+  import { Button } from '@spotcraft/ui/components/button'
+  import * as Card from '@spotcraft/ui/components/card'
+  import * as Table from '@spotcraft/ui/components/table'
   import Breakdown from '#lib/components/Breakdown.svelte'
   import Stat from '#lib/components/Stat.svelte'
   import UsageChart from '#lib/components/UsageChart.svelte'
@@ -85,36 +87,42 @@
   {#if listError}
     <Alert variant="destructive"><AlertTitle>{listError}</AlertTitle></Alert>
   {:else if !page}
-    <div class="border bg-card p-10 text-center text-sm text-muted-foreground">This server has no Postgres, so it has no user pool.</div>
+    <Card.Root><Card.Content class="py-4 text-center text-sm text-muted-foreground">This server has no Postgres, so it has no user pool.</Card.Content></Card.Root>
   {:else if !page.available}
-    <div class="border bg-card p-10 text-center text-sm text-muted-foreground">The user pool isn't set up yet. It appears once the auth service has started.</div>
+    <Card.Root><Card.Content class="py-4 text-center text-sm text-muted-foreground">The user pool isn't set up yet. It appears once the auth service has started.</Card.Content></Card.Root>
   {:else if page.users.length === 0}
-    <div class="border bg-card p-10 text-center text-sm text-muted-foreground">
-      {#if app}No one has used this app yet.{:else}No users yet. Apps add guests through <span class="font-mono">/_spotcraft/auth</span>.{/if}
-    </div>
+    <Card.Root>
+      <Card.Content class="py-4 text-center text-sm text-muted-foreground">
+        {#if app}No one has used this app yet.{:else}No users yet. Apps add guests through <span class="font-mono">/_spotcraft/auth</span>.{/if}
+      </Card.Content>
+    </Card.Root>
   {:else}
-    <div class="border bg-card">
-      <div class="hidden gap-6 border-b px-4 py-2 text-xs text-muted-foreground md:flex" aria-hidden="true">
-        <span class="flex-1">User</span>
-        <span class="w-28 shrink-0">Kind</span>
-        <span class="w-44 shrink-0">Created</span>
-        <span class="w-32 shrink-0">{app ? 'Last seen here' : 'Last seen'}</span>
-        <span class="w-20 shrink-0"></span>
-      </div>
-      <ul class="divide-y">
-        {#each page.users as user (user.id)}
-          <li class="flex flex-wrap items-center gap-x-6 gap-y-1 px-4 py-3 text-sm">
-            <span class="min-w-0 flex-1 truncate font-mono text-xs" title={user.id}>{user.id.slice(0, 8)}…</span>
-            <span class="w-28 shrink-0"><Badge variant={user.guest ? 'secondary' : 'default'}>{user.guest ? 'Guest' : 'Registered'}</Badge></span>
-            <span class="hidden w-44 shrink-0 text-muted-foreground md:inline">{dateTime(user.createdAt)}</span>
-            <span class="w-32 shrink-0 text-muted-foreground" title={user.lastSeen ? dateTime(user.lastSeen) : 'No active session'}>{ago(user.lastSeen)}</span>
-            <span class="w-20 shrink-0 text-right">
-              <Button variant="ghost" size="sm" onclick={() => (deleting = user.id)}>Delete</Button>
-            </span>
-          </li>
-        {/each}
-      </ul>
-    </div>
+    <Card.Root class="gap-0 py-0">
+      <Table.Root>
+        <Table.Header>
+          <Table.Row>
+            <Table.Head class="px-4">User</Table.Head>
+            <Table.Head>Kind</Table.Head>
+            <Table.Head class="hidden md:table-cell">Created</Table.Head>
+            <Table.Head>{app ? 'Last seen here' : 'Last seen'}</Table.Head>
+            <Table.Head class="px-4"><span class="sr-only">Actions</span></Table.Head>
+          </Table.Row>
+        </Table.Header>
+        <Table.Body>
+          {#each page.users as user (user.id)}
+            <Table.Row>
+              <Table.Cell class="px-4 font-mono text-xs" title={user.id}>{user.id.slice(0, 8)}…</Table.Cell>
+              <Table.Cell><Badge variant={user.guest ? 'secondary' : 'default'}>{user.guest ? 'Guest' : 'Registered'}</Badge></Table.Cell>
+              <Table.Cell class="hidden text-muted-foreground md:table-cell">{dateTime(user.createdAt)}</Table.Cell>
+              <Table.Cell class="text-muted-foreground" title={user.lastSeen ? dateTime(user.lastSeen) : 'No active session'}>{ago(user.lastSeen)}</Table.Cell>
+              <Table.Cell class="px-4 text-right">
+                <Button variant="ghost" size="sm" onclick={() => (deleting = user.id)}>Delete</Button>
+              </Table.Cell>
+            </Table.Row>
+          {/each}
+        </Table.Body>
+      </Table.Root>
+    </Card.Root>
     <div class="mt-3 flex gap-2">
       {#if cursor}<Button href="?" variant="outline">Newest</Button>{/if}
       {#if page.next}<Button href="?cursor={page.next}" variant="outline">Older</Button>{/if}
@@ -146,7 +154,7 @@
     </form>
     <AlertDialog.Footer>
       <AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
-      <button type="submit" form="delete-user" class={buttonVariants({ variant: 'destructive' })}>Delete user</button>
+      <Button type="submit" form="delete-user" variant="destructive">Delete user</Button>
     </AlertDialog.Footer>
   </AlertDialog.Content>
 </AlertDialog.Root>

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Alert, AlertDescription, AlertTitle } from '@spotcraft/ui/components/alert'
+  import * as Card from '@spotcraft/ui/components/card'
   import { backupHealth } from '#lib/backup.ts'
   import AppTile from '#lib/components/AppTile.svelte'
   import MemoryBar from '#lib/components/MemoryBar.svelte'
@@ -39,7 +40,8 @@
   </Alert>
 {/if}
 
-<section aria-labelledby="deployment" class="mb-6 grid border bg-card md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+<section aria-labelledby="deployment" class="mb-6">
+<Card.Root class="grid gap-0 py-0 md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
   <div class="flex items-center justify-center border-b p-8 md:border-r md:border-b-0">
     <AppTile name={app.name} host={app.domain ?? app.hostnames[0]} size="xl" />
   </div>
@@ -78,6 +80,7 @@
       <dd>{limit ? bytes(limit) : app.memory} memory · {app.cpus} CPU</dd>
     </dl>
   </div>
+</Card.Root>
 </section>
 
 <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

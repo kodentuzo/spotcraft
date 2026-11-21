@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Alert, AlertDescription, AlertTitle } from '@spotcraft/ui/components/alert'
+  import * as Card from '@spotcraft/ui/components/card'
   import AppTile from '#lib/components/AppTile.svelte'
   import UsageChart from '#lib/components/UsageChart.svelte'
   import { count } from '#lib/format.ts'
@@ -59,7 +60,7 @@
     ]}
   />
 
-  <div class="mt-3 border bg-card">
+  <Card.Root class="mt-3 gap-0 py-0">
     <div class="hidden gap-6 border-b px-4 py-2 text-xs text-muted-foreground md:flex" aria-hidden="true">
       <span class="flex-1">App</span>
       <span class="grid w-96 shrink-0 grid-cols-3 gap-4 text-right"><span>Visitors</span><span>Page views</span><span>Requests</span></span>
@@ -91,5 +92,5 @@
         </li>
       {/each}
     </ul>
-  </div>
+  </Card.Root>
 {/if}

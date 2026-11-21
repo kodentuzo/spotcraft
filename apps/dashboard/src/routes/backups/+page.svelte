@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Alert, AlertDescription, AlertTitle } from '@spotcraft/ui/components/alert'
   import { Button } from '@spotcraft/ui/components/button'
+  import * as Card from '@spotcraft/ui/components/card'
   import { backupHealth } from '#lib/backup.ts'
   import AppTile from '#lib/components/AppTile.svelte'
   import { ago, bytes, dateTime } from '#lib/format.ts'
@@ -25,7 +26,8 @@
 {:else if !data.enabled}
   <Alert><AlertTitle>Backups are off</AlertTitle><AlertDescription>Set the backup bucket in the server's <span class="font-mono">.env</span> to turn them on.</AlertDescription></Alert>
 {:else}
-  <ul class="divide-y border bg-card">
+  <Card.Root class="gap-0 py-0">
+  <ul class="divide-y">
     {#each data.apps as app (app.name)}
       {@const last = form?.name === app.name && form && 'backedUp' in form ? form.backedUp : (data.last[app.name] ?? null)}
       {@const health = backupHealth(last)}
@@ -58,4 +60,5 @@
       </li>
     {/each}
   </ul>
+  </Card.Root>
 {/if}

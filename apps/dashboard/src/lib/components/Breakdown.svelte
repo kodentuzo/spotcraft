@@ -1,4 +1,7 @@
 <script lang="ts">
+  import { Button } from '@spotcraft/ui/components/button'
+  import * as Card from '@spotcraft/ui/components/card'
+  import * as Tabs from '@spotcraft/ui/components/tabs'
   import type { Snippet } from 'svelte'
   import { type Row, share } from '#lib/breakdown.ts'
   import { count } from '#lib/format.ts'
@@ -20,36 +23,26 @@
   let { tabs, label }: { tabs: Tab[]; label: string } = $props()
 
   const SHOWN = 6
-  let current = $state(0)
+  let current = $state('0')
   let all = $state(false)
-  const tab = $derived(tabs[current])
+  const tab = $derived(tabs[Number(current)])
   const max = $derived(Math.max(1, ...tab.rows.map((r) => r.count)))
   const rows = $derived(all ? tab.rows : tab.rows.slice(0, SHOWN))
-  const id = $props.id()
 </script>
 
-<section class="flex min-h-80 flex-col border bg-card" aria-label={label}>
-  <div class="flex items-center justify-between gap-4 border-b px-4">
-    <div role="tablist" class="flex gap-4">
-      {#each tabs as t, i (t.label)}
-        <button
-          type="button"
-          role="tab"
-          id="{id}-tab-{i}"
-          aria-selected={current === i}
-          aria-controls="{id}-panel"
-          class="-mb-px min-h-11 border-b-2 text-sm {current === i ? 'border-foreground font-medium' : 'border-transparent text-muted-foreground hover:text-foreground'}"
-          onclick={() => {
-            current = i
-            all = false
-          }}
-        >{t.label}</button>
-      {/each}
+<section aria-label={label}>
+<Card.Root class="h-full min-h-80 gap-0 py-0">
+  <Tabs.Root bind:value={current} onValueChange={() => (all = false)} class="flex-1 gap-0">
+    <div class="flex items-center justify-between gap-4 border-b px-4">
+      <Tabs.List variant="line">
+        {#each tabs as t, i (t.label)}
+          <Tabs.Trigger value={String(i)}>{t.label}</Tabs.Trigger>
+        {/each}
+      </Tabs.List>
+      <span class="text-xs text-muted-foreground uppercase">{tab.unit}</span>
     </div>
-    <span class="text-xs text-muted-foreground uppercase">{tab.unit}</span>
-  </div>
 
-  <div role="tabpanel" id="{id}-panel" aria-labelledby="{id}-tab-{current}" class="flex flex-1 flex-col p-2">
+    <Tabs.Content value={current} class="flex flex-1 flex-col p-2">
     {#if tab.rows.length}
       <ul class="space-y-1">
         {#each rows as row (row.name)}
@@ -64,14 +57,16 @@
         {/each}
       </ul>
       {#if tab.rows.length > SHOWN}
-        <button type="button" class="mx-auto mt-auto min-h-11 px-4 text-xs text-muted-foreground hover:text-foreground" onclick={() => (all = !all)}>
+        <Button variant="ghost" size="sm" class="mx-auto mt-auto text-xs text-muted-foreground" onclick={() => (all = !all)}>
           {all ? 'Show fewer' : `Show all ${tab.rows.length}`}
-        </button>
+        </Button>
       {/if}
     {:else}
       <div class="m-auto max-w-xs p-6 text-center">
         {#if tab.empty}{@render tab.empty()}{:else}<p class="text-sm text-muted-foreground">Nothing counted yet</p>{/if}
       </div>
     {/if}
-  </div>
+      </Tabs.Content>
+  </Tabs.Root>
+</Card.Root>
 </section>
