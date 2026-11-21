@@ -177,6 +177,23 @@ LABEL dev.spotcraft.migrate='["/nodejs/bin/node", "dist/migrate.js"]'
 
 `/_spotcraft/webhook` is kept for calls from the platform to the app.
 
+## Headers
+
+Spotcraft adds headers to an app's responses, and nothing to their content
+([ADR 0012](decisions/0012-hardening-before-v0-1.md),
+[ADR 0043](decisions/0043-apps-own-their-ui.md)):
+
+- **always:** `Strict-Transport-Security` (a year, with subdomains), `X-Content-Type-Options:
+  nosniff` and `Referrer-Policy: strict-origin-when-cross-origin`. The `Server` header is
+  removed, and responses are compressed (zstd, gzip);
+- **only when the app sends none of its own:** `X-Frame-Options: DENY`, a `Permissions-Policy`
+  that turns off camera, microphone, geolocation, payment and USB, and
+  `Cross-Origin-Opener-Policy: same-origin`. The app's own value wins.
+
+The `Content-Security-Policy` is the app's. Until the analytics script stops being added to
+pages ([ADR 0043](decisions/0043-apps-own-their-ui.md), in `opt-out` mode), that is the one
+change to an app's HTML.
+
 ## Users
 
 Users come from the instance's pool. Today they are all guests.
