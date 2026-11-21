@@ -78,6 +78,45 @@ describe('S3 signing', () => {
     await assert.rejects(s3.put('a/b', Buffer.from('x')), /403 for a\/b: <Error>AccessDenied/)
   })
 
+  it('gets an object, and refuses one larger than asked', async () => {
+    const fakeFetch = (async () =>
+      new Response('dump', {
+        status: 200,
+        headers: { 'content-length': '4' },
+      })) as unknown as typeof fetch
+    const s3 = new S3(
+      { endpoint: 'https://x.example', bucket: 'b', accessKeyId: 'k', secretAccessKey: 's' },
+      fakeFetch,
+    )
+    assert.equal((await s3.get('a/database.dump', 10)).toString(), 'dump')
+    await assert.rejects(s3.get('a/database.dump', 3), /larger than/)
+  })
+
+  it('lists the folders under a prefix, through every page, with a signed query', async () => {
+    const seen: string[] = []
+    const pages = [
+      `<ListBucketResult><IsTruncated>true</IsTruncated><NextContinuationToken>t&amp;2</NextContinuationToken>
+       <CommonPrefixes><Prefix>blog/20261113T030000Z/</Prefix></CommonPrefixes></ListBucketResult>`,
+      `<ListBucketResult><IsTruncated>false</IsTruncated>
+       <CommonPrefixes><Prefix>blog/20261114T030000Z/</Prefix></CommonPrefixes></ListBucketResult>`,
+    ]
+    const fakeFetch = (async (url: string, init: RequestInit) => {
+      seen.push(url)
+      assert.match((init.headers as Record<string, string>).authorization ?? '', /Signature=/)
+      return new Response(pages.shift(), { status: 200 })
+    }) as unknown as typeof fetch
+    const s3 = new S3(
+      { endpoint: 'https://x.example', bucket: 'b', accessKeyId: 'k', secretAccessKey: 's' },
+      fakeFetch,
+    )
+    assert.deepEqual(await s3.folders('blog/'), [
+      'blog/20261113T030000Z/',
+      'blog/20261114T030000Z/',
+    ])
+    assert.equal(seen[0], 'https://x.example/b?delimiter=%2F&list-type=2&prefix=blog%2F')
+    assert.match(seen[1] ?? '', /continuation-token=t%262/)
+  })
+
   it('formats times for x-amz-date and keys', () => {
     const date = new Date('2026-11-14T03:04:05.678Z')
     assert.equal(amzDate(date), '20261114T030405Z')
@@ -91,9 +130,12 @@ describe('S3 signing', () => {
   })
 })
 
+/** Every docker command the runner was given, joined. */
+const commands: string[] = []
+
 /** A runner where every app's deploy works. */
 const docker: Runner = async (_file, args) => {
-  if (args[0] === 'ps') return { code: 0, stdout: '', stderr: '' }
+  commands.push(args.join(' '))
   return { code: 0, stdout: '', stderr: '' }
 }
 
@@ -105,6 +147,20 @@ function fakeBucket() {
       if (failing) throw new Error('The bucket answered 403')
       objects.set(key, Buffer.from(body))
     },
+    async get(key) {
+      const object = objects.get(key)
+      if (!object) throw new Error(`The bucket answered 404 for ${key}`)
+      return object
+    },
+    async folders(prefix) {
+      const found = new Set<string>()
+      for (const key of objects.keys()) {
+        if (!key.startsWith(prefix)) continue
+        const rest = key.slice(prefix.length)
+        if (rest.includes('/')) found.add(`${prefix}${rest.slice(0, rest.indexOf('/') + 1)}`)
+      }
+      return [...found]
+    },
   }
   return { target, objects, fail: (on = true) => (failing = on) }
 }
@@ -115,12 +171,18 @@ describe('backups', () => {
   let apps: Apps
   let app: ReturnType<typeof buildApp>
   const dumped: string[] = []
+  const restored: { name: string; dump: string }[] = []
+  let restoreFails = false
+  let layout: 'schema' | 'database' = 'schema'
   let clock = new Date('2026-11-14T03:00:00Z')
 
   beforeEach(async () => {
     dir = await mkdtemp(join(tmpdir(), 'spotcraft-backups-'))
     bucket = fakeBucket()
     dumped.length = 0
+    restored.length = 0
+    restoreFails = false
+    layout = 'schema'
     const databases = {
       async provision(name: string, password: string) {
         return { DATABASE_URL: `postgres://app_${name}:${password}@postgres:5432/apps` }
@@ -133,7 +195,7 @@ describe('backups', () => {
         return false
       },
       async layout() {
-        return 'schema' as const
+        return layout
       },
       async move() {
         return { users: 0, sessions: 0, tables: {} }
@@ -148,6 +210,10 @@ describe('backups', () => {
       dump: async (name) => {
         dumped.push(name)
         return Buffer.from(`dump of ${name}`)
+      },
+      restore: async (name, dump) => {
+        if (restoreFails) throw new Error('pg_restore: error: violates foreign key constraint')
+        restored.push({ name, dump: dump.toString() })
       },
       now: () => clock,
     })
@@ -281,5 +347,82 @@ describe('backups', () => {
     assert.equal(off.statusCode, 409)
     assert.equal((await without.inject({ url: '/backups', headers: auth })).json().enabled, false)
     await without.close()
+  })
+
+  it("lists an app's backups, newest first, and nothing else in its folder", async () => {
+    await apps.backupAll()
+    clock = new Date('2026-11-15T03:00:00Z')
+    await apps.backup('sokobanko')
+    bucket.objects.set('sokobanko/notes/readme.txt', Buffer.from('not a backup'))
+    const res = await app.inject({ url: '/apps/sokobanko/backups', headers: auth })
+    assert.equal(res.statusCode, 200, res.body)
+    assert.deepEqual(res.json().backups, [
+      { key: 'sokobanko/20261115T030000Z/', at: '2026-11-15T03:00:00Z' },
+      { key: 'sokobanko/20261114T030000Z/', at: '2026-11-14T03:00:00Z' },
+    ])
+    assert.equal((await app.inject({ url: '/apps/nope/backups', headers: auth })).statusCode, 404)
+    clock = new Date('2026-11-14T03:00:00Z')
+  })
+
+  it('restores a backup: the current data backed up first, then the dump, then a deploy', async () => {
+    await apps.backupAll()
+    clock = new Date('2026-11-16T10:00:00Z')
+    commands.length = 0
+    const res = await app.inject({
+      method: 'POST',
+      url: '/apps/sokobanko/restore',
+      headers: auth,
+      payload: { key: 'sokobanko/20261114T030000Z/' },
+    })
+    assert.equal(res.statusCode, 200, res.body)
+    assert.equal(res.json().restored, 'sokobanko/20261114T030000Z/')
+    assert.equal(res.json().before, 'sokobanko/20261116T100000Z/')
+    assert.ok(bucket.objects.has('sokobanko/20261116T100000Z/database.dump'), 'backed up first')
+    assert.deepEqual(restored, [{ name: 'sokobanko', dump: 'dump of sokobanko' }])
+    assert.ok(
+      commands.some((command) => command.includes(' up ')),
+      'deployed again, running its migrations',
+    )
+    clock = new Date('2026-11-14T03:00:00Z')
+  })
+
+  it("refuses a key that isn't one of the app's backups, or an app without a schema", async () => {
+    await apps.backupAll()
+    const restore = (key: string) =>
+      app.inject({
+        method: 'POST',
+        url: '/apps/sokobanko/restore',
+        headers: auth,
+        payload: { key },
+      })
+    assert.equal((await restore('site/20261114T030000Z/')).statusCode, 400)
+    assert.equal((await restore('sokobanko/../site/20261114T030000Z/')).statusCode, 400)
+    assert.equal(
+      (await restore('sokobanko/20261101T030000Z/')).statusCode,
+      502,
+      'not in the bucket',
+    )
+    layout = 'database'
+    assert.equal((await restore('sokobanko/20261114T030000Z/')).statusCode, 409)
+    assert.deepEqual(restored, [])
+  })
+
+  it('deploys nothing when the restore fails', async () => {
+    await apps.backupAll()
+    restoreFails = true
+    commands.length = 0
+    const res = await app.inject({
+      method: 'POST',
+      url: '/apps/sokobanko/restore',
+      headers: auth,
+      payload: { key: 'sokobanko/20261114T030000Z/' },
+    })
+    assert.equal(res.statusCode, 502)
+    assert.match(
+      res.json().error,
+      /Could not restore sokobanko from the backup of 2026-11-14T03:00:00Z/,
+    )
+    assert.match(res.json().output, /foreign key/)
+    assert.ok(!commands.some((command) => command.includes(' up ')))
   })
 })

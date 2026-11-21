@@ -3,7 +3,7 @@ import { AccessApps } from './access.ts'
 import { Umami } from './analytics.ts'
 import { buildApp } from './app.ts'
 import { ANALYTICS_BACKUP, Apps, POOL_BACKUP } from './apps.ts'
-import { dockerDump, untilNext } from './backups.ts'
+import { dockerDump, dockerRestore, untilNext } from './backups.ts'
 import { CloudflareApi } from './cloudflare.ts'
 import { loadConfig } from './config.ts'
 import { postgresDatabases } from './databases.ts'
@@ -43,6 +43,10 @@ const apps = new Apps(
     dump: dockerDump(config.backup.postgresContainer, async (app) =>
       databases ? databases.dumpTarget(app) : { database: appRoleName(app) },
     ),
+    // Only into a schema of the instance database (ADR 0043), so only with Postgres.
+    ...(databases && {
+      restore: dockerRestore(config.backup.postgresContainer, INSTANCE.database, appRoleName),
+    }),
     platform: [
       // The user pool's schema in the apps database (ADR 0035).
       {

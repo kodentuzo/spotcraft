@@ -193,6 +193,16 @@ Users come from the instance's pool. Today they are all guests.
   bearer token it is sent.
 - **App data** points at the user with a foreign key, `on delete cascade` or `on delete set
   null`. Deleting a user deletes their rows in every app. A key that blocks the delete is a bug.
+- **Deleting and exporting** ([ADR 0043](decisions/0043-apps-own-their-ui.md)):
+  - a guest deletes themselves with `POST <AUTH_URL>/delete-anonymous-user` (same origin, with
+    their session). Their rows in every app go with them, so an app needs no delete code;
+  - `GET <AUTH_URL>/export` answers what the pool holds about the signed-in user, as JSON. The
+    app exports its own rows, and offers both.
+- **What the pool keeps:** expired sessions are deleted daily; a session's IP address and user
+  agent are cleared after 30 days unused; guests unused for 180 days are deleted. Deleted
+  users' ids are kept 30 days, as long as backups, so a restore can delete them again.
+- **Logs:** Spotcraft keeps no access logs. An app that logs a client's IP address keeps it no
+  longer than 30 days, and says so in its privacy page.
 
 ## Analytics
 

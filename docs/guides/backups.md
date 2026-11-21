@@ -57,37 +57,22 @@ overwriting a backup before it expires.
 
 ## Restore one app's data
 
-For example, after a bad migration. You need shell access to the server as `deploy`.
+For example, after a bad migration. On the app's **Backups** page in the dashboard, pick a
+backup under **Restore** and confirm. The agent then:
 
-**Never restore as the `postgres` superuser alone.** An app owns its tables, so its dump can
-hold functions that run while the dump is restored, with the restoring role's rights. The
-commands below restore as the app's own role. The role is `app_` and the app's name, with `-`
-as `_`.
+1. backs up the data as it is now, so you can go back to it;
+2. puts the app's schema back as it was at that backup, as the app's own role, so a dump can do
+   no more than the app could;
+3. deploys the same version again, which runs its migrations on the restored data.
 
-1. In R2, open the app's folder of the backup to restore and download `database.dump`. Restore
-   only a backup you trust: the agent's key can add new folders. Copy it to the server, into a
-   file only `deploy` can read:
+**People who deleted their data since that backup stay deleted.** The user pool logs the id of
+every deleted user for as long as backups are kept ([ADR 0043](../decisions/0043-apps-own-their-ui.md)),
+and the restore removes their rows again.
 
-   ```bash
-   ssh deploy@<server> 'umask 077 && cat > blog.dump' < database.dump
-   ```
-
-2. On the server, empty the app's schema in the `apps` database, then restore into it:
-
-   ```bash
-   cd /opt/spotcraft
-   docker compose exec -T postgres psql -U postgres -d apps -v ON_ERROR_STOP=1 \
-     -c 'DROP SCHEMA app_blog CASCADE' -c 'CREATE SCHEMA app_blog AUTHORIZATION app_blog'
-   docker compose exec -T postgres pg_restore -U postgres --role=app_blog --no-owner --no-privileges \
-     -d apps < ~/blog.dump
-   rm ~/blog.dump
-   ```
-
-   The restore ends with one error, `permission denied for database apps` on
-   `CREATE SCHEMA app_blog`. That is the app's role being refused a new schema, as it should be;
-   the schema is already there. Any other error needs a look.
-
-3. In the dashboard, choose **Redeploy** on the app, which starts it against the restored data.
+While it restores, the app may answer with errors for a few seconds. If the restore fails,
+the app's data is as it was and nothing is deployed; the dashboard shows `pg_restore`'s error.
+A restore of a dump that has rows for users deleted before the log existed fails that way:
+restore the newest backup instead, or delete those rows by hand.
 
 ### An app that still has its own database
 

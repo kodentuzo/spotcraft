@@ -14,7 +14,14 @@ import {
   servedHosts,
   slotService,
 } from './app-spec.ts'
-import { type BackupStatus, type BackupTarget, backupStamp, type Dump } from './backups.ts'
+import {
+  type BackupStatus,
+  type BackupTarget,
+  backupStamp,
+  type Dump,
+  MAX_DUMP_BYTES,
+  type Restore,
+} from './backups.ts'
 import { CloudflareError } from './cloudflare.ts'
 import { DomainConflict, type Domains } from './domains.ts'
 import type { Runner, RunResult } from './runner.ts'
@@ -26,6 +33,16 @@ import {
   renderSite,
   upstreamAlias,
 } from './templates.ts'
+
+/** The time of a backup folder `<name>/<stamp>/` (backupStamp), or undefined if `key` isn't one. */
+export function backupTime(name: string, key: string): string | undefined {
+  const match = new RegExp(`^${name}/(\\d{4})(\\d{2})(\\d{2})T(\\d{2})(\\d{2})(\\d{2})Z/$`).exec(
+    key,
+  )
+  if (!match) return undefined
+  const [, y, mo, d, h, mi, se] = match
+  return `${y}-${mo}-${d}T${h}:${mi}:${se}Z`
+}
 
 /** The image label naming the command that migrates the app before it starts (ADR 0034). */
 export const MIGRATE_LABEL = 'dev.spotcraft.migrate'
@@ -334,7 +351,13 @@ export class Apps {
   readonly #domains: Domains | undefined
   readonly #access: AccessApps | undefined
   readonly #backups:
-    | { target: BackupTarget; dump: Dump; platform: PlatformDump[]; now: () => Date }
+    | {
+        target: BackupTarget
+        dump: Dump
+        restore?: Restore
+        platform: PlatformDump[]
+        now: () => Date
+      }
     | undefined
   /** Apps with a backup on request waiting or running. */
   readonly #backingUp = new Set<string>()
@@ -369,6 +392,8 @@ export class Apps {
     backups?: {
       target: BackupTarget
       dump: Dump
+      /** Puts an app's schema back from a dump; without it, restoring is refused. */
+      restore?: Restore
       platform?: PlatformDump[]
       now?: () => Date
     },
@@ -1280,6 +1305,65 @@ export class Apps {
     } finally {
       this.#backingUp.delete(name)
     }
+  }
+
+  /**
+   * The app's backups in the bucket, newest first: each folder `<name>/<time>/` and its time.
+   * Older ones are gone: the bucket deletes them after its retention.
+   */
+  async listBackups(name: string): Promise<{ key: string; at: string }[]> {
+    const backups = this.#backups
+    if (!backups) throw new AgentError('Backups are not set up on this server', 409)
+    if (!(await this.#store.get(name))) throw new AgentError('No such app', 404)
+    const folders = await backups.target.folders(`${name}/`).catch((error: unknown) => {
+      throw new AgentError('Could not list the backups in the bucket', 502, message(error))
+    })
+    return folders
+      .map((key) => ({ key, at: backupTime(name, key) }))
+      .filter((backup): backup is { key: string; at: string } => Boolean(backup.at))
+      .sort((a, b) => b.at.localeCompare(a.at))
+  }
+
+  /**
+   * Puts the app's schema back from the backup in folder `key` (ADR 0043), in the queue: a
+   * backup of the current data first, then the restore (`Restore`: users deleted since the
+   * backup stay deleted), then a deploy of the same version, which runs its migrations on the
+   * restored data. If the restore fails, the schema is as it was and nothing is deployed.
+   */
+  restore(
+    name: string,
+    key: string,
+  ): Promise<{ status: AppStatus; restored: string; before?: string }> {
+    return this.#exclusive(async () => {
+      const backups = this.#backups
+      if (!backups?.restore) throw new AgentError('Restoring is not set up on this server', 409)
+      const spec = await this.#store.get(name)
+      if (!spec) throw new AgentError('No such app', 404)
+      if (!backupTime(name, key)) throw new AgentError(`${key} is not a backup of ${name}`, 400)
+      if (!this.#databases || (await this.#databases.layout(name)) !== 'schema') {
+        throw new AgentError(`${name} has no schema to restore`, 409)
+      }
+      const dump = await backups.target
+        .get(`${key}database.dump`, MAX_DUMP_BYTES)
+        .catch((error: unknown) => {
+          throw new AgentError(`Could not read ${key}database.dump`, 502, message(error))
+        })
+      const before = await this.#backup(name)
+      if (!before.ok) throw new AgentError(`Could not back ${name} up first`, 502, before.error)
+      try {
+        await backups.restore(name, dump)
+      } catch (error) {
+        throw new AgentError(
+          `Could not restore ${name} from the backup of ${backupTime(name, key)}`,
+          502,
+          message(error),
+        )
+      }
+      console.info(`restored ${name} from ${key}; its data before is in ${before.key}`)
+      const status = await this.#deploy(spec)
+      if (this.#releases.get(name)?.state !== 'deploying') this.#releases.delete(name)
+      return { status, restored: key, ...(before.key ? { before: before.key } : {}) }
+    })
   }
 
   /**

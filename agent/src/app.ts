@@ -257,6 +257,29 @@ export function buildApp({ token, apps, allowedIps = [], logger = false }: Build
     async (request) => apps.backup(request.params.name),
   )
 
+  // The app's backups in the bucket, and putting its schema back from one (ADR 0043).
+  app.get<{ Params: NameParams }>(
+    '/apps/:name/backups',
+    { schema: { params: nameParamsSchema } },
+    async (request) => ({ backups: await apps.listBackups(request.params.name) }),
+  )
+
+  app.post<{ Params: NameParams; Body: { key: string } }>(
+    '/apps/:name/restore',
+    {
+      schema: {
+        params: nameParamsSchema,
+        body: {
+          type: 'object',
+          required: ['key'],
+          additionalProperties: false,
+          properties: { key: { type: 'string', minLength: 1, maxLength: 200 } },
+        },
+      },
+    },
+    async (request) => apps.restore(request.params.name, request.body.key),
+  )
+
   // The app's usage (ADR 0038): visits from Umami and accounts from the pool, counts only.
   app.get<{ Params: NameParams; Querystring: { days: number; brief: boolean } }>(
     '/apps/:name/usage',

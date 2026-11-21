@@ -68,6 +68,17 @@ export function signV4(request: {
 /** `20261114T030000Z`, as x-amz-date wants it. */
 export const amzDate = (date: Date) => date.toISOString().replace(/[-:]|\.\d{3}/g, '')
 
+/** The text between `<tag>` and `</tag>`, for each one in `xml`, XML-unescaped. */
+const tags = (xml: string, tag: string) =>
+  [...xml.matchAll(new RegExp(`<${tag}>([^<]*)</${tag}>`, 'g'))].map((m) =>
+    (m[1] ?? '')
+      .replaceAll('&lt;', '<')
+      .replaceAll('&gt;', '>')
+      .replaceAll('&quot;', '"')
+      .replaceAll('&apos;', "'")
+      .replaceAll('&amp;', '&'),
+  )
+
 export class S3 {
   readonly #config: S3Config & { region: string }
   readonly #fetch: typeof fetch
@@ -79,19 +90,33 @@ export class S3 {
     this.#now = now
   }
 
-  /** Puts one object; throws with S3's answer if it fails. */
-  async put(key: string, body: Uint8Array, contentType = 'application/octet-stream') {
+  /** A signed request for `key` in the bucket (`''`: the bucket itself); throws unless 2xx. */
+  async #request(
+    method: 'GET' | 'PUT',
+    key: string,
+    {
+      query = {},
+      body,
+      contentType,
+    }: { query?: Record<string, string>; body?: Uint8Array; contentType?: string } = {},
+  ): Promise<Response> {
     const url = new URL(this.#config.endpoint)
-    const path = `/${[this.#config.bucket, ...key.split('/')].map(encodeSegment).join('/')}`
-    const payloadHash = sha256Hex(body)
+    const segments = [this.#config.bucket, ...(key ? key.split('/') : [])]
+    const path = `/${segments.map(encodeSegment).join('/')}`
+    const search = Object.keys(query)
+      .sort()
+      .map((name) => `${encodeSegment(name)}=${encodeSegment(query[name] ?? '')}`)
+      .join('&')
+    const payloadHash = sha256Hex(body ?? '')
     const headers: Record<string, string> = {
       host: url.host,
       'x-amz-content-sha256': payloadHash,
       'x-amz-date': amzDate(this.#now()),
     }
     const authorization = signV4({
-      method: 'PUT',
+      method,
       path,
+      query: search,
       headers,
       payloadHash,
       accessKeyId: this.#config.accessKeyId,
@@ -99,15 +124,51 @@ export class S3 {
       region: this.#config.region,
     })
     const { host: _, ...sent } = headers
-    const response = await this.#fetch(`${url.origin}${path}`, {
-      method: 'PUT',
-      headers: { ...sent, authorization, 'content-type': contentType },
-      body,
+    const response = await this.#fetch(`${url.origin}${path}${search ? `?${search}` : ''}`, {
+      method,
+      headers: { ...sent, authorization, ...(contentType ? { 'content-type': contentType } : {}) },
+      ...(body ? { body } : {}),
       signal: AbortSignal.timeout(60_000),
     })
     if (!response.ok) {
       const text = (await response.text().catch(() => '')).slice(0, 500)
-      throw new Error(`The bucket answered ${response.status} for ${key}: ${text}`)
+      throw new Error(`The bucket answered ${response.status} for ${key || 'a listing'}: ${text}`)
     }
+    return response
+  }
+
+  /** Puts one object; throws with S3's answer if it fails. */
+  async put(key: string, body: Uint8Array, contentType = 'application/octet-stream') {
+    await this.#request('PUT', key, { body, contentType })
+  }
+
+  /** One object's bytes; refuses one larger than `maxBytes`. */
+  async get(key: string, maxBytes: number): Promise<Buffer> {
+    const response = await this.#request('GET', key)
+    const length = Number(response.headers.get('content-length') ?? 0)
+    if (length > maxBytes) {
+      await response.body?.cancel()
+      throw new Error(`${key} is larger than ${maxBytes / 1024 / 1024} MB`)
+    }
+    const data = Buffer.from(await response.arrayBuffer())
+    if (data.length > maxBytes)
+      throw new Error(`${key} is larger than ${maxBytes / 1024 / 1024} MB`)
+    return data
+  }
+
+  /** The "folders" right under `prefix` (which ends in `/`), such as `blog/20261114T030000Z/`. */
+  async folders(prefix: string): Promise<string[]> {
+    const found: string[] = []
+    let token: string | undefined
+    do {
+      const query: Record<string, string> = { 'list-type': '2', delimiter: '/', prefix }
+      if (token) query['continuation-token'] = token
+      const xml = await (await this.#request('GET', '', { query })).text()
+      const common = xml.match(/<CommonPrefixes>[\s\S]*?<\/CommonPrefixes>/g) ?? []
+      for (const block of common) found.push(...tags(block, 'Prefix'))
+      token =
+        tags(xml, 'IsTruncated')[0] === 'true' ? tags(xml, 'NextContinuationToken')[0] : undefined
+    } while (token)
+    return found
   }
 }

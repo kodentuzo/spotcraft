@@ -4,6 +4,7 @@ import { anonymous, bearer, jwt } from 'better-auth/plugins'
 import { drizzle } from 'drizzle-orm/node-postgres'
 import type pg from 'pg'
 import type { Config } from './config.ts'
+import { exportPlugin } from './export.ts'
 import { accounts, jwks, sessions, users, verifications } from './schema.ts'
 
 /** Where the pool answers on every app's domain; Caddy routes it here (ADR 0035). */
@@ -110,6 +111,8 @@ export function createPool(config: Config, client: pg.Pool) {
         customRules: { '/sign-in/anonymous': { window: 10 * 60, max: 30 } },
       },
       plugins: [
+        // A guest deletes themselves with POST /delete-anonymous-user (on by default), which
+        // cascades through apps' foreign keys (ADR 0043).
         anonymous(),
         bearer(),
         jwt({
@@ -120,6 +123,7 @@ export function createPool(config: Config, client: pg.Pool) {
             definePayload: ({ user }) => ({ is_anonymous: Boolean(user.isAnonymous) }),
           },
         }),
+        exportPlugin(),
       ],
       telemetry: { enabled: false },
     })

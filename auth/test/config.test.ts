@@ -14,6 +14,8 @@ describe('settings', () => {
     assert.equal(config.protocol, 'https')
     assert.equal(config.appGroup, 'spotcraft_app')
     assert.equal(config.guestDays, 180)
+    assert.equal(config.ipDays, 30)
+    assert.equal(config.backupDays, 30)
     assert.deepEqual(config.trustedOrigins, [])
   })
 
@@ -23,6 +25,8 @@ describe('settings', () => {
     assert.throws(() => loadConfig({ ...valid, AUTH_ISSUER: 'nope' }), /AUTH_ISSUER/)
     assert.throws(() => loadConfig({ ...valid, AUTH_PROTOCOL: 'ftp' }), /AUTH_PROTOCOL/)
     assert.throws(() => loadConfig({ ...valid, AUTH_GUEST_DAYS: '0' }), /AUTH_GUEST_DAYS/)
+    assert.throws(() => loadConfig({ ...valid, AUTH_IP_DAYS: '1.5' }), /AUTH_IP_DAYS/)
+    assert.throws(() => loadConfig({ ...valid, AUTH_BACKUP_DAYS: 'x' }), /AUTH_BACKUP_DAYS/)
   })
 
   it('takes trusted origins as a list of origins only', () => {

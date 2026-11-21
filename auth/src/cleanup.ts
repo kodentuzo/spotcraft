@@ -32,3 +32,30 @@ export async function deleteIdleGuests(
   }
   return { deleted, blocked: [...new Set(blocked)] }
 }
+
+/**
+ * What the pool keeps no longer than it needs (ADR 0043): it deletes expired sessions, clears
+ * the IP address and user agent of sessions unused for `ipDays`, and forgets deleted users'
+ * ids once backups no longer hold them (`backupDays`).
+ */
+export async function forget(
+  db: pg.Pool,
+  { ipDays, backupDays }: { ipDays: number; backupDays: number },
+): Promise<{ sessions: number; addresses: number; deletions: number }> {
+  const sessions = await db.query('DELETE FROM auth.sessions WHERE expires_at < now()')
+  const addresses = await db.query(
+    `UPDATE auth.sessions SET ip_address = NULL, user_agent = NULL
+     WHERE updated_at < now() - make_interval(days => $1)
+       AND (ip_address IS NOT NULL OR user_agent IS NOT NULL)`,
+    [ipDays],
+  )
+  const deletions = await db.query(
+    'DELETE FROM auth.deletions WHERE deleted_at < now() - make_interval(days => $1)',
+    [backupDays],
+  )
+  return {
+    sessions: sessions.rowCount ?? 0,
+    addresses: addresses.rowCount ?? 0,
+    deletions: deletions.rowCount ?? 0,
+  }
+}
