@@ -7,6 +7,7 @@ import type {
   ReleaseState,
   UserPage,
 } from '@spotcraft/agent/apps'
+import type { LegalFacts, LegalOwner } from '@spotcraft/agent/legal'
 import { AGENT_TOKEN, AGENT_URL } from '$app/env/private'
 
 export type {
@@ -190,6 +191,27 @@ export async function relayRelease(
     | ReleaseState
     | { error: string }
   return { status: response.status, body }
+}
+
+/** The owner's details (null until set) and the instance's legal facts (ADR 0043). */
+export async function getLegal(): Promise<{ owner: LegalOwner | null; facts: LegalFacts }> {
+  return expectJson(await call('/legal'))
+}
+
+/**
+ * Saves the owner's details. Answers the new facts and the apps being deployed again so they
+ * get them, or throws with what is missing.
+ */
+export async function setLegal(
+  owner: unknown,
+): Promise<{ facts: LegalFacts; redeploying: string[] }> {
+  return expectJson(
+    await call('/legal', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(owner),
+    }),
+  )
 }
 
 /** Whether backups are set up, and every app's last backup (null: none yet). ADR 0030. */
