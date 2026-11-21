@@ -147,7 +147,7 @@
 <section id="danger" class="mt-8">
   <h2 class="mb-2 text-base font-semibold">Remove</h2>
   <Card.Root size="sm" class="ring-destructive/50">
-    <Card.Content class="flex flex-wrap items-center justify-between gap-4 text-sm">
+    <Card.Content class="flex flex-row flex-wrap items-center justify-between gap-4 text-sm">
     <p class="text-muted-foreground">Stops the app and removes its settings and its site. The image stays on Docker Hub{app.database ? '; its database is kept unless you choose otherwise' : ''}.</p>
 <AlertDialog.Root>
       <AlertDialog.Trigger class={buttonVariants({ variant: 'destructive' })}>Remove</AlertDialog.Trigger>

@@ -28,7 +28,7 @@
         </div>
         <ul class="space-y-3">
           {#each app.own as host (host)}
-            <li><Card.Root size="sm"><Card.Content class="flex flex-wrap items-center justify-between gap-2 text-sm">
+            <li><Card.Root size="sm"><Card.Content class="flex flex-row flex-wrap items-center justify-between gap-2 text-sm">
               <a href="https://{host}" class="font-mono hover:underline" target="_blank" rel="noopener noreferrer">{host}</a>
               <span class="text-xs text-muted-foreground">Spotcraft subdomain</span>
             </Card.Content></Card.Root></li>

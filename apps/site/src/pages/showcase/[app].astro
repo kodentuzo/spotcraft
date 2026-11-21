@@ -64,7 +64,7 @@ const dated = numbers.date?.toLocaleDateString('en-GB', {
           data.features.map((feature) => (
             <li>
               <Card.Root size="sm">
-                <Card.Content class="flex gap-4">
+                <Card.Content class="flex flex-row gap-4">
                   <svg class="mt-0.5 size-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                     <path d="M20 6 9 17l-5-5" />
                   </svg>
@@ -86,19 +86,21 @@ const dated = numbers.date?.toLocaleDateString('en-GB', {
       <p class="mt-2 text-sm text-muted-foreground">
         {dated ? `From the Spotcraft dashboard on ${dated}.` : 'From the Spotcraft dashboard.'}
       </p>
-      <dl class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {
           figures.map((figure) => (
             <Card.Root>
               <Card.Content>
-                <dt class="text-sm text-muted-foreground">{figure.label}</dt>
-                <dd class="mt-2 font-heading text-3xl font-bold tabular-nums">{figure.value}</dd>
-                {figure.note && <dd class="mt-1 text-sm text-muted-foreground">{figure.note}</dd>}
+                <dl>
+                  <dt class="text-sm text-muted-foreground">{figure.label}</dt>
+                  <dd class="mt-2 font-heading text-3xl font-bold tabular-nums">{figure.value}</dd>
+                  {figure.note && <dd class="mt-1 text-sm text-muted-foreground">{figure.note}</dd>}
+                </dl>
               </Card.Content>
             </Card.Root>
           ))
         }
-      </dl>
+      </div>
     </section>
 
     <!-- The story -->

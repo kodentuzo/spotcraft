@@ -39,9 +39,10 @@
         </div>
       </header>
 
-      <main class="mx-auto w-full max-w-5xl px-4 py-6 md:px-8 md:py-8">
+      <!-- Sidebar.Inset is the page's <main>. -->
+      <div class="mx-auto w-full max-w-5xl px-4 py-6 md:px-8 md:py-8">
         {@render children()}
-      </main>
+      </div>
     </Sidebar.Inset>
   </Sidebar.Provider>
 {:else}

@@ -42,29 +42,31 @@
   </Sidebar.Header>
 
   <Sidebar.Content>
-    {#await data.settings then settings}
-      {#each SECTIONS as group, i (i)}
-        <Sidebar.Group class={i > 0 ? 'pt-0' : ''}>
-          <Sidebar.Menu>
-            {#each group as item (item.id)}
-              {#if item.id !== 'backups' || settings?.backups}
-                {@const Icon = icons[item.id]}
-                <Sidebar.MenuItem>
-                  <Sidebar.MenuButton isActive={section === item.id}>
-                    {#snippet child({ props })}
-                      <!-- Links keep the app picked in the switcher. -->
-                      <a href={hrefFor(item.id, app)} onclick={close} aria-current={section === item.id ? 'page' : undefined} {...props}>
-                        <Icon /><span>{item.label}</span>
-                      </a>
-                    {/snippet}
-                  </Sidebar.MenuButton>
-                </Sidebar.MenuItem>
-              {/if}
-            {/each}
-          </Sidebar.Menu>
-        </Sidebar.Group>
-      {/each}
-    {/await}
+    <nav aria-label="Main" class="flex flex-col gap-2">
+      {#await data.settings then settings}
+        {#each SECTIONS as group, i (i)}
+          <Sidebar.Group class={i > 0 ? 'pt-0' : ''}>
+            <Sidebar.Menu>
+              {#each group as item (item.id)}
+                {#if item.id !== 'backups' || settings?.backups}
+                  {@const Icon = icons[item.id]}
+                  <Sidebar.MenuItem>
+                    <Sidebar.MenuButton isActive={section === item.id}>
+                      {#snippet child({ props })}
+                        <!-- Links keep the app picked in the switcher. -->
+                        <a href={hrefFor(item.id, app)} onclick={close} aria-current={section === item.id ? 'page' : undefined} {...props}>
+                          <Icon /><span>{item.label}</span>
+                        </a>
+                      {/snippet}
+                    </Sidebar.MenuButton>
+                  </Sidebar.MenuItem>
+                {/if}
+              {/each}
+            </Sidebar.Menu>
+          </Sidebar.Group>
+        {/each}
+      {/await}
+    </nav>
   </Sidebar.Content>
 
   <Sidebar.Footer class="border-t border-sidebar-border">
