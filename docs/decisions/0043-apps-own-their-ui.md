@@ -41,7 +41,7 @@ which keeps its own theme.
 - **Every feature an app gets from Spotcraft passes three tests:**
   1. it is written down in [docs/contracts.md](../contracts.md);
   2. `spotcraft dev` offers it locally;
-  3. it runs without Spotcraft, from published images and env vars.
+  3. it runs without Spotcraft, from published images, env vars and static files.
 - **`spotcraft dev`'s stack is the reference** for what the server gives an app. A self-hosting
   example is the same stack without the development settings.
 
@@ -52,27 +52,38 @@ which keeps its own theme.
 - **The platform adds what it knows:** the hosting provider and location, the edge, backups and
   how long they are kept, SMTP, analytics and what it collects, and the pool's cookie and
   retention.
+- **The facts are one JSON document** with an `updated` date, which changes whenever any fact
+  does. A policy shows it as its "last changed" date.
 - **Apps get the facts in two ways:**
-  - servers read one reserved env var holding them as JSON;
+  - servers read the reserved env var `LEGAL_FACTS`;
   - clients without a server (static, client-rendered and native apps) read
     `/_spotcraft/legal.json`.
-- `spotcraft dev` writes placeholders. Outside Spotcraft, the owner sets the env var.
+- **When a fact changes,** `legal.json` changes at once, and the agent redeploys every container
+  app so it reads the new `LEGAL_FACTS`, with no downtime
+  ([ADR 0028](0028-zero-downtime-deploys.md)).
+- `spotcraft dev` writes placeholders. Outside Spotcraft, the owner sets `LEGAL_FACTS` and
+  serves the same JSON as a file at `/_spotcraft/legal.json`.
 - **Each app writes only what it stores itself** in its own privacy page.
 
 ### Data rights and retention live in the pool
 
-- **A signed-in user can export and delete themselves** through the pool. Deleting a user
-  cascades through apps' foreign keys (ADR 0035), so an app needs no delete code.
-- **Retention:** expired sessions are deleted, and the IP address and user agent of a session
-  are cleared after a set time. Guests unused for 180 days are deleted, as now.
+- **A signed-in user can delete themselves** through the pool. Deleting a user cascades through
+  apps' foreign keys (ADR 0035), so an app needs no delete code.
+- **Export is split:** the pool exports what it holds (the user and their sessions), and each
+  app exports its own rows. The your-data block puts both in one download.
+- **Retention:**
+  - expired sessions are deleted every day, next to the job that deletes idle guests;
+  - a session's IP address and user agent are cleared 30 days after it was last used, an
+    instance setting;
+  - guests unused for 180 days are deleted, as now.
 - **No consent banner by design:** nothing the platform offers sets a cookie that needs
   consent. The pool's cookie is set on a user's first save and is needed for the app to work,
   and analytics uses no cookies.
 
 ### spotkit is the bridge
 
-- spotkit wraps every service an app uses: who is signed in, `legal()`, `exportMe()`,
-  `deleteMe()`, and the analytics tracker.
+- spotkit wraps every service an app uses: who is signed in, `legal()`, `exportMe()` (the
+  pool's part), `deleteMe()`, and the analytics tracker.
 - It stays optional: everything it does is in the contract.
 
 ### Spotstrap: tokens, blocks and brand assets, at development time only
@@ -106,8 +117,9 @@ Spotstrap is never a runtime dependency on Spotcraft. It has three layers:
     primitives and copied into the app through a shadcn registry. The app owns them.
   - Vanilla gets a function that renders a block to HTML, and a small script that makes it
     interactive.
-  - React Native gets native views for sign-in and your data, and links to the app's web pages
-    for the legal texts.
+  - React Native gets native views for sign-in and your data, and links to web pages for the
+    legal texts: the app's website, or its API's domain when it has no website. A native view
+    of the core's document model can come later.
 - **Brand assets** (favicons, app icons, the web manifest, Open Graph images) come from a
   Spotstrap command at development time, from `brand.json`. Spotcraft makes no assets.
 - **Order:** tokens for all five platforms, the core and Vue views first. Other views come when
@@ -128,6 +140,9 @@ test.
 - Apps have more code in them, but they own it, and the core keeps the logic in one place.
 - Views for five platforms are a maintenance cost. Building them only when an app needs one
   keeps it down.
+- Copied views and the core can drift apart. The core follows semver; a breaking change ships
+  with updated views in the registry, and its changelog says to add them again.
+- Changing a fact redeploys every container app. Apps that start slowly take longer to show it.
 - A policy built from the facts is only as accurate as the owner's settings, and still needs one
   legal review.
 - It isn't checked yet whether Basecoat and react-native-reusables install from a custom
