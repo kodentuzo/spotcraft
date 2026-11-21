@@ -418,7 +418,10 @@ describe('backups', () => {
       payload: { key: 'sokobanko/20261114T030000Z/' },
     })
     assert.equal(res.statusCode, 502)
-    assert.match(res.json().error, /Could not restore sokobanko/)
+    assert.match(
+      res.json().error,
+      /Could not restore sokobanko from the backup of 2026-11-14T03:00:00Z/,
+    )
     assert.match(res.json().output, /foreign key/)
     assert.ok(!commands.some((command) => command.includes(' up ')))
   })

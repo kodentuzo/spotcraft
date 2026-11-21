@@ -1353,7 +1353,11 @@ export class Apps {
       try {
         await backups.restore(name, dump)
       } catch (error) {
-        throw new AgentError(`Could not restore ${name} from ${key}`, 502, message(error))
+        throw new AgentError(
+          `Could not restore ${name} from the backup of ${backupTime(name, key)}`,
+          502,
+          message(error),
+        )
       }
       console.info(`restored ${name} from ${key}; its data before is in ${before.key}`)
       const status = await this.#deploy(spec)
