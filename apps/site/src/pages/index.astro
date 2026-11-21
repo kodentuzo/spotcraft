@@ -1,5 +1,6 @@
 ---
-import ButtonLink from '../components/ButtonLink.astro'
+import { Button } from '@spotcraft/ui/components/button'
+import * as Card from '@spotcraft/ui/components/card'
 import GitHubIcon from '../components/GitHubIcon.astro'
 import Base from '../layouts/Base.astro'
 import { GITHUB } from '../lib/site.ts'
@@ -68,8 +69,8 @@ const stack = [
     <h1 class="max-w-3xl font-heading text-4xl leading-tight font-bold tracking-tight text-balance sm:text-6xl">Your apps, your server.</h1>
     <p class="mt-6 max-w-2xl text-lg text-pretty text-muted-foreground">{description}</p>
     <div class="mt-8 flex flex-wrap gap-3">
-      <ButtonLink href="/docs/getting-started">Get started</ButtonLink>
-      <ButtonLink href={GITHUB} variant="outline" rel="noopener noreferrer"><GitHubIcon /> GitHub</ButtonLink>
+      <Button href="/docs/getting-started" size="lg">Get started</Button>
+      <Button href={GITHUB} size="lg" variant="outline" rel="noopener noreferrer"><GitHubIcon data-icon="inline-start" /> GitHub</Button>
     </div>
     <picture>
       <source srcset="/screenshots/app-dark.webp" media="(prefers-color-scheme: dark)" />
@@ -94,11 +95,15 @@ const stack = [
 <section class="border-b">
   <div class="mx-auto max-w-6xl px-4 py-16 sm:py-20">
     <h2 class="font-heading text-2xl font-bold sm:text-3xl">What you get</h2>
-    <ul class="mt-10 grid gap-px border bg-border sm:grid-cols-2 lg:grid-cols-3">
+    <ul class="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {strengths.map((item) => (
-        <li class="bg-background p-6">
-          <h3 class="font-heading font-semibold">{item.title}</h3>
-          <p class="mt-2 text-sm leading-6 text-muted-foreground">{item.text}</p>
+        <li>
+          <Card.Root class="h-full">
+            <Card.Header>
+              <Card.Title><h3>{item.title}</h3></Card.Title>
+              <Card.Description class="leading-6">{item.text}</Card.Description>
+            </Card.Header>
+          </Card.Root>
         </li>
 ))}
     </ul>
@@ -165,8 +170,8 @@ const stack = [
     <h2 class="font-heading text-3xl font-bold sm:text-4xl">Ready to run your own?</h2>
     <p class="mx-auto mt-4 max-w-xl text-muted-foreground">One server, one workflow run, then apps from a form. The guide takes about half an hour.</p>
     <div class="mt-8 flex flex-wrap justify-center gap-3">
-      <ButtonLink href="/docs/getting-started">Get started</ButtonLink>
-      <ButtonLink href={GITHUB} variant="outline" rel="noopener noreferrer"><GitHubIcon /> GitHub</ButtonLink>
+      <Button href="/docs/getting-started" size="lg">Get started</Button>
+      <Button href={GITHUB} size="lg" variant="outline" rel="noopener noreferrer"><GitHubIcon data-icon="inline-start" /> GitHub</Button>
     </div>
   </div>
 </section>

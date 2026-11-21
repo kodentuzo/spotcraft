@@ -26,6 +26,9 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
 - **The dashboard's charts use shadcn-svelte's Chart (LayerChart).** The usage chart has axes and
   a tooltip; the small CPU, memory and response-time lines show their value on hover. Today's
   point is no longer drawn dashed: the note under the chart says it is still counting.
+- **The website renders the shared components at build time** (`@astrojs/svelte`, no client
+  JavaScript). Its buttons, cards and tags are `Button`, `Card` and `Badge`; the tiles are
+  separate cards instead of one bordered grid.
 
 ## [0.8.1] - 2026-11-20
 

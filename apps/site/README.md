@@ -29,8 +29,10 @@ render at build time ([ADR 0041](../../docs/decisions/0041-all-ui-from-shadcn-sv
 - **Styling**: Tailwind v4 through `@tailwindcss/vite`, with the theme from
   `@spotcraft/ui/styles.css`, so it matches the dashboard. Dark mode follows the system.
   `@astrojs/svelte` renders `@spotcraft/ui` components into the HTML; no page uses a
-  `client:` directive, so none ships JavaScript. Button links (`src/components/ButtonLink.astro`)
-  use the shared button's `buttonVariants`.
+  `client:` directive, so none ships JavaScript. Pages use `Button` (with `href`, it renders a
+  link), `Card` and `Badge`. Astro still writes the Svelte renderer's `_astro/client.*.js`, but
+  no page loads it. Icons stay inline SVG (`GitHubIcon.astro`): `astro check` can't read
+  lucide's Svelte prop types.
 - **Content-Security-Policy**: a meta tag with `script-src 'none'` (`src/layouts/Base.astro`).
 - **Static files** (`public/`): `CNAME`, `robots.txt`, the favicon, the dashboard screenshots
   (1280×800, light and dark, from the dashboard running on made-up demo apps) and the

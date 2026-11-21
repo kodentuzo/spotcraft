@@ -2,11 +2,11 @@
 title: All UI is shadcn-svelte, with its own theme
 number: 41
 status: accepted
-implementation: skeleton
+implementation: done
 date: 2026-11-21
 supersedes: [24, 33]
 superseded_by: []
-notes: "The theme is in packages/ui and spotstrap is gone; the dashboard and site still have hand-made parts to move onto the components."
+notes: "Done for the dashboard and site. Uptime and memory bars stay hand-drawn status strips; the site keeps inline SVG icons."
 ---
 
 # All UI is shadcn-svelte, with its own theme
