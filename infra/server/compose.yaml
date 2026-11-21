@@ -132,6 +132,10 @@ services:
       # admin account in place of Umami's default.
       UMAMI_URL: http://umami:3000
       UMAMI_ADMIN_PASSWORD: ${UMAMI_ADMIN_PASSWORD:?set UMAMI_ADMIN_PASSWORD in .env}
+      # How visits are counted (server, opt-out, opt-in), and how long Umami's events are kept
+      # (ADR 0043).
+      ANALYTICS_MODE: ${ANALYTICS_MODE:-opt-out}
+      ANALYTICS_DAYS: ${ANALYTICS_DAYS:-395}
       # cloudflare: site blocks are plain HTTP, the tunnel brings requests to Caddy (ADR 0021).
       EDGE: ${EDGE:-direct}
       # Optional, all four together: custom domains' DNS through the Cloudflare API.

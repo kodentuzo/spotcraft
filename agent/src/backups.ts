@@ -127,6 +127,63 @@ export function untilNext(hour: number, now = new Date()): number {
   return next.getTime() - now.getTime()
 }
 
+/**
+ * The tables of Umami 3 that hold what visitors did, each with `created_at`. Umami keeps them
+ * forever (it has no retention of its own), so the agent deletes old rows (ADR 0043). A table
+ * an older or newer Umami doesn't have is skipped.
+ */
+const UMAMI_EVENT_TABLES = [
+  'event_data',
+  'session_data',
+  'revenue',
+  'session_replay',
+  'heatmap_event',
+  'error_event',
+  'session_link',
+  'website_event',
+]
+
+/**
+ * Deletes Umami's events older than `days`, then sessions with no event left, in the Postgres
+ * container as the superuser over its local socket, like the dumps. Returns psql's notices:
+ * how many rows each table lost.
+ */
+export function dockerPruneAnalytics(
+  postgresContainer: string,
+  database = 'umami',
+): (days: number) => Promise<string> {
+  return async (days) => {
+    if (!Number.isInteger(days) || days < 1) throw new Error('days must be a whole number')
+    const tables = UMAMI_EVENT_TABLES.map((t) => `'${t}'`).join(', ')
+    return execIn(
+      postgresContainer,
+      ['psql', '-U', 'postgres', '-d', database, '-v', 'ON_ERROR_STOP=1', '-q'],
+      `DO $$
+      DECLARE
+        t text;
+        n bigint;
+        cutoff timestamptz := now() - make_interval(days => ${days});
+      BEGIN
+        FOREACH t IN ARRAY ARRAY[${tables}] LOOP
+          IF to_regclass('public.' || t) IS NOT NULL THEN
+            EXECUTE format('DELETE FROM public.%I WHERE created_at < $1', t) USING cutoff;
+            GET DIAGNOSTICS n = ROW_COUNT;
+            IF n > 0 THEN RAISE NOTICE '% %', t, n; END IF;
+          END IF;
+        END LOOP;
+        IF to_regclass('public.session') IS NOT NULL THEN
+          DELETE FROM public.session s WHERE s.created_at < cutoff
+            AND NOT EXISTS (SELECT 1 FROM public.website_event e WHERE e.session_id = s.session_id);
+          GET DIAGNOSTICS n = ROW_COUNT;
+          IF n > 0 THEN RAISE NOTICE 'session %', n; END IF;
+        END IF;
+      END $$;`,
+      300_000,
+      { stderr: true },
+    )
+  }
+}
+
 /** Where the schema being replaced waits during a restore; one restore runs at a time. */
 export const RESTORE_OLD_SCHEMA = 'spotcraft_restore_old'
 
@@ -139,6 +196,8 @@ function execIn(
   args: string[],
   input: string | Buffer,
   timeoutMs: number,
+  /** Answer stderr instead of stdout, where psql writes its notices. */
+  { stderr: wantStderr = false } = {},
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     const child = spawn('docker', ['exec', '-i', container, ...args], {
@@ -165,7 +224,7 @@ function execIn(
       clearTimeout(timer)
       if (failure) reject(failure)
       else if (code !== 0) reject(new Error(stderr.trim() || `${args[0]} failed`))
-      else resolve(stdout)
+      else resolve(wantStderr ? stderr : stdout)
     })
     child.stdin.on('error', () => {})
     child.stdin.end(input)

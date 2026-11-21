@@ -3,7 +3,7 @@ import { AccessApps } from './access.ts'
 import { Umami } from './analytics.ts'
 import { buildApp } from './app.ts'
 import { ANALYTICS_BACKUP, Apps, POOL_BACKUP } from './apps.ts'
-import { dockerDump, dockerRestore, untilNext } from './backups.ts'
+import { dockerDump, dockerPruneAnalytics, dockerRestore, untilNext } from './backups.ts'
 import { CloudflareApi } from './cloudflare.ts'
 import { loadConfig } from './config.ts'
 import { postgresDatabases } from './databases.ts'
@@ -37,6 +37,7 @@ const apps = new Apps(
     dashboardDomain: config.dashboardDomain,
     authIssuer: config.authIssuer,
     edge: config.edge,
+    analyticsMode: config.analyticsMode,
   },
   cloudflare,
   config.backup && {
@@ -69,7 +70,7 @@ if (config.analytics) apps.analytics = new Umami(config.analytics.url, config.an
 apps.legal = new Legal(config.dataDir, {
   edge: config.edge,
   backupEndpoint: config.backup?.endpoint,
-  analytics: Boolean(config.analytics),
+  analytics: { mode: config.analyticsMode, days: config.analytics?.days ?? 395 },
   ...config.retention,
 })
 const app = buildApp({
@@ -136,6 +137,28 @@ if (databases) {
     app.log.warn({ failed, attempt }, 'app databases not up to date yet; retrying')
     await new Promise((resolve) => setTimeout(resolve, 5000))
   }
+}
+
+// Every night at 04:00 UTC, after the backups, delete Umami's events older than ANALYTICS_DAYS
+// (ADR 0043): Umami itself keeps them forever.
+const PRUNE_HOUR_UTC = 4
+if (config.analytics) {
+  const { days, postgresContainer } = config.analytics
+  const prune = dockerPruneAnalytics(postgresContainer)
+  const nightly = async () => {
+    try {
+      const deleted = (await prune(days)).trim()
+      if (deleted) app.log.info({ deleted: deleted.split('\n') }, 'old analytics deleted')
+    } catch (error) {
+      app.log.error({ err: error }, 'could not delete old analytics')
+    }
+    setTimeout(nightly, untilNext(PRUNE_HOUR_UTC)).unref()
+  }
+  setTimeout(nightly, untilNext(PRUNE_HOUR_UTC)).unref()
+  app.log.info(
+    { days, mode: config.analyticsMode },
+    'analytics older than ANALYTICS_DAYS deleted nightly',
+  )
 }
 
 // Every night at 03:00 UTC, back up every app (ADR 0030). Each app's result is kept in its

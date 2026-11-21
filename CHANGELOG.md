@@ -34,6 +34,14 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
   `/_spotcraft/legal.json`, for their privacy policy and legal notice; saving deploys every app
   again. The page also lists what the owner still does, and downloads the facts as the record
   of processing. `spotcraft dev` writes example facts.
+- **Three analytics modes** (`ANALYTICS_MODE`, [ADR 0043](docs/decisions/0043-apps-own-their-ui.md)),
+  since consent rules differ between EU countries: `opt-out` (the default, as before), `opt-in`
+  (nothing added to pages; apps load the tracker after the visitor agrees) and `server` (nothing
+  in the browser; only requests and accounts are counted). `config.json` says the mode, the
+  legal facts follow it (`consent` for opt-in, no analytics entry for server), and the
+  dashboard's Settings shows it.
+- **Old analytics are deleted:** Umami keeps events forever, so the agent deletes those older
+  than `ANALYTICS_DAYS` (395) every night. The legal facts now say so.
 - **A guide for when personal data leaks** ([docs/guides/breach.md](docs/guides/breach.md)).
 - **The pool's retention settings are in the server's Compose file and `.env.example`:**
   `AUTH_GUEST_DAYS`, `AUTH_IP_DAYS`, `AUTH_BACKUP_DAYS`.

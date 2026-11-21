@@ -187,6 +187,19 @@ describe('config', () => {
     assert.throws(() => loadConfig({ ...base, APPS_DOMAIN: 'https://x.dev' }))
     assert.throws(() => loadConfig({ ...base, EDGE: 'nginx' }))
   })
+  it('counts visits in opt-out mode by default, and in server mode without Umami', () => {
+    const umami = { UMAMI_URL: 'http://umami:3000', UMAMI_ADMIN_PASSWORD: 'p'.repeat(32) }
+    assert.equal(loadConfig(base).analyticsMode, 'server')
+    const config = loadConfig({ ...base, ...umami })
+    assert.equal(config.analyticsMode, 'opt-out')
+    assert.equal(config.analytics?.days, 395)
+    assert.equal(config.analytics?.postgresContainer, 'spotcraft-apps-postgres-1')
+    const set = loadConfig({ ...base, ...umami, ANALYTICS_MODE: 'opt-in', ANALYTICS_DAYS: '180' })
+    assert.equal(set.analyticsMode, 'opt-in')
+    assert.equal(set.analytics?.days, 180)
+    assert.throws(() => loadConfig({ ...base, ...umami, ANALYTICS_MODE: 'on' }), /ANALYTICS_MODE/)
+    assert.throws(() => loadConfig({ ...base, ...umami, ANALYTICS_DAYS: '0' }), /ANALYTICS_DAYS/)
+  })
   it('reads the four BACKUP_* settings together, or none', () => {
     assert.equal(loadConfig(base).backup, undefined)
     const backup = {

@@ -191,14 +191,25 @@ domain; the name `auth` is reserved.
 Every site also serves analytics ([ADR 0038](../docs/decisions/0038-analytics.md)):
 
 - `/_spotcraft/s.js` and `/_spotcraft/e` go to Umami (`umami:3000`), the second with the visitor's
-  address in `X-Spotcraft-Client-IP` for the country;
-- `/_spotcraft/config.json` answers `{"analytics":{"websiteId":"…","enabled":true}}`, or
-  `{"analytics":{"enabled":false}}`;
+  address in `X-Spotcraft-Client-IP` for the country; in `server` mode both answer 404;
+- `/_spotcraft/config.json` answers `{"analytics":{"websiteId":"…","enabled":true,"mode":"opt-out"}}`,
+  or `{"analytics":{"enabled":false,"mode":"…"}}`;
 - `/_spotcraft/privacy` is a page saying what is counted, with a switch that stops counting in
   that browser.
 
-With analytics on (the app's `analytics` isn't `false` and it has a website), the site asks the
-app for uncompressed responses (`Accept-Encoding: identity`) and, in `text/html` responses only,
+`ANALYTICS_MODE` sets how visits are counted for the whole instance
+([ADR 0043](../docs/decisions/0043-apps-own-their-ui.md)): `opt-out` (the default) as below;
+`opt-in` adds nothing to pages, and the app loads the tracker after the visitor agrees;
+`server` collects nothing from browsers, so only Caddy's request counts and the pool's account
+counts remain. Without Umami it is `server`. A change reaches every site when the agent starts.
+
+Umami keeps events forever, so every night at 04:00 UTC the agent deletes those older than
+`ANALYTICS_DAYS` (395 by default): rows of Umami's event tables (`website_event`, `event_data`,
+`session_data` and the rest that Umami 3 has), then sessions with no event left. It runs `psql`
+in `POSTGRES_CONTAINER` as the superuser, like the backups (`dockerPruneAnalytics`).
+
+With analytics on in `opt-out` mode (the app's `analytics` isn't `false` and it has a website),
+the site asks the app for uncompressed responses (`Accept-Encoding: identity`) and, in `text/html` responses only,
 adds `<script defer src="/_spotcraft/s.js" data-website-id="…"></script>` before `</head>`,
 streamed; `encode` then compresses for the visitor. Caddy runs from Spotcraft's image, built with
 the `replace-response` module for this.
@@ -436,6 +447,8 @@ move to the pool (`POST /apps/:name/move`); the dashboard doesn't show those.
 | `EDGE`                 | `direct`                 | `cloudflare`: sites are plain HTTP               |
 | `UMAMI_URL`            | —                        | analytics (ADR 0038), with the password          |
 | `UMAMI_ADMIN_PASSWORD` | —                        | at least 32 characters; replaces Umami's default |
+| `ANALYTICS_MODE`       | `opt-out`                | `server`, `opt-out` or `opt-in` (ADR 0043)       |
+| `ANALYTICS_DAYS`       | `395`                    | Umami's events older than this are deleted       |
 | `CLOUDFLARE_*`         | —                        | custom domains, Access (see below)               |
 | `LOG_LEVEL`            | `info`                   | log level                                        |
 

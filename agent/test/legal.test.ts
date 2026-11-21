@@ -15,7 +15,7 @@ const auth = { authorization: `Bearer ${TOKEN}` }
 const platform: PlatformFacts = {
   edge: 'direct',
   backupDays: 30,
-  analytics: false,
+  analytics: { mode: 'server', days: 395 },
   guestDays: 180,
   ipDays: 30,
 }
@@ -45,7 +45,7 @@ describe('legal facts (ADR 0043)', () => {
       ...platform,
       edge: 'cloudflare',
       backupEndpoint: 'https://acct.eu.r2.cloudflarestorage.com',
-      analytics: true,
+      analytics: { mode: 'opt-out', days: 395 },
     })
     const byId = Object.fromEntries(facts.processing.map((p) => [p.id, p]))
     assert.deepEqual(byId.edge?.transfer, { country: 'US', basis: 'dpf' })
@@ -53,6 +53,9 @@ describe('legal facts (ADR 0043)', () => {
     assert.deepEqual(byId.backups?.processor, { name: 'Cloudflare, Inc.', country: 'EU' })
     assert.equal(byId.backups?.retentionDays, 30)
     assert.equal(byId.analytics?.basis, 'legitimate-interests')
+    assert.equal(byId.analytics?.retentionDays, 395)
+    const optIn = buildFacts(null, { ...platform, analytics: { mode: 'opt-in', days: 395 } })
+    assert.equal(optIn.processing.find((p) => p.id === 'analytics')?.basis, 'consent')
 
     const other = buildFacts(null, { ...platform, backupEndpoint: 'https://s3.example.net' })
     const backups = other.processing.find((p) => p.id === 'backups')

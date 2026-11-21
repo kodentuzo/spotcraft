@@ -1433,7 +1433,11 @@ describe('analytics (ADR 0038)', () => {
         `</head> \`<script defer src="/_spotcraft/s.js" data-website-id="${ID}"></script></head>\``,
       ),
     )
-    assert.ok(text.includes(`respond \`{"analytics":{"websiteId":"${ID}","enabled":true}}\` 200`))
+    assert.ok(
+      text.includes(
+        `respond \`{"analytics":{"websiteId":"${ID}","enabled":true,"mode":"opt-out"}}\` 200`,
+      ),
+    )
     assert.match(text, /handle \/_spotcraft\/privacy \{[\s\S]*?Don't count my visits/)
     const secrets = JSON.parse(await readFile(join(dir, 'apps/tagtape/secrets.json'), 'utf8'))
     assert.equal(secrets.analyticsId, ID, 'kept, so the site can be written again without Umami')
@@ -1444,8 +1448,39 @@ describe('analytics (ADR 0038)', () => {
     await apps.deploy({ name: 'tagtape', ...fullSpec, analytics: false })
     const text = await site()
     assert.doesNotMatch(text, /replace stream|Accept-Encoding|data-website-id/)
-    assert.ok(text.includes('respond `{"analytics":{"enabled":false}}` 200'))
-    assert.match(text, /This site counts nothing about its visits/)
+    assert.ok(text.includes('respond `{"analytics":{"enabled":false,"mode":"opt-out"}}` 200'))
+    assert.match(text, /Nothing runs in your browser to count your visits/)
+  })
+
+  it('leaves the tracker to the app in opt-in mode, and collects nothing in server mode', async () => {
+    const fake = umami()
+    const optIn = new Apps(new Store(dir), docker.run, 'caddy-test', undefined, {
+      edge: 'direct',
+      analyticsMode: 'opt-in',
+    })
+    optIn.analytics = fake.analytics
+    await optIn.deploy({ name: 'tagtape', ...fullSpec })
+    let text = await site()
+    assert.doesNotMatch(text, /replace stream|data-website-id/, 'nothing added to pages')
+    assert.match(text, /handle \/_spotcraft\/s\.js \{\n\t\treverse_proxy umami:3000\n/)
+    assert.ok(
+      text.includes(
+        `respond \`{"analytics":{"websiteId":"${ID}","enabled":true,"mode":"opt-in"}}\` 200`,
+      ),
+    )
+    assert.match(text, /only if you agree to it/)
+
+    const server = new Apps(new Store(dir), docker.run, 'caddy-test', undefined, {
+      edge: 'direct',
+      analyticsMode: 'server',
+    })
+    server.analytics = fake.analytics
+    await server.deploy({ name: 'tagtape', ...fullSpec })
+    text = await site()
+    assert.doesNotMatch(text, /replace stream|data-website-id|reverse_proxy umami/)
+    assert.match(text, /handle \/_spotcraft\/s\.js \{\n\t\trespond 404\n/)
+    assert.match(text, /handle \/_spotcraft\/e \{\n\t\trespond 404\n/)
+    assert.ok(text.includes('respond `{"analytics":{"enabled":false,"mode":"server"}}` 200'))
   })
 
   it('deploys anyway when Umami is down, and starts counting once it is back', async () => {

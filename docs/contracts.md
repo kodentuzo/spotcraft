@@ -252,8 +252,8 @@ repository. A server reads `LEGAL_FACTS`; a client without one reads
   agent, against abuse), `backups` (nightly copies) and `analytics` (counts without cookies or
   ids). The words for them, translated, come with Spotstrap.
 - `basis` is the GDPR Art. 6(1) legal basis: `contract`, `legitimate-interests` or `consent`.
-  `retentionDays` counts from last use, or for `backups` from when the backup was made; null
-  when it isn't limited. `processor.country` is a
+  `retentionDays` counts from last use, or for `backups` and `analytics` from when the backup
+  or event was made; null when it isn't limited. `processor.country` is a
   two-letter code, `EU`, or null when unknown. `transfer.basis` `dpf` is the EU–US Data
   Privacy Framework.
 - When the owner's details change, every site serves the new facts at once, and every app is
@@ -269,7 +269,19 @@ Spotcraft counts how each app is used, with Umami on the instance
 ([ADR 0038](decisions/0038-analytics.md)). Nothing goes to an outside service, and nothing
 collected holds an id, personal data or a cookie.
 
-**What needs no change to the app:**
+**How visits are counted is the instance's choice** (`ANALYTICS_MODE`,
+[ADR 0043](decisions/0043-apps-own-their-ui.md)), because consent rules differ between EU
+countries:
+
+- `opt-out`, the default: the script below is added to pages; the visitor can turn it off.
+- `opt-in`: nothing is added. The app asks the visitor first and loads
+  `/_spotcraft/s.js` (with `data-website-id` from `config.json`) only after they agree.
+- `server`: nothing runs in the browser, and `s.js` and `e` answer 404. Only requests and
+  accounts are counted.
+
+Events are kept `ANALYTICS_DAYS`, 395 by default, then deleted.
+
+**What needs no change to the app** (in `opt-out` mode):
 
 - **Page views:** Caddy adds
   `<script defer src="/_spotcraft/s.js" data-website-id="…"></script>` before `</head>` in
@@ -282,8 +294,8 @@ collected holds an id, personal data or a cookie.
 same by hand:
 
 - `GET <app URL>/_spotcraft/config.json` answers
-  `{ "analytics": { "websiteId": "<uuid>", "enabled": true } }`. With `enabled: false`, send
-  nothing.
+  `{ "analytics": { "websiteId": "<uuid>", "enabled": true, "mode": "opt-out" } }`. With
+  `enabled: false`, send nothing. With `mode: "opt-in"`, send nothing until the user agrees.
 - Screens and events go to `POST <app URL>/_spotcraft/e` as Umami event payloads, with a
   User-Agent that names the platform. Event data must not hold ids or personal data.
 - Requests to the pool may carry `Spotcraft-Client: <platform>/<version>`, such as `ios/1.4.0`:

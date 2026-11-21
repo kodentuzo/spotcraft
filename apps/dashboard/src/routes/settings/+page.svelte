@@ -39,10 +39,12 @@
     backups: "Backups: nightly copies of every app's data and the accounts",
     analytics: 'Analytics: page views and events, without cookies or ids',
   }
-  /** How long, in words: backups count from when they're made, the rest from last use. */
+  /** How long, in words: backups and events count from when they're made, the rest from last use. */
   const kept = (id: string, days: number | null) => {
-    if (days) return id === 'backups' ? `Kept ${days} days.` : `Kept ${days} days after last use.`
-    return id === 'analytics' ? 'No time limit set yet.' : ''
+    if (!days) return ''
+    return id === 'backups' || id === 'analytics'
+      ? `Kept ${days} days.`
+      : `Kept ${days} days after last use.`
   }
   const BASIS: Record<string, string> = {
     contract: 'Art. 6(1)(b), running the service',
@@ -73,6 +75,8 @@
       <dt class="text-muted-foreground">DNS</dt><dd>{s.dns ? 'Set up through the Cloudflare API' : 'Set by hand'}</dd>
       <dt class="text-muted-foreground">Cloudflare Access</dt><dd>{on(s.access)}</dd>
       <dt class="text-muted-foreground">Backups</dt><dd>{s.backups ? 'Every night, to the bucket' : 'Off'}</dd>
+      <dt class="text-muted-foreground">Analytics</dt>
+      <dd>{s.analyticsMode === 'opt-in' ? 'Opt-in: apps count visits after the visitor agrees' : s.analyticsMode === 'server' ? 'Server only: requests and accounts, nothing in the browser' : 'Opt-out: a script on every page, which visitors can turn off'}</dd>
       <dt class="text-muted-foreground">User pool</dt><dd>{#if s.authIssuer}<span class="font-mono">{s.authIssuer}</span>{:else}Off{/if}</dd>
     {/if}
   </dl>
