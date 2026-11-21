@@ -8,7 +8,8 @@ description: Spotcraft's conventions for GitHub Actions workflows and Dependabot
 ## Branches and triggers
 
 - `main` is the only long-lived branch (ADR 0042); PRs target it, from `feature/`, `bugfix/` or
-  `chore/` branches, and `ci.yml`'s `branch-name` job fails anything else. Releases are tags
+  `chore/` branches, and `branch-name.yml` fails anything else (it also runs on `edited`, so a
+  retargeted pull request is checked again). Releases are tags
   `vX.Y.Z` on `main`.
 - `ci.yml` runs on PRs, pushes to `main` and `v*.*.*` / `kit-v*.*.*` tags. Images are pushed only
   on push events: `main` gets `sha-<short>` only; `latest` and the versions come from `v*` tags.

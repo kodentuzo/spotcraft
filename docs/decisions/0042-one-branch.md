@@ -4,7 +4,7 @@ number: 42
 status: accepted
 implementation: done
 date: 2026-11-21
-supersedes: []
+supersedes: [9, 24]
 superseded_by: []
 notes: "CI checks branch names, rulesets protect main and the release tags, the website builds from tags."
 ---
@@ -22,6 +22,11 @@ skills and docs all had to name both.
 Releases are already signed version tags, and deploying is already a separate, manual step. The
 owner's Sokobanko works with `main` alone.
 
+This record replaces two rules that assumed `main` held only released code:
+[ADR 0009](0009-images-on-docker-hub.md)'s `main` → `latest` image tag, and
+[ADR 0024](0024-website-on-pages.md)'s website deployed on every push to `main`. The rest of
+both records stands.
+
 ## Decision
 
 - `main` is the only long-lived branch and the default branch. Work happens on short-lived
@@ -29,15 +34,17 @@ owner's Sokobanko works with `main` alone.
   (lowercase letters, digits, dots, hyphens), and merges back through a pull request.
 - Pull requests merge with a merge commit only; squash and rebase are off. Branches are deleted
   after merging.
-- CI's `branch-name` job fails a pull request that doesn't target `main` or whose branch doesn't
-  follow the names. Dependabot's own `dependabot/…` branches are allowed.
+- The `branch-name` check (its own workflow, so it re-runs when a pull request is retargeted)
+  fails a pull request that doesn't target `main` or whose branch doesn't follow the names. Dependabot's own `dependabot/…` branches are allowed.
 - A ruleset on `main` allows changes only through pull requests with `branch-name`, `verify`,
   `kit and CLI on Node 24` and `Image` passing, with no force pushes and no deletion. A second
   ruleset stops `v*` and `kit-v*` tags from being moved or deleted.
 - A release is a `chore/release-X.Y.Z` pull request (or `chore/release-kit-A.B.C`), then a signed
   tag on the merge commit. Nothing is merged back.
 - Merging to `main` publishes the image as `sha-<short>` only. A `v*` tag publishes `X.Y.Z`,
-  `X.Y`, `latest` and the CLI, and rebuilds the website, so spotcraft.dev shows the released docs.
+  `X.Y` and the CLI; a stable tag also moves `latest` (a pre-release tag doesn't). A `v*` tag
+  whose version matches `package.json` rebuilds the website, so spotcraft.dev shows the released
+  docs.
 - Deploying Spotcraft stays a manual run of the Deploy workflow with a tag.
 
 ## Consequences
