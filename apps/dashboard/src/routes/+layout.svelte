@@ -27,9 +27,13 @@
     switcherAt = { top: box.bottom + 4, left: box.left }
   }
   let avatarFailed = $state(false)
-  // A picture that failed before the page hydrated fired its error event too early: check it.
+  // Listen for errors on the client: an `onerror` attribute is rendered inline and the CSP
+  // blocks it. A picture that failed before the page hydrated fired too early: check it.
   const checkAvatar = (img: HTMLImageElement) => {
-    if (img.complete && img.naturalWidth === 0) avatarFailed = true
+    const fail = () => (avatarFailed = true)
+    if (img.complete && img.naturalWidth === 0) fail()
+    img.addEventListener('error', fail)
+    return () => img.removeEventListener('error', fail)
   }
   const closeAll = () => {
     drawer?.hidePopover()
@@ -79,7 +83,7 @@
     <span class="relative flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-sidebar-accent text-caption-1 font-medium uppercase">
       {(data.accessEmail ?? 'Admin').charAt(0)}
       {#if data.avatar && !avatarFailed}
-        <img src={data.avatar} alt="" width="28" height="28" class="absolute inset-0 size-full object-cover" referrerpolicy="no-referrer" onerror={() => (avatarFailed = true)} {@attach checkAvatar} />
+        <img src={data.avatar} alt="" width="28" height="28" class="absolute inset-0 size-full object-cover" referrerpolicy="no-referrer" {@attach checkAvatar} />
       {/if}
     </span>
     <span class="min-w-0">

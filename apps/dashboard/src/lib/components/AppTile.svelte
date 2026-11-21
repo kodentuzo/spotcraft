@@ -10,9 +10,13 @@
   const icon = { sm: 32, lg: 40, xl: 80 }
 
   let iconFailed = $state(false)
-  // An icon that failed before the page hydrated fired its error event too early: check it.
+  // Listen for errors on the client: an `onerror` attribute is rendered inline and the CSP
+  // blocks it. An icon that failed before the page hydrated fired too early: check it.
   const checkIcon = (img: HTMLImageElement) => {
-    if (img.complete && img.naturalWidth === 0) iconFailed = true
+    const fail = () => (iconFailed = true)
+    if (img.complete && img.naturalWidth === 0) fail()
+    img.addEventListener('error', fail)
+    return () => img.removeEventListener('error', fail)
   }
 </script>
 
@@ -31,7 +35,6 @@
       height={icon[size]}
       style="width: {icon[size]}px; height: {icon[size]}px"
       class="absolute object-contain"
-      onerror={() => (iconFailed = true)}
       {@attach checkIcon}
     />
   {/if}
