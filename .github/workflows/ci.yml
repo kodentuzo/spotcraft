@@ -1,8 +1,9 @@
 name: CI
 
 # Pull requests: verify, and build the image (not pushed) so a broken Dockerfile shows before
-# merging. main and v* tags: verify, then publish the image to Docker Hub; v* tags also publish
-# the CLI. kit-v* tags: verify, then publish @spotcraft/kit alone (ADR 0027).
+# merging (branch-name.yml checks the branch's name). main: verify, then publish the image as
+# sha-<short>. v* tags: the same, tagged X.Y.Z, X.Y and latest, then publish the CLI. kit-v*
+# tags: verify, then publish @spotcraft/kit alone (ADR 0027).
 on:
   push:
     branches: [main]
@@ -136,14 +137,14 @@ jobs:
           username: ${{ vars.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # main → latest; v1.2.3 → 1.2.3, 1.2 and 1 (no major tag for v0.x); every build → sha-abc1234.
+      # v1.2.3 → 1.2.3, 1.2, 1 (no major tag for v0.x) and latest; every build → sha-abc1234.
+      # latest comes from the semver rules (flavor latest=auto), so a pre-release tag
+      # (v0.9.0-rc.1) never moves it. main holds unreleased work: it gets sha-abc1234 only.
       - id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ${{ vars.DOCKERHUB_USERNAME || 'vindotski' }}/spotcraft
           tags: |
-            # main holds the production version; dev is the default branch, so not is_default_branch.
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             # No bare major tag before 1.0 (a "0" tag would mean nothing stable).

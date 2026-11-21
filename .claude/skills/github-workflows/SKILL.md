@@ -7,10 +7,15 @@ description: Spotcraft's conventions for GitHub Actions workflows and Dependabot
 
 ## Branches and triggers
 
-- `dev` is the default branch; PRs target it. `main` holds production; releases are tags
+- `main` is the only long-lived branch (ADR 0042); PRs target it, from `feature/`, `bugfix/` or
+  `chore/` branches, and `branch-name.yml` fails anything else (it also runs on `edited`, so a
+  retargeted pull request is checked again). Releases are tags
   `vX.Y.Z` on `main`.
-- `ci.yml` runs on PRs, pushes to `main` and `v*.*.*` tags. Images are pushed only on push
-  events; `latest` comes from `main` only.
+- `ci.yml` runs on PRs, pushes to `main` and `v*.*.*` / `kit-v*.*.*` tags. Images are pushed only
+  on push events: `main` gets `sha-<short>` only; `latest` and the versions come from `v*` tags.
+- `pages.yml` builds the website on `v*.*.*` tags (and by hand), so it shows the released docs.
+- Required checks on `main` (ruleset): `branch-name`, `verify`, `kit and CLI on Node 24`,
+  `Image`. Renaming one of these jobs means updating the ruleset too.
 - `deploy.yml` is manual (`workflow_dispatch` with an image tag) and uses the `production`
   environment.
 

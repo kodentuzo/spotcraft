@@ -5,7 +5,7 @@ status: accepted
 implementation: done
 date: 2026-11-07
 supersedes: []
-superseded_by: [25]
+superseded_by: [25, 42]
 notes: ""
 ---
 

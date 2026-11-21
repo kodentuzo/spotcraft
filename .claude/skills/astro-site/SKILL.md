@@ -53,9 +53,10 @@ port with `lsof` before saying it's stopped.
 
 ## Deployment
 
-`.github/workflows/pages.yml` builds on pushes to `main` and deploys `apps/site/dist` with
-`actions/upload-pages-artifact` + `actions/deploy-pages`. The repository's Pages source is
-"GitHub Actions". `main` is production, so the site shows the released docs.
+`.github/workflows/pages.yml` builds on `v*.*.*` tags (and by hand) and deploys `apps/site/dist`
+with `actions/upload-pages-artifact` + `actions/deploy-pages`. The repository's Pages source is
+"GitHub Actions". `main` holds unreleased work, so building from tags keeps the site on the
+released docs (ADR 0042).
 
 Look up anything else in the Astro docs for the installed version (`pnpm --filter
 @spotcraft/site exec astro --version`); APIs differ between majors.

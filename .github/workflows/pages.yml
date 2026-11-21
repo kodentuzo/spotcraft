@@ -1,20 +1,12 @@
 name: Pages
 
-# The website, spotcraft.dev: built from main (the released docs) and published on GitHub Pages
-# (ADR 0024). The repository's Pages source is "GitHub Actions", its custom domain spotcraft.dev,
-# and the github-pages environment allows deploys from main.
+# The website, spotcraft.dev: built from each release tag, so it shows the released docs, and
+# published on GitHub Pages (ADR 0024, ADR 0042). Run it by hand to rebuild from main. The
+# repository's Pages source is "GitHub Actions", its custom domain spotcraft.dev, and the
+# github-pages environment allows deploys from v* tags and main.
 on:
   push:
-    branches: [main]
-    paths:
-      - apps/site/**
-      - docs/**
-      - CHANGELOG.md
-      - packages/*/CHANGELOG.md
-      - packages/ui/**
-      - package.json
-      - pnpm-lock.yaml
-      - .github/workflows/pages.yml
+    tags: ["v*.*.*"]
   workflow_dispatch:
 
 permissions:
@@ -32,6 +24,19 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # Like CI: a release tag must match the root package.json version, so a rejected tag can't
+      # replace the live docs. Runs by hand build whatever they're given.
+      - name: Check the tag matches package.json
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          REF: ${{ github.ref }}
+        run: |
+          tag="${REF#refs/tags/v}"
+          version="$(jq -r .version package.json)"
+          if [ "$tag" != "$version" ]; then
+            echo "::error::Tag v$tag doesn't match package.json version $version"
+            exit 1
+          fi
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.0 (version from packageManager)
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
