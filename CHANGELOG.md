@@ -10,6 +10,11 @@ raises the minor version and is listed under **Changed** or **Removed** with mig
 
 ## [Unreleased]
 
+### Changed
+
+- **Server images:** Umami 3.5.0 (also in the local stack), node-exporter 1.13.1 and cAdvisor
+  0.61.1.
+
 ## [0.8.2] - 2026-11-21
 
 ### Changed

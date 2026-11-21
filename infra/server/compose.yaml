@@ -214,7 +214,7 @@ services:
   # exposed. Its role, database and secret are set up by the deploy script.
   umami:
     <<: *hardened
-    image: ghcr.io/umami-software/umami:3.4.1@sha256:e69d1a7932e9dab0fc523edc7be1f3a53f3c261f57856fc2167ae74a8fc022e8
+    image: ghcr.io/umami-software/umami:3.5.0@sha256:b64f40400d77bcadd39cf5c62a1e368c99524ca442024f96e1133355a19a5dbc
     # Not read-only: when it starts, Umami writes the collect path into its tracker script.
     tmpfs:
       - /tmp:size=16m,noexec,nosuid,nodev
@@ -291,7 +291,7 @@ services:
 
   node-exporter:
     <<: *hardened
-    image: prom/node-exporter:v1.12.1@sha256:1b4e4438faca4dd7e001dd445d161a4a2091b0fededa84093b3a8dfeae1f1be0
+    image: prom/node-exporter:v1.13.1@sha256:7296504d4ada44b7d7ab4431e27e9f9900d8488f8d55842f4b12ae2704e16dfe
     read_only: true
     mem_limit: 128m
     command: ["--path.rootfs=/host"]
@@ -308,7 +308,7 @@ services:
   # cAdvisor reads every container's cgroups and the Docker/containerd state, read-only.
   cadvisor:
     <<: *hardened
-    image: ghcr.io/google/cadvisor:v0.61.0@sha256:448ca9b1ce0d3f2eb7563938030908a4b81ddfe959a3fe5e62f691fd4b2cb417
+    image: ghcr.io/google/cadvisor:v0.61.1@sha256:4929b70e82079d001d0028b85d6a4dd25ad4666b719455c9542b983489963916
     read_only: true
     mem_limit: 256m
     # Only what the dashboard reads (each container's CPU and memory, found by its Compose
